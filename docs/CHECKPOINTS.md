@@ -39,3 +39,11 @@
 - **Bug Count Found**: 1 (TypeScript schema typing warning accessing `.address` on Supabase's generated Json utility type).
 - **Bug Count Fixed**: 1 (Added strict cast assertions to interpret generic JSON fields as mapped `address` objects).
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 05: Rides Marketplace Vertical
+- **Completed Work**: Developed `utils/pricing.ts` as a mock utility engine to calculate pseudo-random distances and dynamic surge multipliers. Created `RideBookingForm.tsx` as a Client Component utilizing state tracking for live price estimation. Developed the server action `actions.ts` to execute secure backend database inserts into the `orders` table. Updated `app/customer/rides/page.tsx` to host the form.
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: React Client Components, Effects, and Server Action typings successfully align.
+- **Bug Count Found**: 2 (React state mutation warning inside `useEffect`, Next.js 15 strict server action inline return typing constraint).
+- **Bug Count Fixed**: 2 (Migrated dynamic calculation out of the effect lifecycle natively into the pure render phase, decoupled form action to an async wrapper function).
+- **Final Push Status**: Pushed to main
