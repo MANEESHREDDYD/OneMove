@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { signout } from "@/app/auth/actions"
 import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
+import Link from "next/link"
 import { AdminDashboardClient } from "./AdminDashboardClient"
 
 export default async function AdminCommandCenter() {
@@ -49,9 +50,16 @@ export default async function AdminCommandCenter() {
           title="Command Center" 
           description="Platform-wide God Mode"
         />
-        <form action={signout}>
-          <Button variant="ghost" className="rounded-full text-xs">Sign Out</Button>
-        </form>
+        <div className="flex items-center gap-4">
+          <Link href="/admin/analytics">
+            <Button variant="outline" className="rounded-full text-xs font-bold border-primary text-primary hover:bg-primary/10">
+              View Analytics Charts
+            </Button>
+          </Link>
+          <form action={signout}>
+            <Button variant="ghost" className="rounded-full text-xs">Sign Out</Button>
+          </form>
+        </div>
       </div>
 
       <AdminDashboardClient 
