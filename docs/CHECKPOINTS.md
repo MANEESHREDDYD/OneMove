@@ -135,3 +135,11 @@
 - **Bug Count Found**: 0
 - **Bug Count Fixed**: 0
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 17: PWA Polish
+- **Completed Work**: Upgraded the Next.js web application into a fully installable Progressive Web App (PWA). Configured `app/manifest.ts` to dynamically generate the `manifest.webmanifest` specification for "Add to Home Screen" zero-cost installation. Designed a custom SVG vector maskable icon (`public/icon.svg`). Stripped hardcoded links and updated `app/layout.tsx` metadata headers (`apple-mobile-web-app-capable`, `themeColor`) to ensure the device status bar seamlessly integrates with the dark mode UI on iOS and Android.
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: Passed successfully. Caught one strict generic type error on `purpose: 'maskable'`.
+- **Bug Count Found**: 1
+- **Bug Count Fixed**: 1
+- **Final Push Status**: Pushed to main
