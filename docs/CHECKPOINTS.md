@@ -63,3 +63,11 @@
 - **Bug Count Found**: 1 (ESLint warned about a declared but unused custom type reference `Order`).
 - **Bug Count Fixed**: 1 (Stripped unused types).
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 08: Partner Dashboard + Job Flow
+- **Completed Work**: Built `app/driver/page.tsx` as the Partner-facing dashboard. It polls the `orders` table to dynamically list all `pending` unassigned jobs in a grid. Once a job is accepted, the marketplace clears and displays a priority "Active Job" card. Engineered `JobActionButtons.tsx` and Server Actions (`actions.ts`) to securely bind the `driver_id` and transition order states through `accepted` -> `in_transit` -> `completed`, keeping the Driver and Customer dashboards perfectly synchronized.
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: Passed successfully.
+- **Bug Count Found**: 1 (Minor unused type definition).
+- **Bug Count Fixed**: 1 (Cleaned).
+- **Final Push Status**: Pushed to main
