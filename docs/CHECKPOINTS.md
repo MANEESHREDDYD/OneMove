@@ -143,3 +143,11 @@
 - **Bug Count Found**: 1
 - **Bug Count Fixed**: 1
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 18: CI/CD + Documentation
+- **Completed Work**: Upgraded the generic Next.js README into a comprehensive, portfolio-grade `README.md` detailing the multi-sided marketplace architecture (Customer, Driver, Merchant, Admin), tech stack, and zero-cost environment configurations. Engineered `.github/workflows/ci.yml` to instantiate an automated GitHub Actions pipeline. The pipeline now enforces strict Next.js `build`, `lint`, and `typecheck` validations on every push to the `main` branch, ensuring long-term code stability.
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: Passed successfully.
+- **Bug Count Found**: 0
+- **Bug Count Fixed**: 0
+- **Final Push Status**: Pushed to main
