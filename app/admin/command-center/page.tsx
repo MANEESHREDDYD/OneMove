@@ -51,9 +51,14 @@ export default async function AdminCommandCenter() {
           description="Platform-wide God Mode"
         />
         <div className="flex items-center gap-4">
+          <Link href="/admin/ai-lab">
+            <Button variant="outline" className="rounded-full text-xs font-bold border-purple-500 text-purple-500 hover:bg-purple-500/10">
+              ML / AI Lab
+            </Button>
+          </Link>
           <Link href="/admin/analytics">
             <Button variant="outline" className="rounded-full text-xs font-bold border-primary text-primary hover:bg-primary/10">
-              View Analytics Charts
+              View Analytics
             </Button>
           </Link>
           <form action={signout}>
