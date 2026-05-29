@@ -95,3 +95,11 @@
 - **Bug Count Found**: 3 (TypeScript `any` strict-mode violations).
 - **Bug Count Fixed**: 3 (Replaced `any` with precise `package` generic object definitions).
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 12: Merchant Dashboard Polish & Analytics
+- **Completed Work**: Upgraded the fundamental merchant dashboard (created in CPs 09/10) into a portfolio-grade command center. Refactored `app/merchant/page.tsx` to aggregate all historical and active `eats`/`grocery` orders server-side, calculating "Total Revenue" and "Total Orders". Engineered `MerchantDashboardClient.tsx` as a sleek, tabbed UI that partitions the data into a real-time `Live Queue`, an exhaustive `History` table, and a `Settings` view containing a master store toggle switch.
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: Passed successfully.
+- **Bug Count Found**: 3 (Unused `lucide-react` imports, unescaped quote `Today's`, TS typing generic issue on JSON).
+- **Bug Count Fixed**: 3 (Removed imports, escaped quotes, mapped generic `unknown` wrapper for JSON).
+- **Final Push Status**: Pushed to main
