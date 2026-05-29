@@ -3,8 +3,15 @@ import { GlassCard } from "@/components/common/GlassCard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { login } from "../actions"
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>
+}) {
+  const { error } = await searchParams
+
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <GlassCard className="w-full max-w-md p-8 space-y-6">
@@ -13,14 +20,15 @@ export default function LoginPage() {
           <p className="text-muted-foreground">Enter your credentials to sign in to OneMove</p>
         </div>
         
-        <form className="space-y-4">
+        <form className="space-y-4" action={login}>
+          {error && <div className="text-sm font-medium text-red-500 bg-red-500/10 p-3 rounded-md">{error}</div>}
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" placeholder="name@example.com" required />
+            <Input id="email" name="email" type="email" placeholder="name@example.com" required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" required />
+            <Input id="password" name="password" type="password" required />
           </div>
           <Button type="submit" className="w-full">Sign In</Button>
         </form>
