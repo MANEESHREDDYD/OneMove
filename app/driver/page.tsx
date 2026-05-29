@@ -95,6 +95,15 @@ export default async function DriverDashboard() {
                     <Navigation className="h-4 w-4 mt-1 text-destructive shrink-0" />
                     <p className="text-sm">{(job.dropoff_location as {address?: string})?.address || 'N/A'}</p>
                   </div>
+                  {job.service_type === 'courier' && (
+                    <div className="flex items-start gap-3 bg-blue-500/10 p-2 rounded-lg border border-blue-500/20 mt-2">
+                      <Package className="h-4 w-4 mt-0.5 text-blue-500 shrink-0" />
+                      <div className="text-sm">
+                        <p className="font-bold text-blue-500">{(job.metadata as { package?: { size?: string, details?: string } })?.package?.size || 'Unknown'} Package</p>
+                        <p className="text-xs text-muted-foreground">{(job.metadata as { package?: { size?: string, details?: string } })?.package?.details || 'No details provided'}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <ActiveJobButtons orderId={job.id} currentStatus={job.status} />
@@ -137,6 +146,12 @@ export default async function DriverDashboard() {
                       <Navigation className="h-3 w-3 shrink-0 text-destructive/80" />
                       <span className="truncate">{(job.dropoff_location as {address?: string})?.address || 'N/A'}</span>
                     </div>
+                    {job.service_type === 'courier' && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2 bg-primary/5 p-2 rounded border border-primary/10">
+                        <Package className="h-3 w-3 shrink-0 text-primary" />
+                        <span className="truncate">Size: {(job.metadata as { package?: { size?: string } })?.package?.size || 'Unknown'}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
