@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/common/PageHeader"
-import { GlassCard } from "@/components/common/GlassCard"
+import { RideBookingForm } from "./RideBookingForm"
 
 export default function CustomerRides() {
   return (
@@ -8,10 +8,7 @@ export default function CustomerRides() {
         title="Request a Ride" 
         description="Where are you heading today?"
       />
-      <GlassCard className="p-8">
-        <h2 className="text-xl font-bold">Ride Map</h2>
-        <p className="text-muted-foreground mt-2">Placeholder for map UI and location picker.</p>
-      </GlassCard>
+      <RideBookingForm />
     </div>
   )
 }
