@@ -47,19 +47,23 @@ export default async function CustomerDashboard() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activeOrders.map((order) => (
-              <GlassCard key={order.id} className="p-4 flex items-start gap-4 hover:bg-white/5 transition-colors group cursor-pointer relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-bl-full -z-10 group-hover:scale-110 transition-transform" />
-                <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                  {order.service_type === 'ride' ? <Car className="h-5 w-5 text-primary" /> : <Package className="h-5 w-5 text-primary" />}
-                </div>
-                <div>
-                  <h3 className="font-semibold capitalize text-sm">{order.service_type} • {order.status.replace('_', ' ')}</h3>
-                  <div className="flex items-center text-xs text-muted-foreground mt-1 gap-1">
-                    <MapPin className="h-3 w-3" />
-                    <span className="truncate max-w-[150px]">{(order.dropoff_location as { address?: string })?.address || 'In transit'}</span>
+              <Link key={order.id} href={`/customer/orders/${order.id}`} className="block group">
+                <GlassCard className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors cursor-pointer border border-primary/20">
+                  <div className="bg-primary/20 p-3 rounded-full group-hover:scale-110 transition-transform">
+                    {order.service_type === 'ride' && <Car className="h-6 w-6 text-primary" />}
+                    {order.service_type === 'eats' && <Utensils className="h-6 w-6 text-primary" />}
+                    {order.service_type === 'grocery' && <ShoppingBasket className="h-6 w-6 text-primary" />}
+                    {order.service_type === 'courier' && <Package className="h-6 w-6 text-primary" />}
                   </div>
-                </div>
-              </GlassCard>
+                  <div className="flex-1 overflow-hidden">
+                    <h3 className="font-semibold capitalize text-sm">{order.service_type} • {order.status.replace('_', ' ')}</h3>
+                    <div className="flex items-center text-xs text-muted-foreground mt-1 gap-1">
+                      <MapPin className="h-3 w-3" />
+                      <span className="truncate max-w-[150px]">{(order.dropoff_location as { address?: string })?.address || 'In transit'}</span>
+                    </div>
+                  </div>
+                </GlassCard>
+              </Link>
             ))}
           </div>
         </div>

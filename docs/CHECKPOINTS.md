@@ -55,3 +55,11 @@
 - **Bug Count Found**: 0
 - **Bug Count Fixed**: 0
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 07: Universal Tracking Experience
+- **Completed Work**: Engineered `app/customer/orders/[id]/page.tsx` as a universal tracking hub. Securely integrated Supabase server-side checks to guarantee users can only query their own orders. Designed a dynamic status indicator that pulses for active deliveries, a stylized mock map UI that injects correct icon sets based on the `service_type` (e.g., rides vs. eats), and built `CancelOrderButton.tsx` (a Client Component interacting with a Server Action) to safely execute state transitions (`pending` -> `cancelled`).
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: End-to-End data mapping and type safety cleared perfectly.
+- **Bug Count Found**: 1 (ESLint warned about a declared but unused custom type reference `Order`).
+- **Bug Count Fixed**: 1 (Stripped unused types).
+- **Final Push Status**: Pushed to main
