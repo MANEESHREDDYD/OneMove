@@ -16,12 +16,12 @@ export default async function MerchantDashboard() {
   }
 
   // Fetch orders for this merchant.
-  // In a real app, we'd filter by merchant ID. For MVP, we'll fetch all `eats` orders 
+  // In a real app, we'd filter by merchant ID. For MVP, we'll fetch all `eats` and `grocery` orders 
   // that are not completed or cancelled, assuming the merchant is looking at their queue.
   const { data: ordersData } = await supabase
     .from('orders')
     .select('*')
-    .eq('service_type', 'eats')
+    .in('service_type', ['eats', 'grocery'])
     .in('status', ['pending', 'accepted', 'preparing', 'ready'])
     .order('created_at', { ascending: true })
 

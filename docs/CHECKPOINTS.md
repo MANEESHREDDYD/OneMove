@@ -79,3 +79,11 @@
 - **Bug Count Found**: 3 (Unused typescript imports `Order`, `Database`, `redirect`).
 - **Bug Count Fixed**: 3 (Cleaned).
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 10: Grocery Flow
+- **Completed Work**: Built `app/customer/grocery/page.tsx` as a dedicated supermarket marketplace. Engineered `GroceryCartClient.tsx` with a live category-based search and filtering system for long inventory lists. Integrated checkout to pass a JSON cart payload under the `grocery` service type. Upgraded the `/merchant` dashboard to query `in('service_type', ['eats', 'grocery'])`, unifying food and grocery order processing into a single merchant tablet experience. The Partner Driver dashboard inherently supports it via the state-transition engine.
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: Passed successfully.
+- **Bug Count Found**: 2 (React unescaped entities in string).
+- **Bug Count Fixed**: 2 (Escaped with `&quot;`).
+- **Final Push Status**: Pushed to main
