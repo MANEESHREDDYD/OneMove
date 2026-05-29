@@ -31,3 +31,11 @@
 - **Bug Count Found**: 2 (ESLint unused vars warning, Next.js 16 deprecated middleware file convention)
 - **Bug Count Fixed**: 2 (Removed unused variable, renamed `middleware.ts` to `proxy.ts`)
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 04: Customer Super-App Dashboard
+- **Completed Work**: Completely rewrote `ServiceCard` to support premium ReactNode icons, hover scaling, and dynamic gradient injection. Scaffolded core routes (`/customer/rides`, `/customer/eats`, `/customer/grocery`, `/customer/orders`). Developed `/customer/page.tsx` with a secure server-action based Supabase call to fetch and render active `orders` for the logged-in customer directly on the dashboard.
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: Build succeeded. Addressed strict TypeScript object schema boundaries for arbitrary JSON outputs.
+- **Bug Count Found**: 1 (TypeScript schema typing warning accessing `.address` on Supabase's generated Json utility type).
+- **Bug Count Fixed**: 1 (Added strict cast assertions to interpret generic JSON fields as mapped `address` objects).
+- **Final Push Status**: Pushed to main
