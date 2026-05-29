@@ -1,30 +1,74 @@
-# OneMove
+# OneMove: The US-First Super-App Ecosystem
 
-One city app for rides, food, groceries, courier, and local commerce.
+![OneMove](https://img.shields.io/badge/OneMove-Super_App-black?style=for-the-badge&logo=next.js)
+![Version](https://img.shields.io/badge/Version-1.0.0-blue?style=for-the-badge)
+![Supabase](https://img.shields.io/badge/Supabase-Database-green?style=for-the-badge&logo=supabase)
 
-A US-first, global-ready PWA super-app with marketplace intelligence, transparent pricing, and city-level operations.
+**OneMove** is a portfolio-grade, zero-cost MVP Progressive Web Application (PWA) designed to simulate a massive scale, US-first gig-economy Super-App. Built entirely on Next.js 15, Tailwind CSS, and Supabase, it consolidates Rides, Eats, Grocery, and Courier services into a single unified platform.
 
-## Limitation Note
-**This is a zero-cost MVP/demo.**
-It does not process real payments.
-It does not perform real background checks.
-It does not provide legal compliance.
-It does not use paid routing APIs.
-It uses mock payments and seeded/demo marketplace activity.
-Real launch would require legal, insurance, payment, KYC, tax, accessibility, and city/state compliance review.
+## 🚀 Ecosystem Overview
 
-## Tech Stack
-- Next.js App Router
-- Supabase (Auth, Postgres, Realtime, RLS)
-- Tailwind CSS, shadcn/ui, Framer Motion
-- Zustand, TanStack Query
+OneMove is designed with role-based partitioning to support a multi-sided marketplace:
 
-## Demo Accounts
-To be provided in seed data documentation.
+1. **The Customer Hub (`/customer`)**:
+   - Order Food (Eats), hail Rides, buy Groceries, or dispatch Couriers.
+   - Beautiful, animated cart interactions and live order history routing.
+2. **The Partner Fleet (`/driver`)**:
+   - Centralized driver dashboard to toggle online status.
+   - Integrated mapping (mocked for zero-cost) and live-job acceptance queue.
+3. **The Merchant Portal (`/merchant`)**:
+   - Storefront command center for restaurants and grocers.
+   - Real-time live order queues, history analytics, and store toggles.
+4. **The God Mode Command Center (`/admin/command-center`)**:
+   - Global view of every order across all 4 verticals.
+   - Dynamic KPIs: Platform GMV, Active User calculations, and Order Volume.
+   - Includes **Analytics Engine** (Recharts) and **ML/AI Lab** (Simulated GPT-4 Copilot).
+   - Includes **Trust & Safety Center** (Compliance management and emergency triggers).
 
-## Running Locally
-1. `npm install`
-2. Configure `.env.local` based on `.env.local.example`
-3. `npm run dev`
+## 🛠 Tech Stack
 
-More comprehensive setup details will be provided in subsequent checkpoints.
+- **Framework**: Next.js 15 (App Router, Server Actions, Server Components)
+- **Styling**: Tailwind CSS (Native dark mode, Glassmorphism design system)
+- **UI Components**: `shadcn/ui` core + `lucide-react` + `recharts`
+- **Database & Auth**: Supabase (PostgreSQL, Row Level Security)
+- **Deployment & Architecture**: Progressive Web App (PWA) configured for mobile installation. Zero-cost serverless Edge runtime.
+
+## 📦 Running Locally
+
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/MANEESHREDDYD/OneMove.git
+   cd OneMove
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Supabase Credentials**
+   Create a `.env.local` file in the root directory:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=your-project-url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+   ```
+
+4. **Boot the Development Server**
+   ```bash
+   npm run dev
+   ```
+
+## 🛡 Strict QA Pipeline
+
+OneMove enforces a strict zero-warning policy on all code before merges. Our CI/CD pipeline validates:
+- `npm run lint`: ESLint rules enforced.
+- `npm run typecheck`: Strict TypeScript `tsc --noEmit`.
+- `npm run build`: Next.js Turbopack static generation verification.
+
+## 🌐 Security & Trust
+- **Role-Based Routing**: Next.js Middleware automatically intercepts routes to protect `/admin`, `/merchant`, and `/driver` portals based on Supabase JWT tokens.
+- **Universal SOS**: The platform features a ubiquitous floating SOS button ensuring real-time simulated emergency access for all users.
+
+---
+
+*Designed and engineered iteratively across 19 strict developmental checkpoints.*
