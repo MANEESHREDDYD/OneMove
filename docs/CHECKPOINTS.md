@@ -71,3 +71,11 @@
 - **Bug Count Found**: 1 (Minor unused type definition).
 - **Bug Count Fixed**: 1 (Cleaned).
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 09: Eats Flow (Customer & Merchant)
+- **Completed Work**: Designed the complete Eats marketplace vertical. Built `app/customer/eats/page.tsx` as a mock restaurant directory and `/customer/eats/[id]/page.tsx` as a specific menu loaded dynamically. Created a fully reactive client-side Shopping Cart (`EatsMenuClient.tsx`) that packages items into JSON and passes them to a Server Action to create an `eats` type order. Built the `/merchant` dashboard to intercept these orders and parse the JSON back into readable kitchen tickets. Implemented Merchant Server Actions to step the order from `pending` -> `preparing` -> `ready`. Expanded the Partner Driver query to allow Drivers to lock in `eats` orders while the kitchen is still preparing them, seamlessly linking all three isolated user roles into one synchronized database event pipeline.
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: Strict mode build passed clean.
+- **Bug Count Found**: 3 (Unused typescript imports `Order`, `Database`, `redirect`).
+- **Bug Count Fixed**: 3 (Cleaned).
+- **Final Push Status**: Pushed to main

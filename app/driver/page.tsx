@@ -6,7 +6,6 @@ import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import { Car, Utensils, ShoppingBasket, Package, MapPin, Navigation } from "lucide-react"
 import { AcceptJobButton, ActiveJobButtons } from "./JobActionButtons"
-import { Database } from "@/types/database.types"
 
 export default async function DriverDashboard() {
   const supabase = await createClient()
@@ -16,11 +15,11 @@ export default async function DriverDashboard() {
     redirect('/auth/login')
   }
 
-  // Fetch orders that are pending and have no driver assigned
+  // Fetch orders that are available to be assigned to a driver
   const { data: availableJobsData } = await supabase
     .from('orders')
     .select('*')
-    .eq('status', 'pending')
+    .in('status', ['pending', 'preparing', 'ready'])
     .is('driver_id', null)
     .order('created_at', { ascending: true })
 
