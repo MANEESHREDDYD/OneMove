@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/common/PageHeader"
 import { ServiceCard } from "@/components/common/ServiceCard"
 import { GlassCard } from "@/components/common/GlassCard"
+import { FloatingSOSButton } from "@/components/common/FloatingSOSButton"
 import { Button } from "@/components/ui/button"
 import { signout } from "@/app/auth/actions"
 import { createClient } from "@/utils/supabase/server"
@@ -113,6 +114,8 @@ export default async function CustomerDashboard() {
           <Button>Start Free Trial</Button>
         </div>
       </GlassCard>
+      
+      <FloatingSOSButton />
     </div>
   )
 }

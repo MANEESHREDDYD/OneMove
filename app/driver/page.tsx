@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/common/PageHeader"
 import { GlassCard } from "@/components/common/GlassCard"
+import { FloatingSOSButton } from "@/components/common/FloatingSOSButton"
 import { Button } from "@/components/ui/button"
 import { signout } from "@/app/auth/actions"
 import { createClient } from "@/utils/supabase/server"
@@ -168,6 +169,7 @@ export default async function DriverDashboard() {
           </div>
         )}
       </div>
+      <FloatingSOSButton />
     </div>
   )
 }
