@@ -87,3 +87,11 @@
 - **Bug Count Found**: 2 (React unescaped entities in string).
 - **Bug Count Fixed**: 2 (Escaped with `&quot;`).
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 11: Courier Flow
+- **Completed Work**: Designed `app/customer/courier/page.tsx` as a pure peer-to-peer package delivery request form, leveraging native FormData parsing in `actions.ts` to dynamically calculate base pricing based on package size. Explicitly upgraded `app/driver/page.tsx` to handle the unique `courier` JSON schema, bypassing the standard restaurant cart logic to render customized "Package Size" and "Instructions" UI directly to the Partner. Bypassed the Merchant dashboard entirely, keeping this flow strictly Customer -> Driver.
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: Passed successfully.
+- **Bug Count Found**: 3 (TypeScript `any` strict-mode violations).
+- **Bug Count Fixed**: 3 (Replaced `any` with precise `package` generic object definitions).
+- **Final Push Status**: Pushed to main
