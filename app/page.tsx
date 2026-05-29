@@ -42,11 +42,11 @@ export default function LandingPage() {
         {/* Service Grid */}
         <section className="py-16 px-6 max-w-6xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <ServiceCard title="Ride" icon={Car} href="/customer/rides" />
-            <ServiceCard title="Eats" icon={Utensils} href="/customer/eats" />
-            <ServiceCard title="Grocery" icon={ShoppingBag} href="/customer/grocery" />
-            <ServiceCard title="Courier" icon={Package} href="/customer/courier" />
-            <ServiceCard title="Local Deals" icon={Tag} href="/customer" />
+            <ServiceCard title="Ride" icon={<Car className="h-6 w-6" />} href="/customer/rides" />
+            <ServiceCard title="Eats" icon={<Utensils className="h-6 w-6" />} href="/customer/eats" />
+            <ServiceCard title="Grocery" icon={<ShoppingBag className="h-6 w-6" />} href="/customer/grocery" />
+            <ServiceCard title="Courier" icon={<Package className="h-6 w-6" />} href="/customer/orders" />
+            <ServiceCard title="Local Deals" icon={<Tag className="h-6 w-6" />} href="/customer" />
           </div>
         </section>
 
