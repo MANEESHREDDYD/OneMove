@@ -111,3 +111,11 @@
 - **Bug Count Found**: 0
 - **Bug Count Fixed**: 0
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 14: Analytics Engineering Dashboard
+- **Completed Work**: Installed `recharts` to enable professional SVG-based data visualization. Engineered `app/admin/analytics/page.tsx` to globally query and reduce the order database into structured arrays mapping `revenue` and `volume` by service type (`ride`, `eats`, `grocery`, `courier`). Built `AnalyticsClient.tsx` featuring a responsive Bar Chart (Revenue by Vertical) and a Donut Chart (Volume Distribution). Integrated deep-links between the Command Center and Analytics dashboards.
+- **Validation Commands Run**: `npx eslint .`, `npm run typecheck`, `npm run build`
+- **Test Summary**: Passed successfully with 0 errors and 0 warnings.
+- **Bug Count Found**: 0
+- **Bug Count Fixed**: 0
+- **Final Push Status**: Pushed to main
