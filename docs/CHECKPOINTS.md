@@ -15,3 +15,11 @@
 - **Bug Count Found**: 2 (Unescaped entity in login, invalid Server Component onClick usage in page.tsx)
 - **Bug Count Fixed**: 2
 - **Final Push Status**: Pushed to main
+
+## Checkpoint 02: Supabase Schema + Seed Data
+- **Completed Work**: Installed Supabase SDKs, scaffolded initial config, wrote SQL schema with RLS and triggers, generated heavy realistic 5-city seed data script, setup database types and client utils.
+- **Validation Commands Run**: `npm run typecheck`, `npm run build`, verified seed SQL generation.
+- **Test Summary**: Types and components compile successfully with new dependencies.
+- **Bug Count Found**: 1 (ts-node ESM compatibility issue)
+- **Bug Count Fixed**: 1
+- **Final Push Status**: Pushed to main
