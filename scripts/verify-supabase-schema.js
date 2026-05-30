@@ -31,24 +31,41 @@ const supabase = createClient(supabaseUrl, anonKey, {
   auth: { persistSession: false }
 })
 
-async function testConnection() {
-  console.log("Testing connection to Supabase...")
-  
-  // Query a table that should exist if schema.sql is applied
-  const { data, error } = await supabase.from('profiles').select('id').limit(1)
-  
-  if (error) {
-    if (error.code === '42P01' || error.message.includes('Could not find the table')) {
-      console.error("\n❌ Supabase connection works, but database schema has not been applied yet.")
-      console.error("Please apply the SQL files in Supabase dashboard as per docs/SUPABASE_SETUP.md.")
-      process.exit(1)
+const REQUIRED_TABLES = [
+  'profiles',
+  'merchants',
+  'products',
+  'vehicles',
+  'orders',
+  'order_items',
+  'payments',
+  'tracking'
+]
+
+async function verify() {
+  console.log("Verifying Supabase schema tables...")
+  let missing = 0
+
+  for (const table of REQUIRED_TABLES) {
+    const { error } = await supabase.from(table).select('id').limit(1)
+    
+    if (error && (error.code === '42P01' || error.message.includes('Could not find the table'))) {
+      console.log(`❌ Table missing: ${table}`)
+      missing++
+    } else if (error) {
+      console.log(`⚠️ Error accessing ${table}: ${error.message}`)
+    } else {
+      console.log(`✅ Table exists: ${table}`)
     }
-    console.error("\n❌ Connection failed:", error.message)
+  }
+
+  if (missing > 0) {
+    console.error(`\n❌ Schema verification failed. ${missing} required tables are missing.`)
     process.exit(1)
   }
-  
-  console.log("\n✅ Connection successful! The database schema is applied.")
+
+  console.log("\n✅ All required tables verified successfully.")
   process.exit(0)
 }
 
-testConnection()
+verify()
