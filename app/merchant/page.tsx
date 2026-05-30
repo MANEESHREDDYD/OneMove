@@ -26,6 +26,7 @@ export default async function MerchantDashboard() {
   const merchantIds = merchants?.map(m => m.id) || []
 
   // If they have no merchants, they have no orders
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let ordersData: any[] = []
   
   if (merchantIds.length > 0) {

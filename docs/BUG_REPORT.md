@@ -54,29 +54,25 @@
 
 ### BUG-007: AppShell shows customer navigation for all roles
 **Severity**: Medium
-**Area**: UI / Navigation
-**Route/Page**: Global
-**Steps to reproduce**:
-1. Login as a driver or merchant.
-2. Look at the sidebar/bottom nav.
-**Expected result**: Should see role-specific navigation (e.g. "Available Jobs", "Earnings").
-**Actual result**: Sees customer navigation ("Rides", "Eats", "Grocery").
-**Root cause**: `AppShell.tsx` has hardcoded customer navigation items and does not check user role.
+**Description**: The sidebar and mobile bottom navigation show Customer links (Rides, Eats, Grocery) to all logged-in users regardless of role.
+**Expected result**: Drivers see Driver nav, Merchants see Merchant nav, Admins see Admin nav.
+**Actual result**: Static Customer nav is rendered for everyone.
+**Root cause**: `NAV_ITEMS` was statically defined in `AppShell.tsx` and never evaluated the current user's role/route.
 **Files affected**: `components/layout/AppShell.tsx`
-**Status**: Open
+**Fix applied**: Replaced static `NAV_ITEMS` with a `getNavItems(pathname)` function that dynamically checks the route prefix (`/partner`, `/merchant`, `/admin`, or fallback to `/customer`) and returns the appropriate navigation array.
+**Retest result**: Logged in as customer -> Customer Nav. Logged in as partner -> Partner Nav. Logged in as merchant -> Merchant Nav. Logged in as admin -> Admin Nav. Both Desktop Sidebar and Mobile Bottom nav render correctly based on prefix.
+**Final Status**: Fixed
 
 ### BUG-008: Merchant dashboard fetches global orders
 **Severity**: Critical
-**Area**: Security / Merchant App
-**Route/Page**: `/merchant/page.tsx`
-**Steps to reproduce**:
-1. Login as Merchant A.
-2. View dashboard.
-**Expected result**: Should only see orders for Merchant A's store.
-**Actual result**: Sees ALL eats and grocery orders in the entire system.
-**Root cause**: Missing `.eq('merchant_id', ...)` filter on the Supabase query.
-**Files affected**: `app/merchant/page.tsx`
-**Status**: Open
+**Description**: The `merchant/page.tsx` route runs a global `select('*')` on the orders table and filters locally, causing a massive data leak.
+**Expected result**: Merchants only see orders assigned to their store.
+**Actual result**: Merchants fetch all platform orders.
+**Root cause**: Missing `in('merchant_id', [merchantsOwned])` filter on the Supabase query.
+**Files affected**: `app/merchant/page.tsx`, `supabase/migrations/00000_schema.sql`
+**Fix applied**: Updated `app/merchant/page.tsx` to first fetch the logged-in user's owned merchants from the `merchants` table via `owner_id = user.id`. Extracted those IDs and applied them to the orders query: `.in('merchant_id', merchantIds)`.
+**Retest result**: Confirmed that `app/merchant/page.tsx` explicitly restricts data by `merchant_id`. Furthermore, the Row Level Security (RLS) policy in `00000_schema.sql` (lines 152-154) strictly enforces cross-merchant restrictions natively on the database (`EXISTS (SELECT 1 FROM merchants m WHERE m.id = orders.merchant_id AND m.owner_id = auth.uid())`). Merchant A cannot access Merchant B orders even via direct URL.
+**Final Status**: Fixed
 
 ---
 

@@ -43,7 +43,7 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = request.nextUrl.pathname.startsWith('/auth')
   const isProtectedRoute = 
     request.nextUrl.pathname.startsWith('/customer') ||
-    request.nextUrl.pathname.startsWith('/driver') ||
+    request.nextUrl.pathname.startsWith('/partner') ||
     request.nextUrl.pathname.startsWith('/merchant') ||
     request.nextUrl.pathname.startsWith('/admin')
 
@@ -62,21 +62,22 @@ export async function updateSession(request: NextRequest) {
       .single()
 
     const role = profile?.role || 'customer'
+    const routePrefix = role === 'driver' ? 'partner' : role
     
     // Check if trying to access a route for a different role
-    if (request.nextUrl.pathname.startsWith('/driver') && role !== 'driver' && role !== 'admin') {
+    if (request.nextUrl.pathname.startsWith('/partner') && role !== 'driver' && role !== 'admin') {
       const url = request.nextUrl.clone()
-      url.pathname = `/${role}`
+      url.pathname = `/${routePrefix}`
       return NextResponse.redirect(url)
     }
     if (request.nextUrl.pathname.startsWith('/merchant') && role !== 'merchant' && role !== 'admin') {
       const url = request.nextUrl.clone()
-      url.pathname = `/${role}`
+      url.pathname = `/${routePrefix}`
       return NextResponse.redirect(url)
     }
     if (request.nextUrl.pathname.startsWith('/admin') && role !== 'admin') {
       const url = request.nextUrl.clone()
-      url.pathname = `/${role}`
+      url.pathname = `/${routePrefix}`
       return NextResponse.redirect(url)
     }
   }
@@ -90,8 +91,9 @@ export async function updateSession(request: NextRequest) {
       .single()
     
     const role = profile?.role || 'customer'
+    const routePrefix = role === 'driver' ? 'partner' : role
     const url = request.nextUrl.clone()
-    url.pathname = role === 'admin' ? '/admin/command-center' : `/${role}`
+    url.pathname = role === 'admin' ? '/admin/command-center' : `/${routePrefix}`
     return NextResponse.redirect(url)
   }
 
