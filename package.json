@@ -17,9 +17,13 @@
     "validate:env": "node scripts/validate-env.js",
     "preflight": "node scripts/validate-env.js && npm run lint && npm run typecheck && npm run build",
     "seed:demo": "tsx scripts/seed-demo.ts",
-    "analytics:refresh": "tsx scripts/refresh-analytics.ts",
-    "dq:check": "tsx scripts/run-data-quality-checks.ts",
-    "demo:activity": "tsx scripts/generate-demo-activity.ts"
+    "analytics:refresh": "node scripts/analytics-refresh.js",
+    "dq:check": "node scripts/dq-check.js",
+    "demo:activity": "tsx scripts/generate-demo-activity.ts",
+    "test:backend": "vitest run __tests__/backend.test.ts",
+    "test:rls": "node scripts/test-rls-security.js",
+    "audit:ui": "node scripts/audit-interactive-elements.js",
+    "test:ml": "vitest run __tests__/ml.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
