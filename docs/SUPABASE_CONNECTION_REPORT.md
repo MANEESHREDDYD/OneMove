@@ -25,9 +25,4 @@
 ## Final Status
 **Status:** Ready for localhost validation
 
----
 
-To proceed with automated schema setup, exactly one of these is needed:
-* **Supabase CLI login/PAT** already configured locally, or
-* **Supabase direct Postgres connection string** in `.env.local` as `DATABASE_URL`, or
-* **Manual SQL execution** in your Supabase dashboard SQL Editor.
