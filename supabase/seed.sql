@@ -74,8 +74,8 @@ INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) V
 INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('0b38c6bd-f856-4d3e-80f1-e88ffcaa2761', 'customer', 'Isidro Fritsch', '1-380-939-0359', NOW(), NOW());
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('1c9af558-a4b1-430b-afc2-4a4648d38a04', 'customer33@example.com', '{"name":"Dr. Stuart Huels"}', NOW(), NOW());
 INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('1c9af558-a4b1-430b-afc2-4a4648d38a04', 'customer', 'Dr. Stuart Huels', '218-563-7886 x882', NOW(), NOW());
-INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('94ae7d0d-f5bd-4163-8b60-431853e528ec', 'customer34@example.com', '{"name":"Tasha D'Amore"}', NOW(), NOW());
-INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('94ae7d0d-f5bd-4163-8b60-431853e528ec', 'customer', 'Tasha D'Amore', '(300) 712-6893 x2779', NOW(), NOW());
+INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('94ae7d0d-f5bd-4163-8b60-431853e528ec', 'customer34@example.com', '{"name":"Tasha D''Amore"}', NOW(), NOW());
+INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('94ae7d0d-f5bd-4163-8b60-431853e528ec', 'customer', 'Tasha D''Amore', '(300) 712-6893 x2779', NOW(), NOW());
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('1e2bf3bc-4e13-4413-8c48-29931ba7efbf', 'customer35@example.com', '{"name":"Garth Welch"}', NOW(), NOW());
 INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('1e2bf3bc-4e13-4413-8c48-29931ba7efbf', 'customer', 'Garth Welch', '(784) 918-2677 x49172', NOW(), NOW());
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('b30cd2c5-99e9-4d6a-93be-6a80ec61583d', 'customer36@example.com', '{"name":"Myrtle Predovic"}', NOW(), NOW());
@@ -140,8 +140,8 @@ INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) V
 INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('b1d91795-b9dd-40ab-a2ed-2eacc21a542d', 'driver', 'Andres Schumm', '1-446-878-5329 x59436', NOW(), NOW());
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('fd606c0d-45e5-4775-9167-3d73197bf3b6', 'driver16@example.com', '{"name":"Brenda McGlynn"}', NOW(), NOW());
 INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('fd606c0d-45e5-4775-9167-3d73197bf3b6', 'driver', 'Brenda McGlynn', '565.956.5310 x250', NOW(), NOW());
-INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('50a8eabe-e596-49ff-b71f-10bd995ad57a', 'driver17@example.com', '{"name":"Jonathon O'Connell"}', NOW(), NOW());
-INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('50a8eabe-e596-49ff-b71f-10bd995ad57a', 'driver', 'Jonathon O'Connell', '(300) 607-5749', NOW(), NOW());
+INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('50a8eabe-e596-49ff-b71f-10bd995ad57a', 'driver17@example.com', '{"name":"Jonathon O''Connell"}', NOW(), NOW());
+INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('50a8eabe-e596-49ff-b71f-10bd995ad57a', 'driver', 'Jonathon O''Connell', '(300) 607-5749', NOW(), NOW());
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('d732da4b-44bb-4dd8-9494-c15072f5cd1a', 'driver18@example.com', '{"name":"Dena Roob"}', NOW(), NOW());
 INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('d732da4b-44bb-4dd8-9494-c15072f5cd1a', 'driver', 'Dena Roob', '1-716-486-0172 x076', NOW(), NOW());
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('3aaf124c-7568-45a0-9957-c0389239b776', 'driver19@example.com', '{"name":"Fleta Friesen"}', NOW(), NOW());
@@ -162,8 +162,8 @@ INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) V
 INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('b2ba0081-92a5-4b3a-af74-53988a02302d', 'merchant', 'Doris Kilback', '311-997-6219 x2191', NOW(), NOW());
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('4202782b-8953-4c58-abe7-f8c1196c9928', 'merchant7@example.com', '{"name":"Letitia Wisozk"}', NOW(), NOW());
 INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('4202782b-8953-4c58-abe7-f8c1196c9928', 'merchant', 'Letitia Wisozk', '1-812-610-6032', NOW(), NOW());
-INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('e91652b2-df1a-4a8a-8eca-6333d110b0ef', 'merchant8@example.com', '{"name":"Cordia O'Conner"}', NOW(), NOW());
-INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('e91652b2-df1a-4a8a-8eca-6333d110b0ef', 'merchant', 'Cordia O'Conner', '(559) 611-8398 x95085', NOW(), NOW());
+INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('e91652b2-df1a-4a8a-8eca-6333d110b0ef', 'merchant8@example.com', '{"name":"Cordia O''Conner"}', NOW(), NOW());
+INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('e91652b2-df1a-4a8a-8eca-6333d110b0ef', 'merchant', 'Cordia O''Conner', '(559) 611-8398 x95085', NOW(), NOW());
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('d4d34221-8a3e-411e-ab2f-014bbc895611', 'merchant9@example.com', '{"name":"Miss Martha Bernhard"}', NOW(), NOW());
 INSERT INTO profiles (id, role, full_name, phone, created_at, updated_at) VALUES ('d4d34221-8a3e-411e-ab2f-014bbc895611', 'merchant', 'Miss Martha Bernhard', '1-692-860-8381', NOW(), NOW());
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at) VALUES ('837e8f49-fcbb-4542-b9ec-ff68dcc89dfc', 'merchant10@example.com', '{"name":"Tyshawn Dicki"}', NOW(), NOW());
