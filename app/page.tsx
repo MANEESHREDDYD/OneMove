@@ -1,8 +1,9 @@
 import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
-import { Car, Utensils, ShoppingBag, Package, Tag, ShieldCheck, Map, Activity } from "lucide-react"
+import { Car, Utensils, ShoppingBag, Package, Tag, ShieldCheck, Activity } from "lucide-react"
 import { GlassCard } from "@/components/common/GlassCard"
 import { ServiceCard } from "@/components/common/ServiceCard"
+import { LiveCityPreview } from "@/components/maps/LiveCityPreview"
 
 export default function LandingPage() {
   return (
@@ -66,9 +67,8 @@ export default function LandingPage() {
                 Simulated city map with moving driver markers, active order markers, and real-time demand zones.
               </p>
             </div>
-            <div className="flex-1 w-full aspect-video bg-muted rounded-xl flex items-center justify-center border">
-              <Map className="w-12 h-12 text-muted-foreground/50" />
-              <span className="ml-2 text-muted-foreground font-medium">Map Preview</span>
+            <div className="flex-1 w-full h-[400px] bg-muted rounded-xl flex items-center justify-center border overflow-hidden relative">
+              <LiveCityPreview />
             </div>
           </GlassCard>
         </section>
