@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/common/PageHeader"
+import { SetupRequired } from "@/components/common/SetupRequired"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
@@ -8,6 +9,9 @@ import { AnalyticsClient } from "./AnalyticsClient"
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
+  if (!supabase) {
+    return <SetupRequired />
+  }
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {

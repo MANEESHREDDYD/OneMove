@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/common/PageHeader"
+import { SetupRequired } from "@/components/common/SetupRequired"
 import { Button } from "@/components/ui/button"
 import { signout } from "@/app/auth/actions"
 import { createClient } from "@/utils/supabase/server"
@@ -7,18 +8,36 @@ import { MerchantDashboardClient } from "./MerchantDashboardClient"
 
 export default async function MerchantDashboard() {
   const supabase = await createClient()
+  if (!supabase) {
+    return <SetupRequired />
+  }
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
     redirect('/auth/login')
   }
 
-  // Fetch all relevant orders for MVP (eats & grocery)
-  const { data: ordersData } = await supabase
-    .from('orders')
-    .select('*')
-    .in('service_type', ['eats', 'grocery'])
-    .order('created_at', { ascending: false })
+  // Find the merchants owned by this user
+  const { data: merchants } = await supabase
+    .from('merchants')
+    .select('id')
+    .eq('owner_id', user.id)
+
+  const merchantIds = merchants?.map(m => m.id) || []
+
+  // If they have no merchants, they have no orders
+  let ordersData: any[] = []
+  
+  if (merchantIds.length > 0) {
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .in('service_type', ['eats', 'grocery'])
+      .in('merchant_id', merchantIds)
+      .order('created_at', { ascending: false })
+      
+    ordersData = data || []
+  }
 
   const allOrders = ordersData || []
 

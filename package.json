@@ -9,6 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "validate:env": "node scripts/validate-env.js",
+    "preflight": "node scripts/validate-env.js && npm run lint && npm run typecheck && npm run build",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "analytics:refresh": "tsx scripts/refresh-analytics.ts",
     "dq:check": "tsx scripts/run-data-quality-checks.ts",

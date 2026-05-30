@@ -1,7 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { hasSupabaseConfig } from '@/utils/env'
 
 export async function createClient() {
+  if (!hasSupabaseConfig()) {
+    // Return null so server components can check and render a setup screen.
+    return null
+  }
+
   const cookieStore = await cookies()
 
   return createServerClient(

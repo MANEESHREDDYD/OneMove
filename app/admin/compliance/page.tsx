@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/common/PageHeader"
+import { SetupRequired } from "@/components/common/SetupRequired"
 import { GlassCard } from "@/components/common/GlassCard"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/utils/supabase/server"
@@ -8,6 +9,9 @@ import { ArrowLeft, ShieldAlert, CheckCircle, FileWarning, Search, UserX } from 
 
 export default async function CompliancePage() {
   const supabase = await createClient()
+  if (!supabase) {
+    return <SetupRequired />
+  }
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {

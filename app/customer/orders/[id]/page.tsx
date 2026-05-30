@@ -1,11 +1,15 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
+import { SetupRequired } from "@/components/common/SetupRequired"
 import { GlassCard } from '@/components/common/GlassCard'
 import { Car, Utensils, ShoppingBasket, Package, MapPin, Navigation, Clock, CheckCircle2 } from 'lucide-react'
 import { CancelOrderButton } from './CancelOrderButton'
 
 export default async function OrderTrackingPage({ params }: { params: { id: string } }) {
   const supabase = await createClient()
+  if (!supabase) {
+    return <SetupRequired />
+  }
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {

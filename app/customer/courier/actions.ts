@@ -5,6 +5,9 @@ import { revalidatePath } from 'next/cache'
 
 export async function requestCourierOrder(formData: FormData) {
   const supabase = await createClient()
+  if (!supabase) {
+    return { error: 'Supabase is not configured. See docs/LOCAL_SETUP.md.' }
+  }
   const { data: { user }, error: userError } = await supabase.auth.getUser()
 
   if (userError || !user) {

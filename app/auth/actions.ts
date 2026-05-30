@@ -6,6 +6,9 @@ import { createClient } from '@/utils/supabase/server'
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
+  if (!supabase) {
+    redirect('/auth/login?error=Supabase+is+not+configured')
+  }
 
   const email = formData.get('email') as string
   const password = formData.get('password') as string
@@ -26,6 +29,9 @@ export async function login(formData: FormData) {
 
 export async function signup(formData: FormData) {
   const supabase = await createClient()
+  if (!supabase) {
+    redirect('/auth/register?error=Supabase+is+not+configured')
+  }
 
   const email = formData.get('email') as string
   const password = formData.get('password') as string
@@ -53,6 +59,9 @@ export async function signup(formData: FormData) {
 
 export async function signout() {
   const supabase = await createClient()
+  if (!supabase) {
+    redirect('/auth/login?error=Supabase+is+not+configured')
+  }
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')
   redirect('/')

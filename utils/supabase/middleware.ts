@@ -1,7 +1,15 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { hasSupabaseConfig, getMissingEnvMessage } from '@/utils/env'
 
 export async function updateSession(request: NextRequest) {
+  // Guard: If Supabase is not configured, skip all auth logic and let the
+  // request proceed to the page which will show a setup-required screen.
+  if (!hasSupabaseConfig()) {
+    console.warn(getMissingEnvMessage())
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })

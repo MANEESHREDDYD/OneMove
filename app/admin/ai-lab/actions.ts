@@ -7,6 +7,9 @@ export async function askAI(query: string) {
   await new Promise(resolve => setTimeout(resolve, 1500))
 
   const supabase = await createClient()
+  if (!supabase) {
+    return { error: 'Supabase is not configured. See docs/LOCAL_SETUP.md.' }
+  }
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {

@@ -5,6 +5,9 @@ import { revalidatePath } from 'next/cache'
 
 export async function acceptJob(orderId: string) {
   const supabase = await createClient()
+  if (!supabase) {
+    return { error: 'Supabase is not configured. See docs/LOCAL_SETUP.md.' }
+  }
   const { data: { user }, error: userError } = await supabase.auth.getUser()
 
   if (userError || !user) {
@@ -44,6 +47,9 @@ export async function acceptJob(orderId: string) {
 
 export async function updateJobStatus(orderId: string, newStatus: 'in_transit' | 'completed') {
   const supabase = await createClient()
+  if (!supabase) {
+    return { error: 'Supabase is not configured. See docs/LOCAL_SETUP.md.' }
+  }
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {

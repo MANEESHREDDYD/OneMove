@@ -14,6 +14,9 @@ export async function requestRide(formData: FormData) {
   }
 
   const supabase = await createClient()
+  if (!supabase) {
+    return { error: 'Supabase is not configured. See docs/LOCAL_SETUP.md.' }
+  }
   const { data: { user }, error: userError } = await supabase.auth.getUser()
 
   if (userError || !user) {
