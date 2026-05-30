@@ -4,15 +4,15 @@ Use this checklist to ensure your Supabase project is correctly configured for t
 
 ## 1. Project
 - [ ] Supabase project created
-- [ ] Project URL copied
-- [ ] anon key copied
-- [ ] service role key copied
+- [ ] Project URL copied (Base URL, not /rest/v1/)
+- [ ] Publishable key copied (`sb_publishable_...`)
+- [ ] Secret key copied (`sb_secret_...`)
 
 ## 2. Local Env
 - [ ] `.env.local` created
-- [ ] `NEXT_PUBLIC_SUPABASE_URL` filled
-- [ ] `NEXT_PUBLIC_SUPABASE_ANON_KEY` filled
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` filled
+- [ ] `NEXT_PUBLIC_SUPABASE_URL` filled with Base URL
+- [ ] `NEXT_PUBLIC_SUPABASE_ANON_KEY` filled with Publishable key
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` filled with Secret key
 - [ ] `.env.local` not tracked by Git (`git status` shows it is ignored)
 
 ## 3. Database SQL

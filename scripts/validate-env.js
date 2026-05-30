@@ -89,10 +89,12 @@ if (!anonKey) {
   errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is missing or empty.')
 } else if (isPlaceholder(anonKey)) {
   errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY contains a placeholder value.')
+} else if (!anonKey.startsWith('sb_publishable_') && !anonKey.startsWith('eyJhbGciOiJIUzI1Ni')) {
+  errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY must be a valid Supabase publishable key or JWT.')
 } else if (anonKey.length < 30) {
   errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY appears too short.')
 } else {
-  passes.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is present and valid length')
+  passes.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is present and valid')
 }
 
 // Check 4: NEXT_PUBLIC_APP_URL
@@ -125,8 +127,10 @@ if (!serviceKey) {
   errors.push('SUPABASE_SERVICE_ROLE_KEY is missing or empty.')
 } else if (isPlaceholder(serviceKey)) {
   errors.push('SUPABASE_SERVICE_ROLE_KEY contains a placeholder value.')
+} else if (!serviceKey.startsWith('sb_secret_') && !serviceKey.startsWith('eyJhbGciOiJIUzI1Ni')) {
+  errors.push('SUPABASE_SERVICE_ROLE_KEY must be a valid Supabase secret key or JWT.')
 } else {
-  passes.push('SUPABASE_SERVICE_ROLE_KEY is present')
+  passes.push('SUPABASE_SERVICE_ROLE_KEY is present and valid')
 }
 
 // Check 8: Production placeholder detection

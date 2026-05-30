@@ -52,7 +52,11 @@ OneMove is designed with role-based partitioning to support a multi-sided market
    Quick checklist:
    ```bash
    cp .env.local.example .env.local
-   # (Fill in .env.local with your keys)
+   # Fill in .env.local with your keys from Supabase Dashboard -> Settings -> API Keys:
+   # NEXT_PUBLIC_SUPABASE_ANON_KEY = Publishable key (sb_publishable_...)
+   # SUPABASE_SERVICE_ROLE_KEY = Secret key (sb_secret_...)
+   # NEXT_PUBLIC_SUPABASE_URL = Base Project URL (not /rest/v1/)
+   ```
    npm run validate:env
    npm run test:supabase
    npm run lint

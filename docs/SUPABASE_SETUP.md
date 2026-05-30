@@ -17,19 +17,20 @@ This guide covers the complete step-by-step process for setting up the Supabase 
 
 Once the project is ready:
 1. Go to **Project Settings** (the gear icon) → **API**.
-2. Locate your **Project URL** and copy it.
-3. Locate the **Project API keys** and copy the `anon` / `public` key.
-4. Locate the `service_role` key and copy it.
+2. Locate your **Project URL** and copy it (Use the base project URL, not `/rest/v1/`).
+3. Locate the **Publishable key** (`sb_publishable_...`) and copy it.
+4. Locate the **Secret key** (`sb_secret_...`) and copy it.
 
 **IMPORTANT KEY MAPPING:**
-* `NEXT_PUBLIC_SUPABASE_URL` = Supabase Project URL
-* `NEXT_PUBLIC_SUPABASE_ANON_KEY` = Supabase `anon` / `public` key
-* `SUPABASE_SERVICE_ROLE_KEY` = Supabase `service_role` key
+* `NEXT_PUBLIC_SUPABASE_URL` = Supabase Project URL (`https://qhhwdrlcjuenmjanyovd.supabase.co`)
+* `NEXT_PUBLIC_SUPABASE_ANON_KEY` = Supabase `Publishable key`
+* `SUPABASE_SERVICE_ROLE_KEY` = Supabase `Secret key`
 
 > [!WARNING]
 > * Never commit `.env.local`.
-> * Never expose `SUPABASE_SERVICE_ROLE_KEY` in browser/client code.
-> * Only use the service role key server-side.
+> * Never expose `SUPABASE_SERVICE_ROLE_KEY` or `sb_secret_...` in browser/client code.
+> * Use the publishable key only for browser/client Supabase usage.
+> * Use the secret key only in server-side scripts/actions.
 
 ## 3. Set Up Local Environment
 
