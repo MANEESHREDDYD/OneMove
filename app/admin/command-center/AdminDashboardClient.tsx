@@ -3,6 +3,7 @@
 import { GlassCard } from "@/components/common/GlassCard"
 import { Database } from "@/types/database.types"
 import { Shield, Activity, DollarSign, Users, Globe, CheckCircle, Clock } from "lucide-react"
+import { LiveCityPreview } from "@/components/maps/LiveCityPreview"
 
 type Order = Database['public']['Tables']['orders']['Row']
 
@@ -20,6 +21,11 @@ export function AdminDashboardClient({
 }) {
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* Map Section */}
+      <div className="w-full h-[400px] rounded-xl overflow-hidden border bg-muted mb-8 relative">
+        <LiveCityPreview />
+      </div>
       
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
