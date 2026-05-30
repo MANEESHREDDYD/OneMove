@@ -40,15 +40,15 @@ cp .env.local.example .env.local
 | Dashboard Field | Environment Variable |
 |---|---|
 | **Project URL** | `NEXT_PUBLIC_SUPABASE_URL` |
-| **anon / public** key | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
-| **service_role** key (optional) | `SUPABASE_SERVICE_ROLE_KEY` |
+| **Publishable key** (`sb_publishable_...`) | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+| **Secret key** (`sb_secret_...`) | `SUPABASE_SERVICE_ROLE_KEY` |
 
 ### 3c. Fill in your `.env.local`
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIs...your-anon-key...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIs...your-service-key...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_your_publishable_key_here
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_your_secret_key_here
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_DEFAULT_REGION=US
 NEXT_PUBLIC_DEFAULT_CITY=NYC
