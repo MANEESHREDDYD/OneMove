@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Car, Utensils, ShoppingBag, Package, LayoutDashboard, Settings, Map, LineChart, Shield, Store, ListOrdered } from "lucide-react"
+import { Car, Utensils, ShoppingBag, Package, LayoutDashboard, Settings, Map, LineChart, Shield } from "lucide-react"
 
 const CUSTOMER_NAV = [
   { name: "Dashboard", href: "/customer", icon: LayoutDashboard },
@@ -15,7 +15,7 @@ const CUSTOMER_NAV = [
 ]
 
 const DRIVER_NAV = [
-  { name: "Dashboard", href: "/driver", icon: LayoutDashboard },
+  { name: "Dashboard", href: "/partner", icon: LayoutDashboard },
 ]
 
 const MERCHANT_NAV = [
@@ -25,13 +25,13 @@ const MERCHANT_NAV = [
 const ADMIN_NAV = [
   { name: "Command Center", href: "/admin/command-center", icon: LayoutDashboard },
   { name: "Analytics", href: "/admin/analytics", icon: LineChart },
-  { name: "AI Lab", href: "/admin/ai-lab", icon: Map },
+  { name: "ML Lab", href: "/admin/ml-lab", icon: Map },
   { name: "Compliance", href: "/admin/compliance", icon: Shield },
 ]
 
 function getNavItems(pathname: string) {
   if (pathname.startsWith("/admin")) return ADMIN_NAV
-  if (pathname.startsWith("/driver") || pathname.startsWith("/partner")) return DRIVER_NAV
+  if (pathname.startsWith("/partner")) return DRIVER_NAV
   if (pathname.startsWith("/merchant")) return MERCHANT_NAV
   return CUSTOMER_NAV
 }

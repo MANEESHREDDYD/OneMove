@@ -60,9 +60,9 @@ export default async function AdminCommandCenter() {
               Safety & Compliance
             </Button>
           </Link>
-          <Link href="/admin/ai-lab">
+          <Link href="/admin/ml-lab">
             <Button variant="outline" className="rounded-full text-xs font-bold border-purple-500 text-purple-500 hover:bg-purple-500/10">
-              ML / AI Lab
+              ML Lab
             </Button>
           </Link>
           <Link href="/admin/analytics">

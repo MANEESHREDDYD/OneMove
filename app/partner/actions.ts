@@ -41,7 +41,7 @@ export async function acceptJob(orderId: string) {
     return { error: 'Failed to accept job' }
   }
 
-  revalidatePath('/driver')
+  revalidatePath('/partner')
   return { success: true }
 }
 
@@ -66,6 +66,6 @@ export async function updateJobStatus(orderId: string, newStatus: 'in_transit' |
     return { error: 'Failed to update job status' }
   }
 
-  revalidatePath('/driver')
+  revalidatePath('/partner')
   return { success: true }
 }
