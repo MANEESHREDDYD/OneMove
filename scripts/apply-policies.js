@@ -14,21 +14,29 @@ async function run() {
   console.log("Connected to DB.");
 
   const sql = `
+  -- Profiles
   DROP POLICY IF EXISTS "Public profiles are viewable by everyone." ON profiles;
   DROP POLICY IF EXISTS "Profiles are viewable by authenticated users." ON profiles;
-  CREATE POLICY "Profiles are viewable by authenticated users." ON profiles FOR SELECT USING (auth.role() = 'authenticated');
+  DROP POLICY IF EXISTS "Users can view own profile." ON profiles;
+  CREATE POLICY "Users can view own profile." ON profiles FOR SELECT USING (auth.uid() = id);
 
+  -- Merchants
   DROP POLICY IF EXISTS "Merchants are viewable by everyone." ON merchants;
   DROP POLICY IF EXISTS "Merchants are viewable by authenticated users." ON merchants;
-  CREATE POLICY "Merchants are viewable by authenticated users." ON merchants FOR SELECT USING (auth.role() = 'authenticated');
+  DROP POLICY IF EXISTS "Merchant owners can view their merchants." ON merchants;
+  CREATE POLICY "Merchant owners can view their merchants." ON merchants FOR SELECT USING (auth.uid() = owner_id);
 
+  -- Products
   DROP POLICY IF EXISTS "Products are viewable by everyone." ON products;
   DROP POLICY IF EXISTS "Products are viewable by authenticated users." ON products;
-  CREATE POLICY "Products are viewable by authenticated users." ON products FOR SELECT USING (auth.role() = 'authenticated');
+  DROP POLICY IF EXISTS "Merchant owners can view their products." ON products;
+  CREATE POLICY "Merchant owners can view their products." ON products FOR SELECT USING (
+    EXISTS (SELECT 1 FROM merchants m WHERE m.id = products.merchant_id AND m.owner_id = auth.uid())
+  );
   `;
 
   await client.query(sql);
-  console.log("Applied stricter RLS policies.");
+  console.log("Applied strictest RLS policies.");
 
   await client.end();
 }
