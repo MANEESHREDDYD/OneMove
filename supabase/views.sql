@@ -1,0 +1,2 @@
+-- No views defined yet
+-- Placeholder for future view definitions

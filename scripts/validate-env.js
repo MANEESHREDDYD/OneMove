@@ -71,8 +71,10 @@ if (!supabaseUrl) {
 } else {
   try {
     const url = new URL(supabaseUrl)
-    if (!url.hostname.includes('supabase')) {
-      warnings.push('NEXT_PUBLIC_SUPABASE_URL does not contain "supabase" in hostname. Verify this is correct.')
+    if (url.protocol !== 'https:') {
+      errors.push('NEXT_PUBLIC_SUPABASE_URL must start with https://')
+    } else if (!url.hostname.includes('supabase.co')) {
+      errors.push('NEXT_PUBLIC_SUPABASE_URL must contain supabase.co')
     } else {
       passes.push('NEXT_PUBLIC_SUPABASE_URL is a valid Supabase URL')
     }
@@ -120,7 +122,9 @@ if (!city) {
 // Check 7: SUPABASE_SERVICE_ROLE_KEY
 const serviceKey = envVars['SUPABASE_SERVICE_ROLE_KEY'] || ''
 if (!serviceKey) {
-  warnings.push('SUPABASE_SERVICE_ROLE_KEY is not set. Some admin features may not work.')
+  errors.push('SUPABASE_SERVICE_ROLE_KEY is missing or empty.')
+} else if (isPlaceholder(serviceKey)) {
+  errors.push('SUPABASE_SERVICE_ROLE_KEY contains a placeholder value.')
 } else {
   passes.push('SUPABASE_SERVICE_ROLE_KEY is present')
 }
@@ -156,16 +160,16 @@ if (errors.length > 0) {
   }
   console.log('')
   console.log('  ────────────────────────────────────────────────')
+  console.log('  ────────────────────────────────────────────────')
   console.log('  PREFLIGHT CHECK FAILED')
-  console.log('  Fix the errors above before building or deploying.')
-  console.log('  See docs/LOCAL_SETUP.md for setup instructions.')
+  console.log('  Supabase is not configured yet. Follow docs/SUPABASE_SETUP.md.')
   console.log('  ────────────────────────────────────────────────')
   console.log('')
   process.exit(1)
 } else {
   console.log('  ────────────────────────────────────────────────')
   console.log('  ✅ PREFLIGHT CHECK PASSED')
-  console.log('  All required environment variables are configured.')
+  console.log('  Supabase environment is configured. You can continue localhost validation.')
   console.log('  ────────────────────────────────────────────────')
   console.log('')
   process.exit(0)
