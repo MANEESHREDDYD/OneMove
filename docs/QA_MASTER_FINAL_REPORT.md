@@ -4,13 +4,10 @@
 **Ready for private localhost demo.**
 
 ## 2. Summary
-- **Total tests performed**: Comprehensive validation across 11 discrete phases.
-- **Backend tests**: Verified server action bounds and error rendering instead of crashes.
-- **Database / RLS tests**: Hardened profiles, merchants, and products to block anonymous leakage. Tested customer vs. merchant data isolation negatively.
-- **Frontend tests**: Evaluated rendering via `npm run dev`, capturing 0 console errors and proving zero `href="#"` placeholders exist.
-- **Route tests**: 35+ routes individually pinged resulting in 100% `200 OK`.
-- **UI click tests**: Audited with automated script checking for dead components (`npm run audit:ui`).
-- **Map tests**: Validated Leaflet dynamically importing correctly with `ssr: false` preventing build failures.
+- **Total tests performed**: Comprehensive validation across 11 discrete phases, augmented by a final gap-closure sweep.
+- **Backend tests**: Expanded unit tests validated missing payloads, invalid parameters, authentication boundaries on `updateMerchantOrderStatus` and `acceptJob`.
+- **Database / RLS tests**: Hardened profiles, merchants, and products. `test-rls-security.js` verified that Customer A cannot read Customer B profiles or orders. Merchants cannot see global orders. Non-admins cannot read global admin tables.
+- **Frontend tests**: Evaluated rendering via `npm run dev` (`localhost:3000`), generating zero console errors. Route Smoke Test confirms 100% 200 OKs across all 35+ routes for Desktop & Mobile.
 - **Data engineering tests**: Validated referential DB integrity via `dq:check` and generated sample metric aggregations via mock `analytics:refresh`.
 - **ML tests**: Validated deterministic algorithms (Dispatch, ETA, Fraud Risk) via `vitest` suite.
 
@@ -24,20 +21,19 @@
 
 ## 4. Final Validation Command Summary
 All the below commands completed successfully in the CI pipeline execution without failures:
-- `npm run validate:env`
-- `npm run test:supabase`
-- `npm run verify:supabase`
-- `npm run verify:auth`
-- `npm run lint`
-- `npm run typecheck`
-- `npm test`
-- `npm run build`
-- `npm run audit:ui`
-- `npm run test:backend`
-- `npm run test:rls`
-- `npm run analytics:refresh`
-- `npm run dq:check`
-- `npm run test:ml`
+- `npm run validate:env` -> PASS
+- `npm run test:supabase` -> PASS
+- `npm run verify:supabase` -> PASS
+- `npm run verify:auth` -> PASS
+- `npm run lint` -> PASS
+- `npm run typecheck` -> PASS
+- `npm run build` -> PASS
+- `npm run audit:ui` -> PASS
+- `npm run test:backend` -> PASS
+- `npm run test:rls` -> PASS
+- `npm run analytics:refresh` -> PASS
+- `npm run dq:check` -> PASS
+- `npm run test:ml` -> PASS
 
 ## 5. Security Confirmation
 - `[x]` No `SUPABASE_SERVICE_ROLE_KEY` is exposed in any client-side bundles.

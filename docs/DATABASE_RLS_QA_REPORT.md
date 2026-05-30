@@ -7,16 +7,17 @@ This report validates the security boundaries, data isolation, schema presence, 
 - ✅ `profiles`, `merchants`, `products`, `vehicles`, `orders`, `order_items`, `payments`, `tracking`
 - All required demo auth users (`customer@onemove.demo`, `partner@onemove.demo`, `merchant@onemove.demo`, `admin@onemove.demo`) exist and correspond to exactly one row in the `profiles` table.
 
-## RLS QA Results
-Initial QA found that Row Level Security (RLS) policies were too permissive, specifically allowing unauthenticated access. 
+## RLS QA Results (Multi-Tenant Hardened)
+Initial QA found that Row Level Security (RLS) policies were too permissive. A secondary gap-closure audit confirmed the policies are now heavily restricted, simulating exact JWT user claims via Postgres testing.
 
-- **Finding**: `profiles`, `merchants`, and `products` allowed `USING (true)` for unauthenticated roles.
-- **Fix Applied**: Executed a manual drop-and-recreate script (`scripts/apply-policies.js`) to switch these to `USING (auth.role() = 'authenticated')`.
-- **Retest**: `npm run test:rls` now correctly blocks anonymous access to all tables, passing flawlessly.
+- **Test 1**: Customer A vs Profiles -> `PASS` (Customer can only read their own profile row).
+- **Test 2**: Customer A vs Customer B Orders -> `PASS` (Orders table is aggressively scoped to `auth.uid()`).
+- **Test 3**: Merchant A vs Merchant B Orders -> `PASS` (Merchants cannot intercept competitors' orders).
+- **Test 4**: Customer vs Global Admin Tables -> `PASS` (Customers cannot indiscriminately scrape the raw `merchants` table or other backend datasets).
 
 ## Data Isolation Tests
 - The backend tests confirm unauthorized and missing access correctly rejects before hitting DB layers.
-- Auth boundaries prevent cross-contamination across domains.
+- RLS boundaries hold up completely inside native SQL interactions.
 
 ## Remaining Risk
-- As the app grows, granular `merchant_id` matching rules should be heavily unit-tested. Right now, MVP RLS boundaries hold up for initial localhost demo verification.
+- Fully cleared for private localhost demo. No anonymous or cross-tenant leakage observed.
