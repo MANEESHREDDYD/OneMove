@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/common/PageHeader"
+import { SetupRequired } from "@/components/common/SetupRequired"
 import { Button } from "@/components/ui/button"
 import { signout } from "@/app/auth/actions"
 import { createClient } from "@/utils/supabase/server"
@@ -8,6 +9,9 @@ import { AdminDashboardClient } from "./AdminDashboardClient"
 
 export default async function AdminCommandCenter() {
   const supabase = await createClient()
+  if (!supabase) {
+    return <SetupRequired />
+  }
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {

@@ -3,9 +3,9 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Car, Utensils, ShoppingBag, Package, LayoutDashboard, Settings } from "lucide-react"
+import { Car, Utensils, ShoppingBag, Package, LayoutDashboard, Settings, Map, LineChart, Shield, Store, ListOrdered } from "lucide-react"
 
-const NAV_ITEMS = [
+const CUSTOMER_NAV = [
   { name: "Dashboard", href: "/customer", icon: LayoutDashboard },
   { name: "Rides", href: "/customer/rides", icon: Car },
   { name: "Eats", href: "/customer/eats", icon: Utensils },
@@ -13,6 +13,28 @@ const NAV_ITEMS = [
   { name: "Courier", href: "/customer/courier", icon: Package },
   { name: "Profile", href: "/customer/profile", icon: Settings },
 ]
+
+const DRIVER_NAV = [
+  { name: "Dashboard", href: "/driver", icon: LayoutDashboard },
+]
+
+const MERCHANT_NAV = [
+  { name: "Dashboard", href: "/merchant", icon: LayoutDashboard },
+]
+
+const ADMIN_NAV = [
+  { name: "Command Center", href: "/admin/command-center", icon: LayoutDashboard },
+  { name: "Analytics", href: "/admin/analytics", icon: LineChart },
+  { name: "AI Lab", href: "/admin/ai-lab", icon: Map },
+  { name: "Compliance", href: "/admin/compliance", icon: Shield },
+]
+
+function getNavItems(pathname: string) {
+  if (pathname.startsWith("/admin")) return ADMIN_NAV
+  if (pathname.startsWith("/driver") || pathname.startsWith("/partner")) return DRIVER_NAV
+  if (pathname.startsWith("/merchant")) return MERCHANT_NAV
+  return CUSTOMER_NAV
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -23,6 +45,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
+  const navItems = getNavItems(pathname)
+
   return (
     <div className="flex min-h-screen bg-background">
       {/* Desktop Sidebar */}
@@ -31,7 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/" className="text-2xl font-bold tracking-tight">OneMove</Link>
         </div>
         <nav className="flex-1 px-4 space-y-2">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
             const Icon = item.icon
             return (
@@ -62,7 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 border-t border-border bg-card/80 backdrop-blur-lg z-50 pb-safe">
         <div className="flex items-center justify-around p-2">
-          {NAV_ITEMS.slice(0, 5).map((item) => {
+          {navItems.slice(0, 5).map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
             const Icon = item.icon
             return (

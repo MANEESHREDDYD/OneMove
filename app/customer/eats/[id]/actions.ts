@@ -5,6 +5,9 @@ import { revalidatePath } from 'next/cache'
 
 export async function placeEatsOrder(restaurantId: string, restaurantName: string, items: { id: string, name: string, price: number, quantity: number }[], totalAmount: number) {
   const supabase = await createClient()
+  if (!supabase) {
+    return { error: 'Supabase is not configured. See docs/LOCAL_SETUP.md.' }
+  }
   const { data: { user }, error: userError } = await supabase.auth.getUser()
 
   if (userError || !user) {

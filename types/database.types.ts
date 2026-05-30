@@ -91,6 +91,7 @@ export interface Database {
           pickup_location: Json
           dropoff_location: Json
           scheduled_at: string | null
+          metadata: Json | null
           created_at: string
           updated_at: string
         }

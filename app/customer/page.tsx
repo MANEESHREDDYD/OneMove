@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/common/PageHeader"
 import { ServiceCard } from "@/components/common/ServiceCard"
 import { GlassCard } from "@/components/common/GlassCard"
 import { FloatingSOSButton } from "@/components/common/FloatingSOSButton"
+import { SetupRequired } from "@/components/common/SetupRequired"
 import { Button } from "@/components/ui/button"
 import { signout } from "@/app/auth/actions"
 import { createClient } from "@/utils/supabase/server"
@@ -13,6 +14,9 @@ type Order = Database['public']['Tables']['orders']['Row']
 
 export default async function CustomerDashboard() {
   const supabase = await createClient()
+  if (!supabase) {
+    return <SetupRequired />
+  }
   const { data: { user } } = await supabase.auth.getUser()
   
   let activeOrders: Order[] = []
