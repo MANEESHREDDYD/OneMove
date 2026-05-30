@@ -46,15 +46,19 @@ OneMove is designed with role-based partitioning to support a multi-sided market
    npm install
    ```
 
-3. **Configure Supabase Credentials**
-   Create a `.env.local` file in the root directory:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=your-project-url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-   ```
-
-4. **Boot the Development Server**
+3. **First-time Supabase Setup**
+   The project requires a configured Supabase database. Follow the complete guide in `docs/SUPABASE_SETUP.md`.
+   
+   Quick checklist:
    ```bash
+   cp .env.local.example .env.local
+   # (Fill in .env.local with your keys)
+   npm run validate:env
+   npm run test:supabase
+   npm run lint
+   npm run typecheck
+   npm test
+   npm run build
    npm run dev
    ```
 
