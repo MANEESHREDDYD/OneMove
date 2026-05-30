@@ -9,14 +9,17 @@ ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tracking ENABLE ROW LEVEL SECURITY;
 
 -- Base Policies (MVP permissive rules for demo purposes, restricted by auth.uid)
-CREATE POLICY "Public profiles are viewable by everyone." ON profiles FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone." ON profiles;
+CREATE POLICY "Profiles are viewable by authenticated users." ON profiles FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Users can insert their own profile." ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own profile." ON profiles FOR UPDATE USING (auth.uid() = id);
 
-CREATE POLICY "Merchants are viewable by everyone." ON merchants FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Merchants are viewable by everyone." ON merchants;
+CREATE POLICY "Merchants are viewable by authenticated users." ON merchants FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Merchant owners can manage their merchants." ON merchants FOR ALL USING (auth.uid() = owner_id);
 
-CREATE POLICY "Products are viewable by everyone." ON products FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Products are viewable by everyone." ON products;
+CREATE POLICY "Products are viewable by authenticated users." ON products FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Merchant owners can manage products." ON products FOR ALL USING (
   EXISTS (SELECT 1 FROM merchants m WHERE m.id = products.merchant_id AND m.owner_id = auth.uid())
 );
