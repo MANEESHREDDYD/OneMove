@@ -5,14 +5,20 @@ import { GlassCard } from "@/components/common/GlassCard"
 import { Button } from "@/components/ui/button"
 import { acceptJob, updateJobStatus } from "../actions"
 import { CheckCircle2, Navigation, Loader2 } from "lucide-react"
+import { useRealtimePartnerJobs } from "@/hooks/useRealtimePartnerJobs"
 
 export function JobsClient({ 
   availableJobs, 
-  activeJobs 
+  activeJobs,
+  driverId
 }: { 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   availableJobs: any[],
-  activeJobs: any[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  activeJobs: any[],
+  driverId: string
 }) {
+  useRealtimePartnerJobs(driverId)
   const [loadingId, setLoadingId] = useState<string | null>(null)
 
   const handleAccept = async (id: string) => {

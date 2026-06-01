@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/common/PageHeader"
 import { ServiceCard } from "@/components/common/ServiceCard"
 import { GlassCard } from "@/components/common/GlassCard"
 import { FloatingSOSButton } from "@/components/common/FloatingSOSButton"
+import { SignOutButton } from "@/components/auth/SignOutButton"
 import { SetupRequired } from "@/components/common/SetupRequired"
 import { Button } from "@/components/ui/button"
 import { signout } from "@/app/auth/actions"
@@ -38,9 +39,7 @@ export default async function CustomerDashboard() {
           title="Good Morning" 
           description="Where to next?"
         />
-        <form action={signout}>
-          <Button variant="ghost" className="rounded-full">Sign Out</Button>
-        </form>
+        <SignOutButton className="rounded-full" />
       </div>
       
       {/* Active Orders Widget */}

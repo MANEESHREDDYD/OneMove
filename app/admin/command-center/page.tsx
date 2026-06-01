@@ -1,5 +1,7 @@
 import { PageHeader } from "@/components/common/PageHeader"
 import { SetupRequired } from "@/components/common/SetupRequired"
+import { AdminOperationsMap } from "@/components/maps/AdminOperationsMap"
+import { SignOutButton } from "@/components/auth/SignOutButton"
 import { Button } from "@/components/ui/button"
 import { signout } from "@/app/auth/actions"
 import { createClient } from "@/utils/supabase/server"
@@ -75,9 +77,7 @@ export default async function AdminCommandCenter() {
               View Analytics
             </Button>
           </Link>
-          <form action={signout}>
-            <Button variant="ghost" className="rounded-full text-xs">Sign Out</Button>
-          </form>
+          <SignOutButton className="rounded-full text-xs" />
         </div>
       </div>
 

@@ -85,8 +85,8 @@ export function MerchantDashboardClient({
               </GlassCard>
             ) : (
               activeOrders.map((order) => {
-                const orderData = order as unknown;
-                const items = (orderData as { metadata?: { items?: { name: string, quantity: number }[] } })?.metadata?.items || []
+                const orderData = order as unknown as any;
+                const items = orderData.order_items || [];
                 
                 return (
                   <GlassCard key={order.id} className="p-5 flex flex-col justify-between h-full border-t-4 border-t-orange-500">
@@ -111,11 +111,18 @@ export function MerchantDashboardClient({
                         <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2 flex items-center gap-1">
                           <Utensils className="w-3 h-3" /> Items to Prepare
                         </h4>
-                        {items.map((item, idx) => (
-                          <div key={idx} className="flex justify-between text-sm">
-                            <span className="font-medium"><span className="text-orange-500 mr-2">{item.quantity}x</span> {item.name}</span>
-                          </div>
-                        ))}
+                        {items.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">No specific items listed.</p>
+                        ) : (
+                          items.map((item: any, idx: number) => (
+                            <div key={idx} className="flex justify-between text-sm">
+                              <span className="font-medium">
+                                <span className="text-orange-500 mr-2">{item.quantity}x</span> 
+                                {item.products?.name || 'Unknown Item'}
+                              </span>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
 

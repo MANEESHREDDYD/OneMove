@@ -38,11 +38,11 @@ export function AcceptJobButton({ orderId }: { orderId: string }) {
   )
 }
 
-export function ActiveJobButtons({ orderId, currentStatus }: { orderId: string, currentStatus: string }) {
+export function ActiveJobButtons({ orderId, currentStatus, serviceType = 'eats' }: { orderId: string, currentStatus: string, serviceType?: string }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleUpdate(newStatus: 'in_transit' | 'completed') {
+  async function handleUpdate(newStatus: string) {
     setLoading(true)
     setError(null)
     const res = await updateJobStatus(orderId, newStatus)
@@ -51,6 +51,9 @@ export function ActiveJobButtons({ orderId, currentStatus }: { orderId: string, 
       setLoading(false)
     }
   }
+
+  const isRide = serviceType === 'ride'
+  const isDelivery = serviceType === 'eats' || serviceType === 'grocery' || serviceType === 'courier'
 
   return (
     <div className="space-y-2">
@@ -61,25 +64,37 @@ export function ActiveJobButtons({ orderId, currentStatus }: { orderId: string, 
         </div>
       )}
       
-      {currentStatus === 'accepted' && (
-        <Button 
-          className="w-full bg-blue-600 hover:bg-blue-700" 
-          onClick={() => handleUpdate('in_transit')}
-          disabled={loading}
-        >
-          <Navigation className="w-4 h-4 mr-2" />
-          {loading ? 'Updating...' : 'Start Job (In Transit)'}
+      {/* Ride Flow */}
+      {isRide && currentStatus === 'accepted' && (
+        <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => handleUpdate('arrived')} disabled={loading}>
+          <Navigation className="w-4 h-4 mr-2" /> {loading ? 'Updating...' : 'Arrived at Pickup'}
+        </Button>
+      )}
+      {isRide && currentStatus === 'arrived' && (
+        <Button className="w-full bg-indigo-600 hover:bg-indigo-700" onClick={() => handleUpdate('started')} disabled={loading}>
+          <Navigation className="w-4 h-4 mr-2" /> {loading ? 'Updating...' : 'Start Ride'}
+        </Button>
+      )}
+      {isRide && currentStatus === 'started' && (
+        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleUpdate('completed')} disabled={loading}>
+          <CheckCircle2 className="w-4 h-4 mr-2" /> {loading ? 'Updating...' : 'Complete Ride'}
         </Button>
       )}
 
-      {currentStatus === 'in_transit' && (
-        <Button 
-          className="w-full bg-green-600 hover:bg-green-700" 
-          onClick={() => handleUpdate('completed')}
-          disabled={loading}
-        >
-          <CheckCircle2 className="w-4 h-4 mr-2" />
-          {loading ? 'Updating...' : 'Complete Job'}
+      {/* Delivery Flow */}
+      {isDelivery && currentStatus === 'accepted' && (
+        <Button className="w-full bg-orange-600 hover:bg-orange-700" onClick={() => handleUpdate('picked_up')} disabled={loading}>
+          <CheckCircle2 className="w-4 h-4 mr-2" /> {loading ? 'Updating...' : 'Confirm Pickup'}
+        </Button>
+      )}
+      {isDelivery && currentStatus === 'picked_up' && (
+        <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => handleUpdate('in_transit')} disabled={loading}>
+          <Navigation className="w-4 h-4 mr-2" /> {loading ? 'Updating...' : 'Start Delivery'}
+        </Button>
+      )}
+      {isDelivery && currentStatus === 'in_transit' && (
+        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleUpdate('completed')} disabled={loading}>
+          <CheckCircle2 className="w-4 h-4 mr-2" /> {loading ? 'Updating...' : 'Complete Delivery'}
         </Button>
       )}
     </div>

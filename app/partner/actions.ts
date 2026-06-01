@@ -17,7 +17,7 @@ export async function acceptJob(orderId: string) {
     .eq('id', orderId)
     .single()
 
-  if (!order || order.status !== 'pending' || order.driver_id !== null) {
+  if (!order || !['pending', 'placed', 'merchant_accepted', 'preparing', 'ready', 'requested', 'created'].includes(order.status) || order.driver_id !== null) {
     return { error: "Job is no longer available" }
   }
 
@@ -57,6 +57,15 @@ export async function updateJobStatus(orderId: string, newStatus: string) {
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "Authentication required" }
+
+  const { data: order } = await supabase.from('orders').select('status, service_type').eq('id', orderId).single()
+  
+  if (!order) return { error: "Order not found" }
+
+  const { isValidTransition } = await import('@/lib/status/statusTransitions')
+  if (!isValidTransition(order.service_type || 'eats', order.status as any, newStatus as any)) {
+    return { error: `Invalid transition from ${order.status} to ${newStatus}` }
+  }
 
   const { error } = await supabase
     .from('orders')

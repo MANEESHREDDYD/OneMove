@@ -29,6 +29,7 @@ export function EatsMenuClient({
   const cartStore = useCartStore()
   // Hydration fix for Zustand
   const [mounted, setMounted] = useState(false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), [])
 
   const handleCheckout = () => {

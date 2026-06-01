@@ -8,6 +8,7 @@ const MapComponent = dynamic(() => import('./MapComponent'), {
   loading: () => <Skeleton className="w-full h-full bg-muted animate-pulse" />
 })
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function LiveCityPreview({ orders, merchants }: { orders?: any[], merchants?: any[] }) {
   return (
     <div className="w-full h-full relative">

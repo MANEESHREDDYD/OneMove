@@ -40,10 +40,17 @@ export default async function GroceryStorePage({ params }: { params: { id: strin
   })) || []
 
   return (
-    <GroceryCartClient 
-      storeId={merchant.id} 
-      storeName={merchant.name} 
-      inventory={inventory} 
-    />
+    <>
+      {inventory.length === 0 && process.env.NODE_ENV === 'development' && (
+        <div className="p-4 bg-destructive/20 text-destructive rounded-lg mb-4">
+          No products found for merchant_id = {merchant.id}
+        </div>
+      )}
+      <GroceryCartClient 
+        storeId={merchant.id} 
+        storeName={merchant.name} 
+        inventory={inventory} 
+      />
+    </>
   )
 }

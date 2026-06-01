@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server"
 import { SetupRequired } from "@/components/common/SetupRequired"
 import { redirect } from "next/navigation"
 import { OrdersClient } from "./OrdersClient"
+import { MerchantRealtime } from "@/components/realtime/MerchantRealtime"
 
 export const dynamic = "force-dynamic"
 
@@ -20,6 +21,7 @@ export default async function OrderHistoryPage() {
 
   const merchantIds = merchants?.map(m => m.id) || []
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let orders: any[] = []
   if (merchantIds.length > 0) {
     const { data } = await supabase
@@ -28,11 +30,13 @@ export default async function OrderHistoryPage() {
       .in('merchant_id', merchantIds)
       .in('status', ['pending', 'accepted', 'preparing', 'ready', 'in_transit'])
       .order('created_at', { ascending: false })
+      .limit(50)
     orders = data || []
   }
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <MerchantRealtime merchantIds={merchantIds} />
       <PageHeader 
         title="Live Orders" 
         description="Manage incoming orders for your store"

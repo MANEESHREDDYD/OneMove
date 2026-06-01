@@ -9,7 +9,7 @@ export function MerchantActionButtons({ orderId, currentStatus }: { orderId: str
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleUpdate(newStatus: 'preparing' | 'ready') {
+  async function handleUpdate(newStatus: 'merchant_accepted' | 'preparing' | 'ready' | 'cancelled') {
     setLoading(true)
     setError(null)
     const res = await updateMerchantOrderStatus(orderId, newStatus)
@@ -28,7 +28,26 @@ export function MerchantActionButtons({ orderId, currentStatus }: { orderId: str
         </div>
       )}
       
-      {currentStatus === 'pending' || currentStatus === 'accepted' ? (
+      {currentStatus === 'placed' || currentStatus === 'pending' ? (
+        <div className="flex gap-2">
+          <Button 
+            className="w-full bg-blue-600 hover:bg-blue-700" 
+            onClick={() => handleUpdate('merchant_accepted')}
+            disabled={loading}
+          >
+            Accept
+          </Button>
+          <Button 
+            className="w-full bg-destructive hover:bg-destructive/90" 
+            onClick={() => handleUpdate('cancelled')}
+            disabled={loading}
+          >
+            Reject
+          </Button>
+        </div>
+      ) : null}
+
+      {currentStatus === 'merchant_accepted' ? (
         <Button 
           className="w-full bg-orange-600 hover:bg-orange-700" 
           onClick={() => handleUpdate('preparing')}

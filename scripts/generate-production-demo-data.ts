@@ -130,7 +130,7 @@ async function run() {
       "DELETE FROM auth.users WHERE id IN (SELECT id FROM profiles WHERE is_demo = true);"
     ];
     for (const q of queries) {
-      try { await client.query(q); } catch(e) { /* ignore if table doesn't exist */ }
+      try { await client.query(q); } catch { /* ignore if table doesn't exist */ }
     }
     console.log("✅ Reset complete.");
     await client.end();
@@ -139,55 +139,28 @@ async function run() {
 
   console.log(`\n🌱 Starting production demo generation [Run ID: ${SEED_RUN_ID}]...`);
   
-  // 1. Generate Auth Users and Profiles
-  const numCustomers = 50;
-  const numPartners = 50;
-  const numRestaurantOwners = 20;
-  const numGroceryOwners = 15;
+  // 1. Fetch Existing Auth Users
+  const { rows: custRows } = await client.query("SELECT id FROM auth.users WHERE email LIKE 'customer%@onemove.demo' ORDER BY email ASC");
+  const { rows: partRows } = await client.query("SELECT id FROM auth.users WHERE email LIKE 'partner%@onemove.demo' ORDER BY email ASC");
+  const { rows: merchRows } = await client.query("SELECT id FROM auth.users WHERE email LIKE 'merchant%@onemove.demo' ORDER BY email ASC");
 
-  const users: string[] = [];
-  const profiles: any[] = [];
-  
-  const emailTs = Date.now().toString(36);
-  
-  const generateUsers = (count: number, role: string, prefix: string) => {
-    const list = [];
-    for (let i = 0; i < count; i++) {
-      const id = faker.string.uuid();
-      const email = `${prefix}_${emailTs}_${i}@example.com`;
-      const encrypted_password = `$2a$10$wT0E8u0nBwK9bO5rL7G/OuJ6z1P7Xp4w9f7Wj4L9vG2e8b6z5r/4O`; // mock hash
-      
-      users.push(`('${id}', '${id}', 'authenticated', 'authenticated', '${email}', '${encrypted_password}', now(), now(), now(), '{"provider":"email","providers":["email"]}', '{"role":"${role}"}', false, now(), now(), null)`);
-      
-      profiles.push({id, role, name: faker.person.fullName(), phone: `+1555${String(i).padStart(4, '0')}${Math.floor(Math.random() * 1000)}`});
-      list.push(id);
-    }
-    return list;
-  };
+  const customerIds = custRows.map(r => r.id);
+  const partnerIds = partRows.map(r => r.id);
+  const merchantOwnerIds = merchRows.map(r => r.id);
 
-  const customerIds = generateUsers(numCustomers, 'customer', 'cust');
-  const partnerIds = generateUsers(numPartners, 'driver', 'part');
-  const restaurantOwnerIds = generateUsers(numRestaurantOwners, 'merchant', 'rest');
-  const groceryOwnerIds = generateUsers(numGroceryOwners, 'merchant', 'groc');
-
-  // Insert Users
-  if (users.length > 0) {
-    const chunk = 50;
-    for(let i=0; i<users.length; i+=chunk) {
-      await client.query(`
-        INSERT INTO auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, recovery_sent_at, last_sign_in_at, raw_app_meta_data, raw_user_meta_data, is_super_admin, created_at, updated_at, phone)
-        VALUES ${users.slice(i, i+chunk).join(',')}
-        ON CONFLICT (id) DO NOTHING
-      `);
-    }
-    // Profiles are created by trigger. Update them with demo fields.
-    for(let i=0; i<profiles.length; i++) {
-      const p = profiles[i];
-      await client.query(`UPDATE profiles SET full_name = $1, phone = $2, role = $3, is_demo = true, seed_run_id = $4 WHERE id = $5`, [p.name, p.phone, p.role, SEED_RUN_ID, p.id]);
-    }
+  if (customerIds.length === 0 || partnerIds.length === 0 || merchantOwnerIds.length === 0) {
+    console.error("❌ No deterministic auth users found. Please run `npm run seed:auth` first.");
+    await client.end();
+    return;
   }
 
-  console.log(`  ✅ Users: ${users.length} (${numCustomers} customers, ${numPartners} partners, ${numRestaurantOwners + numGroceryOwners} merchants)`);
+  // Split merchants into restaurant owners and grocery owners
+  const numRestaurantOwners = Math.floor(merchantOwnerIds.length * 0.6);
+  const numGroceryOwners = merchantOwnerIds.length - numRestaurantOwners;
+  const restaurantOwnerIds = merchantOwnerIds.slice(0, numRestaurantOwners);
+  const groceryOwnerIds = merchantOwnerIds.slice(numRestaurantOwners);
+
+  console.log(`  ✅ Using existing Auth Users: ${customerIds.length} customers, ${partnerIds.length} partners, ${merchantOwnerIds.length} merchants`);
 
   // 2. Generate Restaurants (20)
   const restaurantMerchantIds: { id: string, cuisine: string }[] = [];
@@ -267,14 +240,20 @@ async function run() {
   const analytics: string[] = [];
   const mlLogs: string[] = [];
 
-  const createOrder = async (service: string, merchantId: string | null) => {
+  const createOrder = async (service: string, merchantId: string | null, forcedCustId?: string, forcedPartId?: string | null, forcedStatus?: string, scenario?: string) => {
     const id = faker.string.uuid();
-    const custId = faker.helpers.arrayElement(customerIds);
-    const partId = faker.datatype.boolean({ probability: 0.8 }) ? faker.helpers.arrayElement(partnerIds) : null;
+    const custId = forcedCustId || faker.helpers.arrayElement(customerIds);
+    const partId = forcedPartId !== undefined ? forcedPartId : (faker.datatype.boolean({ probability: 0.8 }) ? faker.helpers.arrayElement(partnerIds) : null);
     const merchIdStr = merchantId ? `'${merchantId}'` : 'null';
     const driverIdStr = partId ? `'${partId}'` : 'null';
     
-    const status = faker.helpers.arrayElement(['completed', 'completed', 'completed', 'in_transit', 'pending', 'cancelled']);
+    const getStatusForService = (srv: string) => {
+      if (srv === 'ride') return faker.helpers.arrayElement(['requested', 'assigned', 'accepted', 'arrived', 'started', 'completed', 'cancelled']);
+      if (srv === 'courier') return faker.helpers.arrayElement(['created', 'partner_assigned', 'accepted', 'picked_up', 'in_transit', 'delivered', 'cancelled']);
+      return faker.helpers.arrayElement(['placed', 'merchant_accepted', 'preparing', 'ready', 'partner_assigned', 'picked_up', 'in_transit', 'completed', 'cancelled', 'refunded']);
+    };
+    
+    const status = forcedStatus || getStatusForService(service);
     const amount = faker.number.float({min: 15, max: 200, fractionDigits: 2});
     const date = randomDateLast30Days();
     
@@ -283,11 +262,18 @@ async function run() {
 
     orders.push(`('${id}', '${custId}', ${merchIdStr}, ${driverIdStr}, '${service}', '${status}', ${amount}, '${pickup}', '${dropoff}', true, '${SEED_RUN_ID}', '${date}')`);
 
-    payments.push(`('${faker.string.uuid()}', '${id}', '${custId}', ${amount}, '${status === 'cancelled' ? 'refunded' : 'succeeded'}', 'card', true, '${SEED_RUN_ID}', '${date}')`);
+    const paymentStatus = status === 'cancelled' ? 'refunded' : (status === 'pending' ? 'pending' : 'succeeded');
+    payments.push(`('${faker.string.uuid()}', '${id}', '${custId}', ${amount}, '${paymentStatus}', 'card', true, '${SEED_RUN_ID}', '${date}')`);
     
     analytics.push(`('${faker.string.uuid()}', 'order_placed', '${custId}', '{"service": "${service}"}', true, '${SEED_RUN_ID}', '${date}')`);
     
-    mlLogs.push(`('${faker.string.uuid()}', 'dispatch_score', '${id}', ${faker.number.float({min: 60, max: 100, fractionDigits: 1})}, '{}', true, '${SEED_RUN_ID}', '${date}')`);
+    // ML Logs based on scenario
+    if (scenario) {
+      const metadata = JSON.stringify({ scenario, explanation: `Generated for scenario: ${scenario}` }).replace(/'/g, "''");
+      mlLogs.push(`('${faker.string.uuid()}', 'scenario_simulation', '${id}', ${faker.number.float({min: 0, max: 100, fractionDigits: 1})}, '${metadata}', true, '${SEED_RUN_ID}', '${date}')`);
+    } else {
+      mlLogs.push(`('${faker.string.uuid()}', 'dispatch_score', '${id}', ${faker.number.float({min: 60, max: 100, fractionDigits: 1})}, '{}', true, '${SEED_RUN_ID}', '${date}')`);
+    }
 
     // Order items for food/grocery orders
     if (merchantId) {
@@ -298,14 +284,49 @@ async function run() {
     }
   };
 
-  // 50 rides
-  for(let i=0; i<50; i++) await createOrder('ride', null);
-  // 50 eats orders  
-  for(let i=0; i<50; i++) await createOrder('eats', restaurantMerchantIds[i % restaurantMerchantIds.length].id);
-  // 50 grocery orders
-  for(let i=0; i<50; i++) await createOrder('grocery', groceryMerchantIds[i % groceryMerchantIds.length]);
-  // 50 courier
-  for(let i=0; i<50; i++) await createOrder('courier', null);
+  const primaryCustId = customerIds[0];
+  const primaryPartId = partnerIds[0];
+  const primaryRestId = restaurantMerchantIds[0].id;
+  const primaryGrocId = groceryMerchantIds[0];
+
+  // Guaranteed data for primary accounts
+  // Customer: 5+ orders, 3+ rides, 2+ grocery, 2+ eats, 1+ courier
+  for(let i=0; i<3; i++) await createOrder('ride', null, primaryCustId, primaryPartId, 'completed');
+  for(let i=0; i<3; i++) await createOrder('eats', primaryRestId, primaryCustId, primaryPartId, 'completed');
+  for(let i=0; i<3; i++) await createOrder('grocery', primaryGrocId, primaryCustId, null, 'completed');
+  for(let i=0; i<2; i++) await createOrder('courier', null, primaryCustId, primaryPartId, 'completed');
+
+  // Merchant: 10+ active/incoming, 20+ historical
+  for(let i=0; i<12; i++) await createOrder('eats', primaryRestId, faker.helpers.arrayElement(customerIds), null, 'pending');
+  for(let i=0; i<20; i++) await createOrder('eats', primaryRestId, faker.helpers.arrayElement(customerIds), faker.helpers.arrayElement(partnerIds), 'completed');
+
+  // Partner: 10+ available jobs, 3+ assigned, 10+ completed
+  for(let i=0; i<15; i++) await createOrder(faker.helpers.arrayElement(['ride', 'eats', 'grocery', 'courier']), faker.helpers.arrayElement(restaurantMerchantIds).id, undefined, null, 'pending'); // Available jobs
+  for(let i=0; i<4; i++) await createOrder('eats', primaryRestId, undefined, primaryPartId, 'in_transit'); // Assigned jobs
+  for(let i=0; i<12; i++) await createOrder('ride', null, undefined, primaryPartId, 'completed'); // Completed jobs
+
+  // ML Scenarios for Admin Lab
+  await createOrder('eats', primaryRestId, primaryCustId, primaryPartId, 'pending', 'High demand dinner rush zone');
+  await createOrder('grocery', primaryGrocId, primaryCustId, primaryPartId, 'pending', 'Late-night grocery spike');
+  await createOrder('ride', null, primaryCustId, null, 'cancelled', 'Repeated failed payments user');
+  await createOrder('ride', null, primaryCustId, null, 'cancelled', 'High cancellation customer');
+  await createOrder('eats', primaryRestId, primaryCustId, primaryPartId, 'completed', 'High-performing partner');
+  await createOrder('courier', null, primaryCustId, primaryPartId, 'in_transit', 'Low-performing partner');
+  await createOrder('eats', primaryRestId, primaryCustId, primaryPartId, 'completed', 'Reliable merchant');
+  await createOrder('eats', primaryRestId, primaryCustId, primaryPartId, 'pending', 'Slow-prep merchant');
+  await createOrder('eats', primaryRestId, primaryCustId, primaryPartId, 'cancelled', 'Refund-heavy merchant');
+  await createOrder('grocery', primaryGrocId, primaryCustId, primaryPartId, 'completed', 'High-value customer');
+  await createOrder('ride', null, primaryCustId, null, 'pending', 'New customer with fraud-risk warning');
+  await createOrder('courier', null, primaryCustId, primaryPartId, 'in_transit', 'SOS/support incident case');
+  await createOrder('eats', primaryRestId, primaryCustId, primaryPartId, 'in_transit', 'Courier delay case');
+  await createOrder('grocery', primaryGrocId, primaryCustId, null, 'pending', 'Peak weekend order burst');
+  await createOrder('ride', null, primaryCustId, null, 'pending', 'Rain/high-demand simulation');
+
+  // 45 more of each for random distribution
+  for(let i=0; i<45; i++) await createOrder('ride', null);
+  for(let i=0; i<45; i++) await createOrder('eats', restaurantMerchantIds[i % restaurantMerchantIds.length].id);
+  for(let i=0; i<45; i++) await createOrder('grocery', groceryMerchantIds[i % groceryMerchantIds.length]);
+  for(let i=0; i<45; i++) await createOrder('courier', null);
 
   if (orders.length > 0) {
     await client.query(`INSERT INTO orders (id, customer_id, merchant_id, driver_id, service_type, status, total_amount, pickup_location, dropoff_location, is_demo, seed_run_id, created_at) VALUES ${orders.join(',')}`);

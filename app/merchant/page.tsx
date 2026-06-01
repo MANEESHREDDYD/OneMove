@@ -1,10 +1,12 @@
 import { PageHeader } from "@/components/common/PageHeader"
+import { SignOutButton } from "@/components/auth/SignOutButton"
 import { SetupRequired } from "@/components/common/SetupRequired"
 import { Button } from "@/components/ui/button"
 import { signout } from "@/app/auth/actions"
 import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import { MerchantDashboardClient } from "./MerchantDashboardClient"
+import { MerchantRealtime } from "@/components/realtime/MerchantRealtime"
 
 export default async function MerchantDashboard() {
   const supabase = await createClient()
@@ -32,10 +34,17 @@ export default async function MerchantDashboard() {
   if (merchantIds.length > 0) {
     const { data } = await supabase
       .from('orders')
-      .select('*')
+      .select(`
+        *,
+        order_items(
+          quantity,
+          products(name)
+        )
+      `)
       .in('service_type', ['eats', 'grocery'])
       .in('merchant_id', merchantIds)
       .order('created_at', { ascending: false })
+      .limit(50)
       
     ordersData = data || []
   }
@@ -60,14 +69,13 @@ export default async function MerchantDashboard() {
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <MerchantRealtime merchantIds={merchantIds} />
       <div className="flex items-center justify-between">
         <PageHeader 
           title="Merchant Portal" 
           description="Manage your store and incoming orders"
         />
-        <form action={signout}>
-          <Button variant="ghost" className="rounded-full text-xs">Sign Out</Button>
-        </form>
+        <SignOutButton className="rounded-full text-xs" />
       </div>
 
       <MerchantDashboardClient 

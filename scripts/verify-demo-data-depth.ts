@@ -57,8 +57,9 @@ async function run() {
       const pass = count >= check.min;
       if (!pass) allPassed = false;
       console.log(`${pass ? '✅' : '❌'} ${check.label}: ${count} (min: ${check.min})`);
-    } catch (err: any) {
-      console.log(`❌ ${check.label}: ERROR - ${err.message}`);
+    } catch (err: unknown) {
+      const e = err as Error;
+      console.log(`❌ ${check.label}: ERROR - ${e.message}`);
       allPassed = false;
     }
   }

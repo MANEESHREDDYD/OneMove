@@ -22,6 +22,7 @@ export async function placeGroceryOrder(storeId: string, storeName: string, item
     .from('orders')
     .insert({
       customer_id: user.id,
+      merchant_id: storeId,
       service_type: 'grocery',
       status: 'pending',
       total_amount: totalAmount,

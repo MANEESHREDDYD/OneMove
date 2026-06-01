@@ -23,6 +23,7 @@ export async function placeEatsOrder(restaurantId: string, restaurantName: strin
     .from('orders')
     .insert({
       customer_id: user.id,
+      merchant_id: restaurantId,
       service_type: 'eats',
       status: 'pending',
       total_amount: totalAmount,
