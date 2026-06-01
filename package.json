@@ -17,13 +17,16 @@
     "validate:env": "node scripts/validate-env.js",
     "preflight": "node scripts/validate-env.js && npm run lint && npm run typecheck && npm run build",
     "seed:demo": "tsx scripts/seed-demo.ts",
+    "seed:production-demo": "tsx scripts/generate-production-demo-data.ts",
     "analytics:refresh": "node scripts/analytics-refresh.js",
     "dq:check": "node scripts/dq-check.js",
     "demo:activity": "tsx scripts/generate-demo-activity.ts",
     "test:backend": "vitest run __tests__/backend.test.ts",
     "test:rls": "node scripts/test-rls-security.js",
     "audit:ui": "node scripts/audit-interactive-elements.js",
-    "test:ml": "vitest run __tests__/ml.test.ts"
+    "test:ml": "vitest run __tests__/ml.test.ts",
+    "debug:roles": "node scripts/debug-demo-roles.js",
+    "verify:demo-depth": "tsx scripts/verify-demo-data-depth.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -58,6 +61,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

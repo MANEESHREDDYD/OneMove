@@ -35,6 +35,8 @@ const client = new Client({
 })
 
 const SQL_FILES = [
+  'supabase/updates.sql',
+  'supabase/indexes.sql',
   'supabase/seed.sql'
 ]
 

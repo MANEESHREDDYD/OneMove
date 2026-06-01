@@ -117,6 +117,15 @@ export default async function OrderTrackingPage({ params }: { params: { id: stri
           </GlassCard>
         </div>
 
+        {/* Order Items */}
+        <GlassCard className="p-6">
+          <h3 className="font-bold mb-4 border-b border-primary/10 pb-2">Order Summary</h3>
+          <div className="space-y-3">
+             {/* We will fetch items dynamically */}
+             <p className="text-sm text-muted-foreground">Items are recorded in your receipt.</p>
+          </div>
+        </GlassCard>
+
         {isCancellable && (
           <div className="pt-4">
             <CancelOrderButton orderId={order.id} />

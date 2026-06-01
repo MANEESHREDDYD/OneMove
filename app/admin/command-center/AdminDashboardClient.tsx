@@ -9,9 +9,11 @@ type Order = Database['public']['Tables']['orders']['Row']
 
 export function AdminDashboardClient({ 
   globalOrders,
+  merchants,
   metrics
 }: { 
   globalOrders: Order[],
+  merchants: any[],
   metrics: { 
     gmv: number, 
     totalOrders: number, 
@@ -24,7 +26,7 @@ export function AdminDashboardClient({
       
       {/* Map Section */}
       <div className="w-full h-[400px] rounded-xl overflow-hidden border bg-muted mb-8 relative">
-        <LiveCityPreview />
+        <LiveCityPreview orders={globalOrders} merchants={merchants} />
       </div>
       
       {/* KPI Row */}

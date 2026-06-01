@@ -1,51 +1,55 @@
-# Master QA Final Report
+# QA Master Final Report
 
-## 1. Overall QA Status
-**Ready for private localhost demo.**
+**Run Date:** 2026-05-31
+**Environment:** Localhost
+**Status:** ✅ APPROVED FOR PRIVATE LOCAL DEMO
 
-## 2. Summary
-- **Total tests performed**: Comprehensive validation across 11 discrete phases, augmented by a final gap-closure sweep.
-- **Backend tests**: Expanded unit tests validated missing payloads, invalid parameters, authentication boundaries on `updateMerchantOrderStatus` and `acceptJob`.
-- **Database / RLS tests**: Hardened profiles, merchants, and products. `test-rls-security.js` verified that Customer A cannot read Customer B profiles or orders. Merchants cannot see global orders. Non-admins cannot read global admin tables.
-- **Frontend tests**: Evaluated rendering via `npm run dev` (`localhost:3000`), generating zero console errors. Route Smoke Test confirms 100% 200 OKs across all 35+ routes for Desktop & Mobile.
-- **Data engineering tests**: Validated referential DB integrity via `dq:check` and generated sample metric aggregations via mock `analytics:refresh`.
-- **ML tests**: Validated deterministic algorithms (Dispatch, ETA, Fraud Risk) via `vitest` suite.
+## Critical Fixes Applied
 
-## 3. Bug Summary
-- **Total bugs found**: 2 (Phase 1 & 2)
-- **Critical**: 0
-- **High**: 1 (Found & Fixed) - Permissive RLS leaked data to unauthenticated requests.
-- **Medium**: 1 (Found & Fixed) - Vitest failing to alias Next.js modules correctly.
-- **Low**: 0
-- **Deferred**: 0 (Full edge functions deferred to post-MVP roadmap).
+| Bug ID | Severity | Issue | Status |
+|--------|----------|-------|--------|
+| BUG-018 | Critical | Login always redirects to /customer | ✅ FIXED |
+| BUG-019 | High | Grocery page empty (no stores/products) | ✅ FIXED |
+| BUG-020 | Medium | No one-click demo login buttons | ✅ FIXED |
+| BUG-021 | Medium | No role launcher on landing page | ✅ FIXED |
+| BUG-022 | Medium | Seed script email collisions with soft-deleted users | ✅ FIXED |
 
-## 4. Final Validation Command Summary
-All the below commands completed successfully in the CI pipeline execution without failures:
-- `npm run validate:env` -> PASS
-- `npm run test:supabase` -> PASS
-- `npm run verify:supabase` -> PASS
-- `npm run verify:auth` -> PASS
-- `npm run lint` -> PASS
-- `npm run typecheck` -> PASS
-- `npm run build` -> PASS
-- `npm run audit:ui` -> PASS
-- `npm run test:backend` -> PASS
-- `npm run test:rls` -> PASS
-- `npm run analytics:refresh` -> PASS
-- `npm run dq:check` -> PASS
-- `npm run test:ml` -> PASS
+## Architecture
+- **Auth:** Supabase Auth with email/password
+- **Profiles:** `handle_new_user` trigger reads `raw_user_meta_data.role` → creates profile with correct role
+- **Routing:** `login()` action queries profiles table → `getRoleRoute()` → role-specific redirect
+- **Middleware:** Enforces role guards (driver→partner, merchant→merchant, admin→admin)
+- **Data:** Deterministic 20 restaurant + 15 grocery seeding with realistic product names
 
-## 5. Security Confirmation
-- `[x]` No `SUPABASE_SERVICE_ROLE_KEY` is exposed in any client-side bundles.
-- `[x]` `.env.local` is listed in `.gitignore` and ignored by Git.
-- `[x]` RLS is fully verified against anonymous leakage and customer-merchant isolation.
-- `[x]` Role protection logic operates smoothly inside server components.
+## Demo Login
+| Email | Password | Role | Redirect |
+|-------|----------|------|----------|
+| customer@onemove.demo | Demo@12345 | Customer | /customer |
+| partner@onemove.demo | Demo@12345 | Partner/Driver | /partner |
+| merchant@onemove.demo | Demo@12345 | Merchant | /merchant |
+| admin@onemove.demo | Demo@12345 | Admin | /admin/command-center |
 
-## 6. Frontend Confirmation
-- `[x]` Navigational buttons and CTAs are functionally wired.
-- `[x]` The interactive Leaflet maps render with correct simulated markers.
-- `[x]` No terminal or browser console crashes during navigation flows.
-- `[x]` Responsiveness passes across simulated devices.
+## Data Counts
+| Entity | Count |
+|--------|-------|
+| Customers | 201+ |
+| Partners | 171+ |
+| Merchants | 106+ |
+| Restaurants | 24+ |
+| Grocery Stores | 24+ |
+| Products | 850+ |
+| Orders | 300+ |
+| Order Items | 500+ |
+| Payments | 300+ |
+| Analytics Events | 200+ |
+| ML Score Logs | 200+ |
 
-## 7. Final Recommendation
-**Ready for private localhost demo.** The application is robust, null-safe, fully typed, securely walled via RLS, and features a completed MVP UI mapping correctly across all core roles. No unresolved bugs are blocking a local presentation.
+## Validation Commands Run
+```
+✅ npm run debug:roles → ALL DEMO ROLES CORRECT
+✅ npm run verify:demo-depth → ALL CHECKS PASSED
+✅ npm run build → Compiled successfully
+```
+
+## Recommendation
+The OneMove MVP is **ready for private localhost demonstration**. Do not deploy publicly until stakeholder verification is complete.

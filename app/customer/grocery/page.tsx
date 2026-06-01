@@ -1,82 +1,100 @@
 import { PageHeader } from "@/components/common/PageHeader"
 import { GlassCard } from "@/components/common/GlassCard"
 import Link from "next/link"
-import { ShoppingBasket, Clock, CheckCircle2 } from "lucide-react"
+import { Star, Clock, ShoppingBasket } from "lucide-react"
+import { createClient } from "@/utils/supabase/server"
+import { SetupRequired } from "@/components/common/SetupRequired"
 
-const MOCK_GROCERY_STORES = [
-  {
-    id: "groc-200",
-    name: "Fresh Market Plus",
-    category: "Organic Produce",
-    rating: 4.8,
-    deliveryTime: "30-45 min",
-    deliveryFee: 4.99,
-    featured: true,
-  },
-  {
-    id: "groc-201",
-    name: "City Supermarket",
-    category: "Everyday Essentials",
-    rating: 4.6,
-    deliveryTime: "40-60 min",
-    deliveryFee: 5.99,
-    featured: false,
-  },
-  {
-    id: "groc-202",
-    name: "Corner Deli & Mart",
-    category: "Quick Snacks & Drinks",
-    rating: 4.9,
-    deliveryTime: "15-25 min",
-    deliveryFee: 1.99,
-    featured: true,
+export const dynamic = "force-dynamic";
+
+export default async function GroceryMarketplace() {
+  const supabase = await createClient()
+  if (!supabase) return <SetupRequired />
+
+  const { data: merchants, error } = await supabase
+    .from('merchants')
+    .select('*')
+    .eq('category', 'grocery')
+    .order('rating', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching merchants:', error)
   }
-]
 
-export default function GroceryMarketplace() {
+  const featuredMerchants = merchants?.slice(0, 4) || []
+  const allMerchants = merchants || []
+
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <PageHeader 
         title="OneMove Grocery" 
-        description="Fresh groceries delivered to your door."
+        description="Fresh essentials, delivered to your door."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {MOCK_GROCERY_STORES.map(store => (
-          <Link key={store.id} href={`/customer/grocery/${store.id}`} className="block group">
-            <GlassCard className="p-0 overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all cursor-pointer h-full flex flex-col border border-primary/20">
-              <div className="h-32 bg-primary/10 w-full flex items-center justify-center relative overflow-hidden group-hover:bg-primary/20 transition-colors">
-                 <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
-                 <ShoppingBasket className="h-10 w-10 text-primary opacity-20 relative z-10" />
-                 <p className="absolute bottom-3 left-4 text-sm font-bold">{store.category}</p>
-                 {store.featured && (
-                   <div className="absolute top-3 right-3 bg-green-500/20 text-green-500 px-2 py-1 rounded text-xs font-bold flex items-center gap-1 border border-green-500/20">
-                     <CheckCircle2 className="h-3 w-3" /> Partner
-                   </div>
-                 )}
-              </div>
-              <div className="p-4 flex flex-col flex-1 justify-between">
-                <div>
-                  <h3 className="font-bold text-lg leading-tight mb-1">{store.name}</h3>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground font-medium mb-4">
+      {/* Featured Section */}
+      {featuredMerchants.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight flex items-center gap-2">
+            <ShoppingBasket className="h-5 w-5 text-green-500" />
+            Top Markets Near You
+          </h2>
+          <div className="flex gap-4 overflow-x-auto pb-4 snap-x hide-scrollbar">
+            {featuredMerchants.map(restaurant => (
+              <Link key={restaurant.id} href={`/customer/grocery/${restaurant.id}`} className="snap-start shrink-0 w-[280px]">
+                <GlassCard className="overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all cursor-pointer">
+                  <div className="h-32 bg-primary/20 w-full flex items-center justify-center">
+                     <p className="text-muted-foreground font-medium">Grocery & Market</p>
+                  </div>
+                  <div className="p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-bold truncate pr-2">{restaurant.name}</h3>
+                      <div className="flex items-center gap-1 bg-background/80 px-1.5 py-0.5 rounded-md text-xs font-bold">
+                        <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+                        {restaurant.rating}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground font-medium">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        30-50 min
+                      </span>
+                    </div>
+                  </div>
+                </GlassCard>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* All Restaurants */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold tracking-tight">All Stores</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {allMerchants.map(restaurant => (
+            <Link key={restaurant.id} href={`/customer/grocery/${restaurant.id}`}>
+              <GlassCard className="p-3 flex items-center gap-4 hover:bg-white/5 transition-colors cursor-pointer group">
+                <div className="h-16 w-16 bg-primary/10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden group-hover:scale-105 transition-transform">
+                  <span className="text-2xl font-bold opacity-30 text-primary">{restaurant.name.charAt(0)}</span>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <h3 className="font-bold text-sm truncate">{restaurant.name}</h3>
+                  <p className="text-xs text-muted-foreground truncate">{restaurant.description}</p>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                    <span className="flex items-center gap-1">
+                      <Star className="h-3 w-3 text-yellow-500" />
+                      {restaurant.rating}
+                    </span>
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {store.deliveryTime}
+                      30-50 min
                     </span>
-                    <span>•</span>
-                    <span>${store.deliveryFee} fee</span>
                   </div>
                 </div>
-                <div className="text-sm text-primary font-semibold flex items-center justify-between">
-                  Shop Now →
-                  <span className="text-xs text-muted-foreground bg-primary/10 px-2 py-1 rounded-full border border-primary/20">
-                    ★ {store.rating}
-                  </span>
-                </div>
-              </div>
-            </GlassCard>
-          </Link>
-        ))}
+              </GlassCard>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   )

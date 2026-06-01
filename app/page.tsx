@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
-import { Car, Utensils, ShoppingBag, Package, Tag, ShieldCheck, Activity } from "lucide-react"
+import { Car, Utensils, ShoppingBag, Package, Tag, ShieldCheck, Activity, User, Truck, Store, Shield } from "lucide-react"
 import { GlassCard } from "@/components/common/GlassCard"
 import { ServiceCard } from "@/components/common/ServiceCard"
 import { LiveCityPreview } from "@/components/maps/LiveCityPreview"
@@ -31,7 +31,7 @@ export default function LandingPage() {
             A US-first, global-ready PWA super-app with marketplace intelligence, transparent pricing, and city-level operations.
           </p>
           <div className="flex items-center justify-center gap-4 pt-4">
-            <Link href="/customer" className={buttonVariants({ size: "lg", className: "rounded-full px-8" })}>
+            <Link href="/auth/login" className={buttonVariants({ size: "lg", className: "rounded-full px-8" })}>
               Start Demo
             </Link>
             <Link href="/admin/command-center" className={buttonVariants({ size: "lg", variant: "outline", className: "rounded-full px-8" })}>
@@ -48,6 +48,59 @@ export default function LandingPage() {
             <ServiceCard title="Grocery" icon={<ShoppingBag className="h-6 w-6" />} href="/customer/grocery" />
             <ServiceCard title="Courier" icon={<Package className="h-6 w-6" />} href="/customer/orders" />
             <ServiceCard title="Local Deals" icon={<Tag className="h-6 w-6" />} href="/customer" />
+          </div>
+        </section>
+
+        {/* Explore by Role Section */}
+        <section className="py-16 px-6 max-w-6xl mx-auto space-y-8">
+          <div className="text-center space-y-2">
+            <h2 className="text-3xl font-bold">Explore OneMove by Role</h2>
+            <p className="text-muted-foreground">Each role is a completely different product experience</p>
+          </div>
+          <div className="grid md:grid-cols-4 gap-6">
+            <GlassCard className="p-6 space-y-4 hover:ring-2 hover:ring-blue-500/50 transition-all group">
+              <div className="p-3 bg-blue-500/10 rounded-xl w-fit">
+                <User className="w-8 h-8 text-blue-400" />
+              </div>
+              <h3 className="text-xl font-bold">Customer</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">Browse rides, restaurants, grocery stores, and courier services. Full marketplace with cart and checkout.</p>
+              <Link href="/customer" className={buttonVariants({ variant: "outline", className: "w-full rounded-full border-blue-500/30 text-blue-400 hover:bg-blue-500/10 group-hover:border-blue-500" })}>
+                Open Customer Demo
+              </Link>
+            </GlassCard>
+
+            <GlassCard className="p-6 space-y-4 hover:ring-2 hover:ring-green-500/50 transition-all group">
+              <div className="p-3 bg-green-500/10 rounded-xl w-fit">
+                <Truck className="w-8 h-8 text-green-400" />
+              </div>
+              <h3 className="text-xl font-bold">Partner / Driver</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">Accept rides and deliveries, track earnings, view heatmaps, and manage your driver profile.</p>
+              <Link href="/partner" className={buttonVariants({ variant: "outline", className: "w-full rounded-full border-green-500/30 text-green-400 hover:bg-green-500/10 group-hover:border-green-500" })}>
+                Open Partner Demo
+              </Link>
+            </GlassCard>
+
+            <GlassCard className="p-6 space-y-4 hover:ring-2 hover:ring-orange-500/50 transition-all group">
+              <div className="p-3 bg-orange-500/10 rounded-xl w-fit">
+                <Store className="w-8 h-8 text-orange-400" />
+              </div>
+              <h3 className="text-xl font-bold">Merchant</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">Manage your store, process orders, track inventory, view analytics, and manage payouts.</p>
+              <Link href="/merchant" className={buttonVariants({ variant: "outline", className: "w-full rounded-full border-orange-500/30 text-orange-400 hover:bg-orange-500/10 group-hover:border-orange-500" })}>
+                Open Merchant Demo
+              </Link>
+            </GlassCard>
+
+            <GlassCard className="p-6 space-y-4 hover:ring-2 hover:ring-purple-500/50 transition-all group">
+              <div className="p-3 bg-purple-500/10 rounded-xl w-fit">
+                <Shield className="w-8 h-8 text-purple-400" />
+              </div>
+              <h3 className="text-xl font-bold">Admin</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">God-mode command center with live map, KPIs, analytics, ML lab, and data platform.</p>
+              <Link href="/admin/command-center" className={buttonVariants({ variant: "outline", className: "w-full rounded-full border-purple-500/30 text-purple-400 hover:bg-purple-500/10 group-hover:border-purple-500" })}>
+                Open Admin Demo
+              </Link>
+            </GlassCard>
           </div>
         </section>
 
