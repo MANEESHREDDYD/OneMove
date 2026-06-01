@@ -4,13 +4,13 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 
-function getRoleRoute(role: string): string {
+function getRoleRoute(role: string): string | null {
   switch (role) {
     case 'driver': return '/partner'
     case 'merchant': return '/merchant'
     case 'admin': return '/admin/command-center'
-    case 'customer':
-    default: return '/customer'
+    case 'customer': return '/customer'
+    default: return null
   }
 }
 
@@ -39,8 +39,16 @@ export async function login(formData: FormData) {
     .eq('id', data.user.id)
     .single()
 
-  const role = profile?.role || 'customer'
-  const route = getRoleRoute(role)
+  if (!profile || !profile.role) {
+    await supabase.auth.signOut()
+    return redirect('/auth/login?error=Role+profile+not+found')
+  }
+
+  const route = getRoleRoute(profile.role)
+  if (!route) {
+    await supabase.auth.signOut()
+    return redirect('/auth/login?error=Unknown+role+configuration')
+  }
 
   revalidatePath('/', 'layout')
   redirect(route)
@@ -67,8 +75,16 @@ export async function demoLogin(email: string, password: string) {
     .eq('id', data.user.id)
     .single()
 
-  const role = profile?.role || 'customer'
-  const route = getRoleRoute(role)
+  if (!profile || !profile.role) {
+    await supabase.auth.signOut()
+    return redirect('/auth/login?error=Demo+role+profile+not+found.+Run+seed+again.')
+  }
+
+  const route = getRoleRoute(profile.role)
+  if (!route) {
+    await supabase.auth.signOut()
+    return redirect('/auth/login?error=Unknown+demo+role+configuration')
+  }
 
   revalidatePath('/', 'layout')
   redirect(route)
@@ -100,8 +116,13 @@ export async function signup(formData: FormData) {
     return redirect('/auth/register?error=Could+not+create+user')
   }
 
+  const route = getRoleRoute(role)
+  if (!route) {
+    return redirect('/auth/register?error=Invalid+role+specified')
+  }
+
   revalidatePath('/', 'layout')
-  redirect(getRoleRoute(role))
+  redirect(route)
 }
 
 export async function signout() {
