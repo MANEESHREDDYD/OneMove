@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 
-// Fix missing marker icons
+// Fix Leaflet's default icon path issues in Next.js
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -13,38 +14,42 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Custom DivIcons
-const createIcon = (color: string) => new L.DivIcon({
-  className: 'custom-div-icon',
-  html: `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5);"></div>`,
-  iconSize: [14, 14],
-  iconAnchor: [7, 7]
-})
+const createIcon = (color: string) => {
+  return new L.Icon({
+    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+}
 
-const driverIcon = createIcon('#3b82f6') // Blue
-const orderIcon = createIcon('#10b981')  // Green
-const merchantIcon = createIcon('#f59e0b') // Orange
+const driverIcon = createIcon('blue');
+const merchantIcon = createIcon('red');
+const orderIcon = createIcon('green');
 
 export default function MapComponent({ 
   orders = [], 
   merchants = [] 
 }: { 
-  orders?: any[],
-  merchants?: any[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  orders?: any[], 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  merchants?: any[] 
 }) {
-  const center: [number, number] = [40.7128, -74.0060] // NYC
-  
-  // Create some simulated driver markers near NYC
+  const [position] = useState<[number, number]>([40.7128, -74.0060]) // Default NY
+
   const drivers = Array.from({ length: 15 }).map((_, i) => ({
     id: `drv-${i}`,
-    lat: 40.7128 + (Math.random() - 0.5) * 0.05,
-    lng: -74.0060 + (Math.random() - 0.5) * 0.05,
-    status: Math.random() > 0.5 ? 'online' : 'busy'
+    lat: 40.7128 + ((i % 10) - 5) * 0.005,
+    lng: -74.0060 + (((i+5) % 10) - 5) * 0.005,
+    status: (i % 2 === 0) ? 'online' : 'busy'
   }))
 
   return (
     <div style={{ height: '100%', width: '100%', minHeight: '400px' }}>
-      <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+      <MapContainer center={position} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/">OSM</a>'
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
@@ -62,15 +67,15 @@ export default function MapComponent({
         ))}
 
         {/* Merchants */}
-        {merchants.slice(0, 20).map(m => (
-          <Marker key={m.id} position={[40.7128 + (Math.random() - 0.5) * 0.04, -74.0060 + (Math.random() - 0.5) * 0.04]} icon={merchantIcon}>
+        {merchants.map((m, i) => (
+          <Marker key={m.id} position={[40.7128 + ((i % 10) - 5) * 0.004, -74.0060 + (((i+3) % 10) - 5) * 0.004]} icon={merchantIcon}>
             <Popup>{m.name} ({m.category})</Popup>
           </Marker>
         ))}
 
         {/* Active Orders */}
-        {orders.filter(o => o.status !== 'completed' && o.status !== 'cancelled').slice(0, 10).map((o, i) => (
-          <Marker key={o.id} position={[40.7128 + (Math.random() - 0.5) * 0.03, -74.0060 + (Math.random() - 0.5) * 0.03]} icon={orderIcon}>
+        {orders.map((o, i) => (
+          <Marker key={o.id} position={[40.7128 + ((i % 10) - 5) * 0.003, -74.0060 + (((i+2) % 10) - 5) * 0.003]} icon={orderIcon}>
             <Popup>Order: {o.service_type}<br/>Status: {o.status}</Popup>
           </Marker>
         ))}

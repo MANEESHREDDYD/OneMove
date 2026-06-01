@@ -39,10 +39,17 @@ export default async function EatsRestaurantPage({ params }: { params: { id: str
   })) || []
 
   return (
-    <EatsMenuClient 
-      restaurantId={merchant.id} 
-      restaurantName={merchant.name} 
-      menu={menuItems} 
-    />
+    <>
+      {menuItems.length === 0 && process.env.NODE_ENV === 'development' && (
+        <div className="p-4 bg-destructive/20 text-destructive rounded-lg mb-4">
+          No products found for merchant_id = {merchant.id}
+        </div>
+      )}
+      <EatsMenuClient 
+        restaurantId={merchant.id} 
+        restaurantName={merchant.name} 
+        menu={menuItems} 
+      />
+    </>
   )
 }

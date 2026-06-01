@@ -131,6 +131,7 @@ export async function signout() {
     redirect('/auth/login?error=Supabase+is+not+configured')
   }
   await supabase.auth.signOut()
+  
   revalidatePath('/', 'layout')
-  redirect('/')
+  redirect('/auth/login')
 }

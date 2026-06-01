@@ -13,15 +13,17 @@ export async function askAI(query: string) {
 
   const q = query.toLowerCase()
 
-  if (q.includes('score') || q.includes('ml') || q.includes('model') || q.includes('risk')) {
-    const { data: logs } = await supabase.from('ml_score_logs').select('*').limit(10).order('created_at', { ascending: false });
+  if (q.includes('score') || q.includes('ml') || q.includes('model') || q.includes('risk') || q.includes('scenario')) {
+    const { data: logs } = await supabase.from('ml_score_logs').select('*').order('created_at', { ascending: false });
     if (!logs || logs.length === 0) return { response: "No ML scoring logs found." }
     
-    const avgScore = logs.reduce((sum, log) => sum + log.score, 0) / logs.length;
-    const avgConfidence = logs.reduce((sum, log) => sum + log.confidence, 0) / logs.length;
-    
+    const scenarios = logs.filter(l => l.model_type === 'scenario_simulation' && l.metadata?.scenario)
+                          .map(l => `- ${l.metadata.scenario} (Score: ${l.score})`)
+                          .slice(0, 5)
+                          .join('\n');
+
     return { 
-      response: `Based on the latest ${logs.length} model inferences, the average ${logs[0].model_type} score is ${avgScore.toFixed(2)} with a confidence of ${(avgConfidence * 100).toFixed(1)}%. Features heavily rely on behavioral frequency and transaction velocity.` 
+      response: `I found ${logs.filter(l => l.model_type === 'scenario_simulation').length} active ML scenario simulations running on the platform. Here are some recent flagged events:\n\n${scenarios}\n\nOur deterministic rules engine is actively tagging fraud risk, partner performance, and surge pricing conditions.` 
     }
   }
 

@@ -27,15 +27,17 @@ export async function placeMarketplaceOrder({
   if (!user) return { error: "Authentication required" }
 
   // 1. Create the order
+  const initialStatus = (serviceType === 'eats' || serviceType === 'grocery') ? 'placed' : 'pending'
+  
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .insert({
       customer_id: user.id,
       merchant_id: merchantId,
       service_type: serviceType,
-      status: 'pending',
+      status: initialStatus,
       total_amount: totalAmount,
-      pickup_location: { address: 'Merchant Address' }, // For demo, simplified
+      pickup_location: { address: 'Merchant Location' }, // Should ideally fetch merchant address
       dropoff_location: { address, instructions },
       metadata: { items_count: items.length }
     })
@@ -61,15 +63,27 @@ export async function placeMarketplaceOrder({
   }
 
   // 3. Create payment record
-  const { error: paymentError } = await supabase.from('payments').insert({
+  let paymentStatus = 'paid_demo'
+  if (paymentMethod === 'cash') paymentStatus = 'pending_demo'
+  else if (paymentMethod === 'manual') paymentStatus = 'manual_review_demo'
+  
+  const { error } = await supabase.from('payments').insert({
     order_id: order.id,
     customer_id: user.id,
     amount: totalAmount,
-    status: 'succeeded',
+    status: paymentStatus,
     method: paymentMethod
   })
 
-  // 4. Create analytics event
+  // 4. Create status event
+  await supabase.from('order_status_events').insert({
+    order_id: order.id,
+    status: initialStatus,
+    changed_by: user.id,
+    notes: 'Order placed by customer via checkout'
+  })
+
+  // 5. Create analytics event
   await supabase.from('analytics_events').insert({
     event_type: 'order_placed',
     user_id: user.id,

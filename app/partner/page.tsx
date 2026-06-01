@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/common/PageHeader"
+import { SignOutButton } from "@/components/auth/SignOutButton"
 import { GlassCard } from "@/components/common/GlassCard"
 import { FloatingSOSButton } from "@/components/common/FloatingSOSButton"
 import { SetupRequired } from "@/components/common/SetupRequired"
@@ -8,6 +9,7 @@ import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import { Car, Utensils, ShoppingBasket, Package, MapPin, Navigation } from "lucide-react"
 import { AcceptJobButton, ActiveJobButtons } from "./JobActionButtons"
+import { PartnerRealtime } from "@/components/realtime/PartnerRealtime"
 
 export default async function DriverDashboard() {
   const supabase = await createClient()
@@ -24,17 +26,19 @@ export default async function DriverDashboard() {
   const { data: availableJobsData } = await supabase
     .from('orders')
     .select('*')
-    .in('status', ['pending', 'preparing', 'ready'])
-    .is('driver_id', null)
+    .in('status', ['pending', 'ready', 'requested', 'created'])
+    .or(`driver_id.is.null,driver_id.eq.${user.id}`)
     .order('created_at', { ascending: true })
+    .limit(20)
 
   // Fetch orders that are actively assigned to THIS driver
   const { data: activeJobsData } = await supabase
     .from('orders')
     .select('*')
     .eq('driver_id', user.id)
-    .in('status', ['accepted', 'in_transit'])
+    .in('status', ['accepted', 'in_transit', 'arrived', 'started', 'picked_up'])
     .order('created_at', { ascending: false })
+    .limit(5)
 
   const availableJobs = availableJobsData || []
   const activeJobs = activeJobsData || []
@@ -50,14 +54,13 @@ export default async function DriverDashboard() {
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <PartnerRealtime driverId={user.id} />
       <div className="flex items-center justify-between">
         <PageHeader 
           title="Partner Dashboard" 
           description="Manage your jobs"
         />
-        <form action={signout}>
-          <Button variant="ghost" className="rounded-full text-xs">Sign Out</Button>
-        </form>
+        <SignOutButton className="rounded-full text-xs" />
       </div>
 
       {/* Active Jobs Section - Takes priority visually */}
@@ -111,7 +114,7 @@ export default async function DriverDashboard() {
                   )}
                 </div>
 
-                <ActiveJobButtons orderId={job.id} currentStatus={job.status} />
+                <ActiveJobButtons orderId={job.id} currentStatus={job.status} serviceType={job.service_type} />
               </GlassCard>
             ))}
           </div>

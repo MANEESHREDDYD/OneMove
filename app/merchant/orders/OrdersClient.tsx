@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { updateMerchantOrderStatus } from "../actions"
 import { Loader2 } from "lucide-react"
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function OrdersClient({ orders }: { orders: any[] }) {
   const [loadingId, setLoadingId] = useState<string | null>(null)
 

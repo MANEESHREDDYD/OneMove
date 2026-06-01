@@ -13,6 +13,7 @@ export function AdminDashboardClient({
   metrics
 }: { 
   globalOrders: Order[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   merchants: any[],
   metrics: { 
     gmv: number, 
@@ -80,6 +81,7 @@ export function AdminDashboardClient({
                   <th className="px-6 py-4 font-bold">Status</th>
                   <th className="px-6 py-4 font-bold">Amount</th>
                   <th className="px-6 py-4 font-bold">Created</th>
+                  <th className="px-6 py-4 font-bold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-primary/10">
@@ -101,11 +103,16 @@ export function AdminDashboardClient({
                     <td className="px-6 py-4 text-muted-foreground text-xs">
                       {new Date(order.created_at).toLocaleString()}
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      <a href={`/admin/orders/${order.id}`} className="text-xs font-bold text-primary hover:underline">
+                        View Details →
+                      </a>
+                    </td>
                   </tr>
                 ))}
                 {globalOrders.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                       No platform activity yet.
                     </td>
                   </tr>

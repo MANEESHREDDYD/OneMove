@@ -25,8 +25,8 @@ export default async function AvailableJobsPage() {
   const { data: availableJobs } = await supabase
     .from('orders')
     .select('*')
-    .is('driver_id', null)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'ready'])
+    .or(`driver_id.is.null,driver_id.eq.${user.id}`)
     .order('created_at', { ascending: false })
     .limit(20)
 
@@ -36,7 +36,7 @@ export default async function AvailableJobsPage() {
         title="Job Marketplace" 
         description="Find and manage your deliveries and rides"
       />
-      <JobsClient availableJobs={availableJobs || []} activeJobs={activeJobs || []} />
+      <JobsClient availableJobs={availableJobs || []} activeJobs={activeJobs || []} driverId={user.id} />
     </div>
   )
 }

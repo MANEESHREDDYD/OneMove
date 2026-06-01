@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:auth": "tsx scripts/test-auth.ts",
     "test:supabase": "node scripts/test-supabase-connection.js",
     "verify:supabase": "node scripts/verify-supabase-schema.js",
     "db:setup": "node scripts/apply-supabase-sql.js",
@@ -27,6 +28,13 @@
     "audit:ui": "node scripts/audit-interactive-elements.js",
     "test:ml": "vitest run __tests__/ml.test.ts",
     "debug:roles": "node scripts/debug-demo-roles.js",
+    "debug:role-data": "tsx scripts/debug-role-data.ts",
+    "debug:customer-marketplace": "tsx scripts/debug-customer-marketplace-data.ts",
+    "debug:partner-jobs": "tsx scripts/debug-partner-jobs.ts",
+    "debug:merchant-orders": "tsx scripts/debug-merchant-orders.ts",
+    "debug:ride-booking": "tsx scripts/debug-ride-booking.ts",
+    "audit:details": "tsx scripts/audit-detail-links.ts",
+    "test:e2e": "playwright test",
     "verify:demo-depth": "tsx scripts/verify-demo-data-depth.ts"
   },
   "dependencies": {
@@ -57,6 +65,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.4.0",
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

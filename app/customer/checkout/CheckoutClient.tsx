@@ -29,6 +29,7 @@ export function CheckoutClient({
   const [instructions, setInstructions] = useState("")
   const [tipAmount, setTipAmount] = useState(3.00)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), [])
 
   if (!mounted) return null;
@@ -223,6 +224,17 @@ export function CheckoutClient({
           >
             <Coins className="w-6 h-6" />
             <span className="text-sm font-medium">Cash</span>
+          </button>
+          <button
+            onClick={() => setPaymentMethod('manual')}
+            className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+              paymentMethod === 'manual' 
+                ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary/20' 
+                : 'bg-background/50 border-primary/20 text-muted-foreground hover:border-primary/50'
+            }`}
+          >
+            <Receipt className="w-6 h-6" />
+            <span className="text-sm font-medium">Manual Pay</span>
           </button>
         </div>
       </GlassCard>
