@@ -8,11 +8,13 @@ import Link from "next/link"
 import { ArrowLeft, MapPin, Package, Clock, DollarSign, Activity } from "lucide-react"
 import { AdminOrderActions } from "./AdminOrderActions"
 
-export default async function AdminOrderDetailPage({ params }: { params: { id: string } }) {
+export default async function AdminOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
   if (!supabase) {
     return <SetupRequired />
   }
+
+  const resolvedParams = await params
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -36,7 +38,7 @@ export default async function AdminOrderDetailPage({ params }: { params: { id: s
       ),
       payments ( amount, method, status )
     `)
-    .eq('id', params.id)
+    .eq('id', resolvedParams.id)
     .single()
 
   if (error || !order) {

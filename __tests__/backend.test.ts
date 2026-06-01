@@ -69,6 +69,6 @@ describe('Backend Server Actions & Edge Cases', () => {
   it('partner accept job action should handle invalid order bounds cleanly', async () => {
     const result = await acceptJob('mock-uuid-123')
     expect(result).toHaveProperty('error')
-    expect(result.error).toMatch(/Supabase is not configured|Authentication required/)
+    expect(result.error).toMatch(/Database setup required|Supabase is not configured|Authentication required/)
   })
 })

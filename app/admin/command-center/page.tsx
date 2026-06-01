@@ -1,6 +1,5 @@
 import { PageHeader } from "@/components/common/PageHeader"
 import { SetupRequired } from "@/components/common/SetupRequired"
-import { AdminOperationsMap } from "@/components/maps/AdminOperationsMap"
 import { SignOutButton } from "@/components/auth/SignOutButton"
 import { Button } from "@/components/ui/button"
 import { signout } from "@/app/auth/actions"
@@ -18,6 +17,16 @@ export default async function AdminCommandCenter() {
 
   if (!user) {
     redirect('/auth/login')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'admin') {
+    redirect(`/${profile?.role || 'customer'}`)
   }
 
   // Admin God Mode: Fetch ALL orders across the entire platform

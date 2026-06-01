@@ -69,7 +69,7 @@ test.describe('OneMove Core Marketplace E2E Flows', () => {
       await expect(page).toHaveURL(/.*\/customer\/checkout/);
       
       // Select demo wallet and Place Order
-      await page.click('button', { hasText: 'Demo Wallet' });
+      await page.locator('button', { hasText: 'Demo Wallet' }).click();
       await page.click('text=Place Order');
       
       // Should land on order detail page

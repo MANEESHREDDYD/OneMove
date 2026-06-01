@@ -19,6 +19,16 @@ export default async function MerchantDashboard() {
     redirect('/auth/login')
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'merchant') {
+    redirect(`/${profile?.role || 'customer'}`)
+  }
+
   // Find the merchants owned by this user
   const { data: merchants } = await supabase
     .from('merchants')
