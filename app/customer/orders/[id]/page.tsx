@@ -9,9 +9,11 @@ import { SafeLeafletMap } from '@/components/maps/SafeLeafletMap'
 
 export const dynamic = "force-dynamic"
 
-export default async function OrderTrackingPage({ params }: { params: { id: string } }) {
+export default async function OrderTrackingPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  const resolvedParams = await params;
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -23,7 +25,7 @@ export default async function OrderTrackingPage({ params }: { params: { id: stri
       merchants (name),
       driver:profiles!driver_id (full_name, phone)
     `)
-    .eq('id', params.id)
+    .eq('id', resolvedParams.id)
     .single()
 
   if (error || !order || order.customer_id !== user.id) {

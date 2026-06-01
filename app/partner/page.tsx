@@ -22,6 +22,16 @@ export default async function DriverDashboard() {
     redirect('/auth/login')
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'driver') {
+    redirect(`/${profile?.role || 'customer'}`)
+  }
+
   // Fetch orders that are available to be assigned to a driver
   const { data: availableJobsData } = await supabase
     .from('orders')

@@ -5,11 +5,13 @@ import { EatsMenuClient } from './EatsMenuClient'
 
 export const dynamic = "force-dynamic";
 
-export default async function EatsRestaurantPage({ params }: { params: { id: string } }) {
+export default async function EatsRestaurantPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
   if (!supabase) {
     return <SetupRequired />
   }
+
+  const resolvedParams = await params;
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
@@ -19,7 +21,7 @@ export default async function EatsRestaurantPage({ params }: { params: { id: str
   const { data: merchant, error: merchError } = await supabase
     .from('merchants')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', resolvedParams.id)
     .single()
 
   if (merchError || !merchant) {

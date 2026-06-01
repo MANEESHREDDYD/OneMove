@@ -248,9 +248,9 @@ async function run() {
     const driverIdStr = partId ? `'${partId}'` : 'null';
     
     const getStatusForService = (srv: string) => {
-      if (srv === 'ride') return faker.helpers.arrayElement(['requested', 'assigned', 'accepted', 'arrived', 'started', 'completed', 'cancelled']);
-      if (srv === 'courier') return faker.helpers.arrayElement(['created', 'partner_assigned', 'accepted', 'picked_up', 'in_transit', 'delivered', 'cancelled']);
-      return faker.helpers.arrayElement(['placed', 'merchant_accepted', 'preparing', 'ready', 'partner_assigned', 'picked_up', 'in_transit', 'completed', 'cancelled', 'refunded']);
+      if (srv === 'ride') return faker.helpers.arrayElement(['pending', 'accepted', 'in_transit', 'completed', 'cancelled']);
+      if (srv === 'courier') return faker.helpers.arrayElement(['pending', 'accepted', 'in_transit', 'completed', 'cancelled']);
+      return faker.helpers.arrayElement(['pending', 'accepted', 'preparing', 'ready', 'in_transit', 'completed', 'cancelled']);
     };
     
     const status = forcedStatus || getStatusForService(service);
@@ -262,7 +262,7 @@ async function run() {
 
     orders.push(`('${id}', '${custId}', ${merchIdStr}, ${driverIdStr}, '${service}', '${status}', ${amount}, '${pickup}', '${dropoff}', true, '${SEED_RUN_ID}', '${date}')`);
 
-    const paymentStatus = status === 'cancelled' ? 'refunded' : (status === 'pending' ? 'pending' : 'succeeded');
+    const paymentStatus = status === 'cancelled' ? 'refunded_demo' : (status === 'pending' ? 'pending_demo' : 'paid_demo');
     payments.push(`('${faker.string.uuid()}', '${id}', '${custId}', ${amount}, '${paymentStatus}', 'card', true, '${SEED_RUN_ID}', '${date}')`);
     
     analytics.push(`('${faker.string.uuid()}', 'order_placed', '${custId}', '{"service": "${service}"}', true, '${SEED_RUN_ID}', '${date}')`);
