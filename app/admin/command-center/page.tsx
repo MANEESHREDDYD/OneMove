@@ -24,7 +24,12 @@ export default async function AdminCommandCenter() {
     .select('*')
     .order('created_at', { ascending: false })
 
+  const { data: merchantsData } = await supabase
+    .from('merchants')
+    .select('*')
+
   const globalOrders = ordersData || []
+  const merchants = merchantsData || []
 
   // Platform Metrics Calculation
   const totalOrders = globalOrders.length
@@ -78,6 +83,7 @@ export default async function AdminCommandCenter() {
 
       <AdminDashboardClient 
         globalOrders={globalOrders}
+        merchants={merchants}
         metrics={metrics}
       />
     </div>

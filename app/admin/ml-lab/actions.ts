@@ -3,41 +3,42 @@
 import { createClient } from '@/utils/supabase/server'
 
 export async function askAI(query: string) {
-  // Simulate network delay for a real AI model
   await new Promise(resolve => setTimeout(resolve, 1500))
 
   const supabase = await createClient()
-  if (!supabase) {
-    return { error: 'Supabase is not configured. See docs/LOCAL_SETUP.md.' }
-  }
+  if (!supabase) return { error: 'Supabase is not configured.' }
+  
   const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'Unauthorized access to the ML Lab.' }
-  }
+  if (!user) return { error: 'Unauthorized.' }
 
   const q = query.toLowerCase()
 
-  // Heuristic mock engine for zero-cost MVP
-  if (q.includes('revenue') || q.includes('money') || q.includes('sales')) {
+  if (q.includes('score') || q.includes('ml') || q.includes('model') || q.includes('risk')) {
+    const { data: logs } = await supabase.from('ml_score_logs').select('*').limit(10).order('created_at', { ascending: false });
+    if (!logs || logs.length === 0) return { response: "No ML scoring logs found." }
+    
+    const avgScore = logs.reduce((sum, log) => sum + log.score, 0) / logs.length;
+    const avgConfidence = logs.reduce((sum, log) => sum + log.confidence, 0) / logs.length;
+    
     return { 
-      response: "Based on our predictive models, platform revenue is highly correlated with Courier and Food delivery density in urban hubs. I recommend running a promotional campaign between 5 PM and 8 PM." 
+      response: `Based on the latest ${logs.length} model inferences, the average ${logs[0].model_type} score is ${avgScore.toFixed(2)} with a confidence of ${(avgConfidence * 100).toFixed(1)}%. Features heavily rely on behavioral frequency and transaction velocity.` 
     }
   }
 
-  if (q.includes('driver') || q.includes('partner') || q.includes('fleet')) {
+  if (q.includes('revenue') || q.includes('money') || q.includes('sales') || q.includes('payout')) {
+    const { data: orders } = await supabase.from('orders').select('total_amount');
+    const { data: payouts } = await supabase.from('merchant_payouts').select('amount');
+    
+    const totalRev = orders?.reduce((s, o) => s + (o.total_amount || 0), 0) || 0;
+    const totalPayout = payouts?.reduce((s, p) => s + (p.amount || 0), 0) || 0;
+    const margin = totalRev - totalPayout;
+    
     return { 
-      response: "Fleet utilization is currently optimal, but the algorithmic forecast predicts a 20% shortage in driver supply during the upcoming weekend. Consider applying a surge multiplier." 
-    }
-  }
-
-  if (q.includes('user') || q.includes('customer') || q.includes('churn')) {
-    return { 
-      response: "Our ML churn-prediction matrix indicates that customers who haven't ordered in the last 14 days have a 70% probability of uninstalling the app. A targeted push notification is recommended." 
+      response: `The platform has generated $${totalRev.toFixed(2)} in total GMV. Merchant payouts total $${totalPayout.toFixed(2)}, leaving an estimated gross margin of $${margin.toFixed(2)}. High-value orders are clustered in peak delivery times.` 
     }
   }
 
   return {
-    response: "I am OneMove's proprietary AI Copilot. I can analyze revenue trends, predict fleet utilization, or identify customer churn risks based on live Supabase data streams. What would you like to investigate?"
+    response: "I am OneMove's ML rule-based Copilot. Ask me about 'scores', 'risk', 'models', 'revenue', or 'payouts' to analyze the platform's deterministic data."
   }
 }

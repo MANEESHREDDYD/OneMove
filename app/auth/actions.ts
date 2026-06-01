@@ -4,6 +4,16 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 
+function getRoleRoute(role: string): string {
+  switch (role) {
+    case 'driver': return '/partner'
+    case 'merchant': return '/merchant'
+    case 'admin': return '/admin/command-center'
+    case 'customer':
+    default: return '/customer'
+  }
+}
+
 export async function login(formData: FormData) {
   const supabase = await createClient()
   if (!supabase) {
@@ -13,18 +23,55 @@ export async function login(formData: FormData) {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   })
 
   if (error) {
-    return redirect('/auth/login?error=Could not authenticate user')
+    return redirect('/auth/login?error=Could+not+authenticate+user')
   }
 
-  // After login, the middleware will redirect them to their specific dashboard based on role
+  // Fetch role from profiles table to determine correct dashboard
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', data.user.id)
+    .single()
+
+  const role = profile?.role || 'customer'
+  const route = getRoleRoute(role)
+
   revalidatePath('/', 'layout')
-  redirect('/customer') 
+  redirect(route)
+}
+
+export async function demoLogin(email: string, password: string) {
+  const supabase = await createClient()
+  if (!supabase) {
+    redirect('/auth/login?error=Supabase+is+not+configured')
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+
+  if (error) {
+    return redirect('/auth/login?error=Could+not+authenticate+demo+user.+Run+npm+run+seed:auth+first.')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', data.user.id)
+    .single()
+
+  const role = profile?.role || 'customer'
+  const route = getRoleRoute(role)
+
+  revalidatePath('/', 'layout')
+  redirect(route)
 }
 
 export async function signup(formData: FormData) {
@@ -50,11 +97,11 @@ export async function signup(formData: FormData) {
   })
 
   if (error) {
-    return redirect('/auth/register?error=Could not create user')
+    return redirect('/auth/register?error=Could+not+create+user')
   }
 
   revalidatePath('/', 'layout')
-  redirect('/customer')
+  redirect(getRoleRoute(role))
 }
 
 export async function signout() {

@@ -1,17 +1,17 @@
-"use client"
+'use client'
 
 import dynamic from 'next/dynamic'
-import { LoadingCard } from '@/components/common/LoadingCard'
+import { Skeleton } from "@/components/ui/skeleton"
 
-// Dynamically import the Leaflet map with SSR disabled to prevent server-side window errors
-const CityCommandMap = dynamic(
-  () => import('./CityCommandMap'),
-  { 
-    ssr: false,
-    loading: () => <LoadingCard />
-  }
-)
+const MapComponent = dynamic(() => import('./MapComponent'), { 
+  ssr: false,
+  loading: () => <Skeleton className="w-full h-full bg-muted animate-pulse" />
+})
 
-export function LiveCityPreview() {
-  return <CityCommandMap />
+export function LiveCityPreview({ orders, merchants }: { orders?: any[], merchants?: any[] }) {
+  return (
+    <div className="w-full h-full relative">
+      <MapComponent orders={orders} merchants={merchants} />
+    </div>
+  )
 }

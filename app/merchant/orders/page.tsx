@@ -1,45 +1,43 @@
 import { PageHeader } from "@/components/common/PageHeader"
-import { GlassCard } from "@/components/common/GlassCard"
-import { ShoppingBag } from "lucide-react"
+import { createClient } from "@/utils/supabase/server"
+import { SetupRequired } from "@/components/common/SetupRequired"
+import { redirect } from "next/navigation"
+import { OrdersClient } from "./OrdersClient"
 
-export default function OrderHistoryPage() {
+export const dynamic = "force-dynamic"
+
+export default async function OrderHistoryPage() {
+  const supabase = await createClient()
+  if (!supabase) return <SetupRequired />
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth/login')
+
+  const { data: merchants } = await supabase
+    .from('merchants')
+    .select('id')
+    .eq('owner_id', user.id)
+
+  const merchantIds = merchants?.map(m => m.id) || []
+
+  let orders: any[] = []
+  if (merchantIds.length > 0) {
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .in('merchant_id', merchantIds)
+      .in('status', ['pending', 'accepted', 'preparing', 'ready', 'in_transit'])
+      .order('created_at', { ascending: false })
+    orders = data || []
+  }
+
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <PageHeader 
-        title="Order History" 
-        description="Manage order history"
+        title="Live Orders" 
+        description="Manage incoming orders for your store"
       />
-      <GlassCard className="p-8 flex flex-col items-center justify-center min-h-[300px] text-center space-y-4">
-        <div className="p-4 bg-primary/10 rounded-full">
-          <ShoppingBag className="w-12 h-12 text-primary" />
-        </div>
-        <h3 className="text-xl font-semibold">Active Order History</h3>
-        <p className="text-muted-foreground max-w-md">
-          This is a functional MVP placeholder. Live data integration for this module is scheduled for the next iteration.
-        </p>
-        
-        <div className="w-full max-w-3xl mt-8 overflow-x-auto">
-          <table className="w-full text-sm text-left border">
-            <thead className="bg-muted text-muted-foreground uppercase text-xs">
-              <tr>
-                <th className="px-4 py-3">Order ID</th>
-                <th className="px-4 py-3">Amount</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              
-              {true && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
-                    No records found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </GlassCard>
+      <OrdersClient orders={orders} />
     </div>
   )
 }
