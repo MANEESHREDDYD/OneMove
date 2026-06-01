@@ -1,6 +1,6 @@
 # Master Bug Log
 
-**Last Updated:** 2026-05-31
+**Last Updated:** 2026-06-01
 
 ## Resolved Bugs
 
@@ -11,8 +11,8 @@
 - **Steps to reproduce:** Login as partner@onemove.demo
 - **Expected:** Redirect to `/partner`
 - **Actual:** Redirect to `/customer`
-- **Root cause:** Hardcoded `redirect('/customer')` — never queries profiles.role
-- **Fix applied:** Added `getRoleRoute()` with profile lookup before redirect
+- **Root cause:** Hardcoded `redirect('/customer')` — never queries profiles.role. Also silently defaulted unknown roles to `/customer`.
+- **Fix applied:** Added `getRoleRoute()` with strict profile lookup. Explicitly throws errors if a role isn't recognized or doesn't exist.
 - **Retest result:** `npm run debug:roles` → all 4 roles correct
 - **Final status:** ✅ RESOLVED
 
@@ -62,6 +62,18 @@
 - **Root cause:** Supabase soft-deletes auth.users (sets `deleted_at`) but unique constraint still applies
 - **Fix applied:** Timestamp-based email suffixes + `ON CONFLICT (id) DO NOTHING`
 - **Retest result:** Seed runs cleanly every time
+- **Final status:** ✅ RESOLVED
+
+### BUG-023: Generated users had no valid login credentials
+- **Severity:** Critical
+- **Layer:** Database / Auth API
+- **Route/File:** `scripts/seed-auth-users.ts`
+- **Steps to reproduce:** Attempt to login with any of the 150+ generated users from the production data seed.
+- **Expected:** Successful login using expected `Pattern@001Move` password.
+- **Actual:** Auth failed (invalid password or user not found in Auth).
+- **Root cause:** The `generate-production-demo-data.ts` script bypassed the Auth API and inserted dummy hashes directly into Postgres, making it impossible to manually login.
+- **Fix applied:** Created a comprehensive `seed-auth-users.ts` script that correctly creates 150+ auth users through the Supabase Admin API and explicitly wires up their corresponding profiles, vehicles, and merchants correctly. Added export scripts to dump private CSV credentials.
+- **Retest result:** `npm run verify:auth` confirms 100% profile mapping for 156 users.
 - **Final status:** ✅ RESOLVED
 
 ## Known Minor UX Debts (Post-MVP)
