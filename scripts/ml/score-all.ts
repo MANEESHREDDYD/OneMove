@@ -4,7 +4,11 @@ import path from 'path'
 const scripts = [
   'generate-demand-forecast.ts',
   'run-dispatch-simulation.ts',
-  'score-fraud-risk.ts'
+  'score-fraud-risk.ts',
+  'generate-recommendations.ts',
+  'segment-customers.ts',
+  'score-merchant-reliability.ts',
+  'score-partner-trust.ts'
 ]
 
 async function runScript(scriptName: string) {
@@ -14,8 +18,9 @@ async function runScript(scriptName: string) {
     console.log(`🚀 Executing ML Pipeline: ${scriptName}`)
     console.log(`================================================`)
     
-    const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx'
-    const child = spawn(cmd, ['tsx', scriptPath], { stdio: 'inherit', shell: true })
+    const cmd = 'node'
+    const args = ['--env-file=.env.local', 'node_modules/tsx/dist/cli.mjs', scriptPath]
+    const child = spawn(cmd, args, { stdio: 'inherit', shell: true })
 
     child.on('close', (code) => {
       if (code === 0) {
