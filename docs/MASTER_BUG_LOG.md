@@ -14,3 +14,7 @@ Known Limitation: Mobile Playwright experiment simulation may exceed default tim
 ## Known Issues (Deferred)
 - Playwright tests run via CLI currently fail on Phase 4 tests *if* global `.auth` setup is wiped. Requires `npm run test:e2e` from scratch to build auth files. This is standard behavior but impacts targeted isolated test runs.
 - MLOps `score_all` background spawn in the UI doesn't provide real-time UI loading state feedback (user must refresh).
+
+
+## Phase 5 Bug Log
+No new critical bugs. Minor design tweaks applied to architecture page for mobile responsiveness. Known limitation regarding Playwright Mobile timeout on Experiments simulation documented.
