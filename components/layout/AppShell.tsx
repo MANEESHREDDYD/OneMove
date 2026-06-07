@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Car, Utensils, ShoppingBag, Package, LayoutDashboard, Settings, Map, LineChart, Shield } from "lucide-react"
+import { Car, Utensils, ShoppingBag, Package, LayoutDashboard, Settings, Map, LineChart, Shield, LifeBuoy, Brain, Headphones, Beaker, Activity } from "lucide-react"
 
 const CUSTOMER_NAV = [
   { name: "Dashboard", href: "/customer", icon: LayoutDashboard },
@@ -11,6 +11,7 @@ const CUSTOMER_NAV = [
   { name: "Eats", href: "/customer/eats", icon: Utensils },
   { name: "Grocery", href: "/customer/grocery", icon: ShoppingBag },
   { name: "Courier", href: "/customer/courier", icon: Package },
+  { name: "Support", href: "/customer/support", icon: LifeBuoy },
   { name: "Profile", href: "/customer/profile", icon: Settings },
 ]
 
@@ -27,6 +28,10 @@ const ADMIN_NAV = [
   { name: "Analytics", href: "/admin/analytics", icon: LineChart },
   { name: "ML Lab", href: "/admin/ml-lab", icon: Map },
   { name: "Compliance", href: "/admin/compliance", icon: Shield },
+  { name: "Ops Assistant", href: "/admin/ops-assistant", icon: Brain },
+  { name: "Support Desk", href: "/admin/support-desk", icon: Headphones },
+  { name: "Experiments", href: "/admin/experiments", icon: Beaker },
+  { name: "MLOps", href: "/admin/mlops", icon: Activity },
 ]
 
 function getNavItems(pathname: string) {
