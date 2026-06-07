@@ -1,82 +1,88 @@
-# OneMove: The US-First Super-App Ecosystem
+# OneMove
 
-![OneMove](https://img.shields.io/badge/OneMove-Super_App-black?style=for-the-badge&logo=next.js)
-![Version](https://img.shields.io/badge/Version-1.0.0-blue?style=for-the-badge)
-![Supabase](https://img.shields.io/badge/Supabase-Database-green?style=for-the-badge&logo=supabase)
+**The Next-Generation Marketplace Intelligence Platform**
 
-**OneMove** is a portfolio-grade, zero-cost MVP Progressive Web Application (PWA) designed to simulate a massive scale, US-first gig-economy Super-App. Built entirely on Next.js 15, Tailwind CSS, and Supabase, it consolidates Rides, Eats, Grocery, and Courier services into a single unified platform.
+*A four-sided super-app marketplace built with Next.js, Supabase, and a custom data engineering & deterministic AI layer.*
 
-## 🚀 Ecosystem Overview
-
-OneMove is designed with role-based partitioning to support a multi-sided marketplace:
-
-1. **The Customer Hub (`/customer`)**:
-   - Order Food (Eats), hail Rides, buy Groceries, or dispatch Couriers.
-   - Beautiful, animated cart interactions and live order history routing.
-2. **The Partner Fleet (`/driver`)**:
-   - Centralized driver dashboard to toggle online status.
-   - Integrated mapping (mocked for zero-cost) and live-job acceptance queue.
-3. **The Merchant Portal (`/merchant`)**:
-   - Storefront command center for restaurants and grocers.
-   - Real-time live order queues, history analytics, and store toggles.
-4. **The God Mode Command Center (`/admin/command-center`)**:
-   - Global view of every order across all 4 verticals.
-   - Dynamic KPIs: Platform GMV, Active User calculations, and Order Volume.
-   - Includes **Analytics Engine** (Recharts) and **ML/AI Lab** (Simulated GPT-4 Copilot).
-   - Includes **Trust & Safety Center** (Compliance management and emergency triggers).
-
-## 🛠 Tech Stack
-
-- **Framework**: Next.js 15 (App Router, Server Actions, Server Components)
-- **Styling**: Tailwind CSS (Native dark mode, Glassmorphism design system)
-- **UI Components**: `shadcn/ui` core + `lucide-react` + `recharts`
-- **Database & Auth**: Supabase (PostgreSQL, Row Level Security)
-- **Deployment & Architecture**: Progressive Web App (PWA) configured for mobile installation. Zero-cost serverless Edge runtime.
-
-## 📦 Running Locally
-
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/MANEESHREDDYD/OneMove.git
-   cd OneMove
-   ```
-
-2. **Install Dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **First-time Supabase Setup**
-   The project requires a configured Supabase database. Follow the complete guide in `docs/SUPABASE_SETUP.md`.
-   
-   Quick checklist:
-   ```bash
-   cp .env.local.example .env.local
-   # Fill in .env.local with your keys from Supabase Dashboard -> Settings -> API Keys:
-   # NEXT_PUBLIC_SUPABASE_ANON_KEY = Publishable key (sb_publishable_...)
-   # SUPABASE_SERVICE_ROLE_KEY = Secret key (sb_secret_...)
-   # NEXT_PUBLIC_SUPABASE_URL = Base Project URL (not /rest/v1/)
-   ```
-   npm run validate:env
-   npm run test:supabase
-   npm run lint
-   npm run typecheck
-   npm test
-   npm run build
-   npm run dev
-   ```
-
-## 🛡 Strict QA Pipeline
-
-OneMove enforces a strict zero-warning policy on all code before merges. Our CI/CD pipeline validates:
-- `npm run lint`: ESLint rules enforced.
-- `npm run typecheck`: Strict TypeScript `tsc --noEmit`.
-- `npm run build`: Next.js Turbopack static generation verification.
-
-## 🌐 Security & Trust
-- **Role-Based Routing**: Next.js Middleware automatically intercepts routes to protect `/admin`, `/merchant`, and `/driver` portals based on Supabase JWT tokens.
-- **Universal SOS**: The platform features a ubiquitous floating SOS button ensuring real-time simulated emergency access for all users.
+**Status:**
+- Private localhost portfolio demo: GO
+- Public production deployment: NOT YET APPROVED
 
 ---
 
-*Designed and engineered iteratively across 19 strict developmental checkpoints.*
+## The Problem
+Running a multi-sided marketplace (Rides, Eats, Grocery, Courier) requires extreme data coordination. Most MVPs focus purely on UI. OneMove focuses on the backend: secure data isolation (RLS), real-time synchronization, comprehensive data pipelines, and embedded operational intelligence.
+
+## Key Features
+- **Four-Sided Dynamics:** Dedicated portals for Customers, Merchants, Partners (Drivers/Couriers), and Admins.
+- **Enterprise-Grade Security:** Deep multi-tenant Row Level Security (RLS) protects user data at the database layer.
+- **Polymorphic Architecture:** A single order pipeline elegantly handles Rides, Food Delivery, and Courier dispatches.
+- **Metric Store & Pipelines:** Automated cron jobs aggregate raw transactional events into daily snapshots for analytics.
+- **Intelligence Platform:** Deterministic scoring algorithms drive Demand Forecasting, Risk Modeling, and Dispatch Optimization.
+- **MLOps & Experimentation:** A fully simulated A/B testing engine tracks variant impressions, conversions, and revenue, backed by comprehensive pipeline logging.
+
+## Tech Stack
+- **Frontend & Routing:** Next.js 14+ App Router, TypeScript, Tailwind CSS, Shadcn UI
+- **Backend & Database:** Supabase PostgreSQL, Supabase Auth, Row Level Security, Next.js Server Actions
+- **Data Engineering:** Real-time refresh/fallback synchronization, Polymorphic Schema Design, Metric Store
+- **Testing:** Playwright (E2E & Security), Vitest (Unit), Artillery (Performance)
+
+## Architecture Overview
+1. **Transaction Layer:** Customers place orders. Supabase acts as the central source of truth.
+2. **Fulfillment Layer:** Merchants and Partners receive real-time-ready updates to accept and complete tasks.
+3. **Data Layer:** Analytical pipelines ingest raw events and aggregate them into a Metric Store.
+4. **Intelligence Layer:** Deterministic ML scripts run on the Metric Store to generate scores, demand forecasts, and operational insights, logging execution to an MLOps pipeline.
+
+## Demo Routes
+Navigate through the application to see the different aspects of the marketplace:
+- `/showcase` (Start here for the high-level pitch and credentials)
+- `/admin/architecture` (Technical deep-dive diagrams)
+- `/admin/command-center` (Live operational metrics)
+- `/admin/data-platform` (Data engineering pipelines)
+- `/admin/analytics` (Metric store visualizations)
+- `/admin/mlops` (Pipeline logging and scoring execution)
+- `/admin/experiments` (A/B testing simulation engine)
+
+## Demo Credentials
+*(Use these pre-configured accounts on the showcase page)*
+- `customer@onemove.demo` / `Demo@12345`
+- `merchant@onemove.demo` / `Demo@12345`
+- `partner@onemove.demo` / `Demo@12345`
+- `admin@onemove.demo` / `Demo@12345`
+
+## Local Setup Commands
+```bash
+# Start the Next.js frontend
+npm run dev
+
+# Refresh the deterministic ML/AI intelligence data
+npm run intelligence:refresh
+
+# Simulate experiment traffic (A/B testing)
+npm run experiments:simulate
+```
+
+## Validation Commands
+```bash
+npm run validate:env
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run test:e2e -- --workers=1
+```
+
+## Known Limitations
+- Localhost portfolio demo only; not publicly deployed.
+- The intelligence layer relies on deterministic, rule-based scripts, not a trained neural network/LLM API.
+- The platform uses a refresh/fallback behavior for state synchronization rather than full end-to-end WebSocket realtime connections.
+- Playwright experiment simulation may timeout (>30s) on constrained machines.
+
+## Future Roadmap
+- Migrate deterministic intelligence scripts to dedicated Python/FastAPI microservices with trained ML models.
+- Implement Redis cache layer for high-velocity reads.
+- Add Vercel preview environments and Dockerize the stack for production.
+- Production observability and full Stripe payment gateway integration.
+
+## What This Project Demonstrates
+OneMove is not just a React application. It demonstrates the ability to architect complex database schemas, enforce strict data access boundaries, orchestrate reliable data engineering pipelines, and implement MLOps tracking around analytical processes.
