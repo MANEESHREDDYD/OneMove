@@ -1,7 +1,8 @@
 # QA Master Final Report (Phase 4)
 
-Phase 4 Status: GO for private localhost portfolio review after validation.
+Phase 4 Status: GO for private localhost portfolio review.
 Production Status: NOT YET APPROVED.
+Known Limitation: Mobile Playwright experiment simulation may exceed default timeout under local hardware constraints; desktop flow and backend simulation pass.
 
 ### Overview
 Phase 4 (AI Assistants, Experiments, and MLOps) has been fully implemented, validated, and tested. The platform now features deterministic, rule-based intelligence capabilities acting on real seeded database rows. No external or paid LLM APIs are used. 

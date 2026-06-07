@@ -17,10 +17,9 @@ export async function POST(request: Request) {
     // We cannot reliably await a long-running background process in a server action without timing out
     // But for demo purposes we can spawn it
     const scriptPath = path.join(process.cwd(), 'scripts', 'ml', 'score-all.ts')
-    spawn('node', ['--env-file=.env.local', 'node_modules/tsx/dist/cli.mjs', scriptPath], {
-      detached: true,
-      stdio: 'ignore'
-    }).unref()
+    const { exec } = require('child_process')
+    const child = exec(`node --env-file=.env.local node_modules/tsx/dist/cli.mjs ${scriptPath}`)
+    child.unref()
   }
 
   revalidatePath('/admin/mlops')

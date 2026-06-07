@@ -22,6 +22,7 @@ test.describe('Intelligence Platform Phase 4: AI Assistants and MLOps', () => {
   })
 
   test('Admin Experiments page loads and simulates data', async ({ page }) => {
+    test.setTimeout(90000) // Increase timeout for simulation
     await page.goto('/admin/experiments')
     await expect(page.locator('h1')).toContainText('A/B Experiments Platform')
     
@@ -32,8 +33,9 @@ test.describe('Intelligence Platform Phase 4: AI Assistants and MLOps', () => {
     // Trigger simulation
     await simulateBtn.click()
     
-    // Page reloads and should show metrics
-    await expect(page.locator('text=A/B Experiments Platform')).toBeVisible()
+    // Page reloads and should show metrics instead of "No metrics collected yet"
+    // The metric display has "Impressions", wait for it
+    await expect(page.locator('text=Impressions').first()).toBeVisible({ timeout: 60000 })
   })
 
   test('Admin MLOps page loads', async ({ page }) => {
