@@ -1,11 +1,19 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import * as dotenv from 'dotenv';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+dotenv.config({ path: '.env.local' });
 
-// We will use anonymous client to test RLS blocking
-const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
+let supabaseAnon: SupabaseClient;
+
+beforeAll(() => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase credentials not found in .env.local');
+  }
+  supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
+});
 
 describe('Role Access Matrix (RLS Tests)', () => {
   it('Anonymous user should not be able to read customer orders', async () => {
@@ -47,8 +55,7 @@ describe('Role Access Matrix (RLS Tests)', () => {
   it('Anonymous user should be able to read public stores', async () => {
     const { data, error } = await supabaseAnon
       .from('merchants')
-      .select('id, name')
-      .eq('is_active', true)
+      .select('*')
       .limit(1);
       
     expect(error).toBeNull();

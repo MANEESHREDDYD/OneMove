@@ -162,7 +162,7 @@ export default async function ArchitecturePage() {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <h3 className="font-bold text-lg mb-4 flex items-center"><TrendingUp className="w-4 h-4 mr-2 text-blue-500"/> Known Limitations</h3>
           <ul className="space-y-2 text-sm text-gray-600">
-            <li>Playwright <code>Simulate Traffic</code> test can time out (>30s) on low-end CI workers due to intense synthetic data generation.</li>
+            <li>Playwright <code>Simulate Traffic</code> test can time out (&gt;30s) on low-end CI workers due to intense synthetic data generation.</li>
             <li>Intelligence is currently deterministic (rule-based scripts) rather than a trained neural network.</li>
             <li>PostgREST schema cache occasionally requires manual reload after complex CLI migrations.</li>
           </ul>
