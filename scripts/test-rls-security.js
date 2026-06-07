@@ -22,12 +22,12 @@ async function runTests() {
   const logFail = (msg) => { console.log(`❌ [FAIL] ${msg}`); failed++; };
 
   // 1. Get user IDs
-  const { data: { users }, error } = await adminClient.auth.admin.listUsers();
-  if (error) { logFail("Failed to list users"); process.exit(1); }
+  const { data: profiles, error } = await adminClient.from('profiles').select('id, email, role');
+  if (error) { logFail("Failed to list profiles"); process.exit(1); }
 
-  const customerId = users.find(u => u.email === 'customer@onemove.demo')?.id;
-  const merchantId = users.find(u => u.email === 'merchant@onemove.demo')?.id;
-  const adminId = users.find(u => u.email === 'admin@onemove.demo')?.id;
+  const customerId = profiles.find(u => u.role === 'customer')?.id;
+  const merchantId = profiles.find(u => u.role === 'merchant')?.id;
+  const adminId = profiles.find(u => u.role === 'admin')?.id;
 
   if (!customerId || !merchantId || !adminId) {
     logFail("Demo users missing from DB.");
@@ -79,6 +79,48 @@ async function runTests() {
     logPass("Customer cannot read raw merchants table directly.");
   } else {
     logFail("Customer can read raw merchants table.");
+  }
+
+  // Phase 4 RLS Checks
+  // 6. Customer can read own support tickets but not others
+  const custTickets = await queryAsUser(customerId, "SELECT customer_id FROM support_tickets;");
+  const crossCustomerTickets = custTickets.filter(t => t.customer_id !== customerId);
+  if (crossCustomerTickets.length === 0) {
+    logPass("Customer cannot read other customers' support tickets.");
+  } else {
+    logFail("Customer can read other customers' support tickets.");
+  }
+
+  // 7. Customer cannot read admin ops_insights
+  const custInsights = await queryAsUser(customerId, "SELECT id FROM ops_insights;");
+  if (custInsights.length === 0) {
+    logPass("Customer cannot read ops_insights.");
+  } else {
+    logFail("Customer can read ops_insights.");
+  }
+
+  // 8. Customer cannot read ml_pipeline_runs
+  const custMl = await queryAsUser(customerId, "SELECT id FROM ml_pipeline_runs;");
+  if (custMl.length === 0) {
+    logPass("Customer cannot read ml_pipeline_runs.");
+  } else {
+    logFail("Customer can read ml_pipeline_runs.");
+  }
+
+  // 9. Admin can read all support tickets
+  const adminTickets = await queryAsUser(adminId, "SELECT id FROM support_tickets;");
+  if (adminTickets.length >= custTickets.length) {
+    logPass("Admin can read all support tickets.");
+  } else {
+    logFail("Admin cannot read all support tickets.");
+  }
+
+  // 10. Admin can read ml_pipeline_runs
+  const adminMl = await queryAsUser(adminId, "SELECT id FROM ml_pipeline_runs;");
+  if (adminMl.length > 0) {
+    logPass("Admin can read ml_pipeline_runs.");
+  } else {
+    logFail("Admin cannot read ml_pipeline_runs (might be 0 rows if not seeded).");
   }
 
   console.log(`\nRLS QA Results: ${failed === 0 ? "All Passed" : failed + " Failed"}`);

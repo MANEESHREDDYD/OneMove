@@ -19,6 +19,7 @@ export async function processNewTicket(
     .insert([{
       customer_id: customerId,
       order_id: orderId || null,
+      subject: classification.category,
       description,
       category: classification.category,
       priority: classification.priority,
