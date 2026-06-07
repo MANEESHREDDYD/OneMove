@@ -15,22 +15,13 @@ CREATE TABLE IF NOT EXISTS public.ops_insights (
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2. support_tickets
-CREATE TABLE IF NOT EXISTS public.support_tickets (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  customer_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  order_id uuid REFERENCES public.orders(id) ON DELETE CASCADE,
-  category text NOT NULL,
-  priority text NOT NULL DEFAULT 'LOW',
-  status text NOT NULL DEFAULT 'OPEN',
-  description text NOT NULL,
-  assistant_explanation text,
-  recommended_action text,
-  refund_eligibility boolean DEFAULT false,
-  escalation_required boolean DEFAULT false,
-  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
-);
+-- 2. support_tickets (ALTER existing table)
+ALTER TABLE public.support_tickets ADD COLUMN IF NOT EXISTS category text DEFAULT 'general';
+ALTER TABLE public.support_tickets ADD COLUMN IF NOT EXISTS priority text DEFAULT 'LOW';
+ALTER TABLE public.support_tickets ADD COLUMN IF NOT EXISTS assistant_explanation text;
+ALTER TABLE public.support_tickets ADD COLUMN IF NOT EXISTS recommended_action text;
+ALTER TABLE public.support_tickets ADD COLUMN IF NOT EXISTS refund_eligibility boolean DEFAULT false;
+ALTER TABLE public.support_tickets ADD COLUMN IF NOT EXISTS escalation_required boolean DEFAULT false;
 
 -- 3. experiments
 CREATE TABLE IF NOT EXISTS public.experiments (

@@ -42,6 +42,7 @@
     "debug:schema-contract": "tsx scripts/debug-schema-contract.ts",
     "debug:order-details": "tsx scripts/debug-order-details.ts",
     "debug:data-integrity": "tsx scripts/debug-data-integrity.ts",
+    "debug:intelligence": "tsx scripts/debug-intelligence.ts",
     "debug:status-lifecycle": "tsx scripts/debug-status-lifecycle.ts",
     "debug:realtime-events": "tsx scripts/debug-realtime-events.ts",
     "audit:details": "tsx scripts/audit-detail-links.ts",
