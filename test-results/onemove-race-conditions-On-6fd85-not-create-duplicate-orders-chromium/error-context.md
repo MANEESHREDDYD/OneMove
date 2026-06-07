@@ -132,7 +132,14 @@ Call log:
             - button [ref=e127]:
               - img [ref=e128]
   - region "Notifications alt+T"
-  - alert [ref=e129]
+  - button "Open Next.js Dev Tools" [ref=e134] [cursor=pointer]:
+    - generic [ref=e137]:
+      - text: Compiling
+      - generic [ref=e138]:
+        - generic [ref=e139]: .
+        - generic [ref=e140]: .
+        - generic [ref=e141]: .
+  - alert [ref=e142]
 ```
 
 # Test source

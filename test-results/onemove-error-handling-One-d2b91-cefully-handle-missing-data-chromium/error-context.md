@@ -26,26 +26,99 @@ Call log:
 ```
 
 ```yaml
-- heading "Welcome back" [level=1]
-- paragraph: Enter your credentials to sign in to OneMove
-- text: Email
-- textbox "Email":
-  - /placeholder: name@example.com
-- text: Password
-- textbox "Password"
-- button "Sign In"
-- text: Don't have an account?
-- link "Register here":
-  - /url: /auth/register
-- paragraph: Quick Demo Access
-- button "Login as Customer":
-  - paragraph: Login as Customer
-- button "Login as Partner / Driver":
-  - paragraph: Login as Partner / Driver
-- button "Login as Merchant":
-  - paragraph: Login as Merchant
-- button "Login as Admin":
-  - paragraph: Login as Admin
+- complementary:
+  - link "OneMove":
+    - /url: /
+  - navigation:
+    - link "Dashboard":
+      - /url: /customer
+    - link "Rides":
+      - /url: /customer/rides
+    - link "Eats":
+      - /url: /customer/eats
+    - link "Grocery":
+      - /url: /customer/grocery
+    - link "Courier":
+      - /url: /customer/courier
+    - link "Profile":
+      - /url: /customer/profile
+- main:
+  - heading "Your History" [level=1]
+  - paragraph: Unified spending and order tracking
+  - paragraph: 30-Day Spending
+  - paragraph: $1748.13
+  - paragraph: Orders
+  - paragraph: "40"
+  - paragraph: Rides
+  - paragraph: "36"
+  - paragraph: Avg Value
+  - paragraph: $43.70
+  - text: Rides
+  - paragraph: $1457.23
+  - text: Eats
+  - paragraph: $0.00
+  - text: Grocery
+  - paragraph: $290.90
+  - text: Courier
+  - paragraph: $0.00
+  - heading "Active Orders" [level=2]
+  - link "ride Service 05/06/2026 • Ordered $38.38 ACCEPTED View details →":
+    - /url: /customer/orders/b0a41999-cfd7-4d06-a4e2-e0ba87982265
+    - heading "ride Service" [level=3]
+    - paragraph: 05/06/2026 • Ordered
+    - text: $38.38 ACCEPTED View details →
+  - link "ride Service 16/05/2026 • Ordered $172.20 PENDING View details →":
+    - /url: /customer/orders/2c2a8968-d342-4c18-ae00-7ba91e3b94a5
+    - heading "ride Service" [level=3]
+    - paragraph: 16/05/2026 • Ordered
+    - text: $172.20 PENDING View details →
+  - heading "Grocery Orders" [level=2]
+  - link "Organic Basket 25/05/2026 • Completed $55.34 COMPLETED View details →":
+    - /url: /customer/orders/891fbcb8-ffe1-4ce6-bcc9-709bd5ff2d88
+    - heading "Organic Basket" [level=3]
+    - paragraph: 25/05/2026 • Completed
+    - text: $55.34 COMPLETED View details →
+  - link "Corner Deli & Mart 21/05/2026 • Completed $27.26 COMPLETED View details →":
+    - /url: /customer/orders/01da498a-8c6d-4c49-ba9c-56244b0d4f8d
+    - heading "Corner Deli & Mart" [level=3]
+    - paragraph: 21/05/2026 • Completed
+    - text: $27.26 COMPLETED View details →
+  - link "FreshDirect Express 19/05/2026 • Completed $168.66 COMPLETED View details →":
+    - /url: /customer/orders/2a90ae23-97a5-41b1-8172-218d9d5e8016
+    - heading "FreshDirect Express" [level=3]
+    - paragraph: 19/05/2026 • Completed
+    - text: $168.66 COMPLETED View details →
+  - link "City Supermarket 12/05/2026 • Completed $39.64 COMPLETED View details →":
+    - /url: /customer/orders/d108942d-7e6c-4f63-8842-fc669b73c4b5
+    - heading "City Supermarket" [level=3]
+    - paragraph: 12/05/2026 • Completed
+    - text: $39.64 COMPLETED View details →
+  - heading "Ride History" [level=2]
+  - link "ride Service 07/06/2026 • Completed $36.52 COMPLETED View details →":
+    - /url: /customer/orders/e421b3ce-24b4-499d-a2a8-49315a8cae03
+    - heading "ride Service" [level=3]
+    - paragraph: 07/06/2026 • Completed
+    - text: $36.52 COMPLETED View details →
+  - link "ride Service 07/06/2026 • Completed $35.90 COMPLETED View details →":
+    - /url: /customer/orders/f1701f88-565b-436a-b77c-5f9fc53f4ac8
+    - heading "ride Service" [level=3]
+    - paragraph: 07/06/2026 • Completed
+    - text: $35.90 COMPLETED View details →
+  - link "ride Service 07/06/2026 • Completed $35.28 COMPLETED View details →":
+    - /url: /customer/orders/b934ea4e-c29c-4be1-94af-01f2a90d0717
+    - heading "ride Service" [level=3]
+    - paragraph: 07/06/2026 • Completed
+    - text: $35.28 COMPLETED View details →
+  - link "ride Service 07/06/2026 • Completed $34.66 COMPLETED View details →":
+    - /url: /customer/orders/f0db8d17-6816-47ef-bb6e-c5b3c486be9a
+    - heading "ride Service" [level=3]
+    - paragraph: 07/06/2026 • Completed
+    - text: $34.66 COMPLETED View details →
+  - link "ride Service 07/06/2026 • Completed $34.04 COMPLETED View details →":
+    - /url: /customer/orders/30d7da94-c86a-4417-ab81-b98a92e3ab23
+    - heading "ride Service" [level=3]
+    - paragraph: 07/06/2026 • Completed
+    - text: $34.04 COMPLETED View details →
 - region "Notifications alt+T"
 - alert
 ```

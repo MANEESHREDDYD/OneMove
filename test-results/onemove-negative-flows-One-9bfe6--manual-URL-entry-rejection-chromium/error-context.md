@@ -12,85 +12,42 @@
 # Error details
 
 ```
-Test timeout of 30000ms exceeded.
-```
+Error: expect(locator).toBeVisible() failed
 
-```
-Error: page.click: Test timeout of 30000ms exceeded.
+Locator: locator('text="Invalid login credentials"')
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
 Call log:
-  - waiting for locator('text="Sign Out"')
+  - Expect "toBeVisible" with timeout 5000ms
+  - waiting for locator('text="Invalid login credentials"')
 
 ```
-
-# Page snapshot
 
 ```yaml
-- generic [active] [ref=e1]:
-  - generic [ref=e2]:
-    - complementary [ref=e3]:
-      - link "OneMove" [ref=e5] [cursor=pointer]:
-        - /url: /
-      - navigation [ref=e6]:
-        - link "Dashboard" [ref=e7] [cursor=pointer]:
-          - /url: /customer
-          - img [ref=e8]
-          - generic [ref=e13]: Dashboard
-        - link "Rides" [ref=e14] [cursor=pointer]:
-          - /url: /customer/rides
-          - img [ref=e15]
-          - generic [ref=e19]: Rides
-        - link "Eats" [ref=e20] [cursor=pointer]:
-          - /url: /customer/eats
-          - img [ref=e21]
-          - generic [ref=e24]: Eats
-        - link "Grocery" [ref=e25] [cursor=pointer]:
-          - /url: /customer/grocery
-          - img [ref=e26]
-          - generic [ref=e29]: Grocery
-        - link "Courier" [ref=e30] [cursor=pointer]:
-          - /url: /customer/courier
-          - img [ref=e31]
-          - generic [ref=e35]: Courier
-        - link "Profile" [ref=e36] [cursor=pointer]:
-          - /url: /customer/profile
-          - img [ref=e37]
-          - generic [ref=e40]: Profile
-    - main [ref=e41]:
-      - generic [ref=e44]:
-        - generic [ref=e45]:
-          - generic [ref=e46]:
-            - heading "Welcome back" [level=1] [ref=e47]
-            - paragraph [ref=e48]: Enter your credentials to sign in to OneMove
-          - generic [ref=e49]:
-            - generic [ref=e50]:
-              - generic [ref=e51]: Email
-              - textbox "Email" [ref=e52]:
-                - /placeholder: name@example.com
-            - generic [ref=e53]:
-              - generic [ref=e54]: Password
-              - textbox "Password" [ref=e55]
-            - button "Sign In" [ref=e56]
-          - generic [ref=e57]:
-            - text: Don't have an account?
-            - link "Register here" [ref=e58] [cursor=pointer]:
-              - /url: /auth/register
-        - generic [ref=e60]:
-          - paragraph [ref=e62]: Quick Demo Access
-          - generic [ref=e64]:
-            - button "Login as Customer" [ref=e65]:
-              - img [ref=e66]
-              - paragraph [ref=e69]: Login as Customer
-            - button "Login as Partner / Driver" [ref=e70]:
-              - img [ref=e71]
-              - paragraph [ref=e76]: Login as Partner / Driver
-            - button "Login as Merchant" [ref=e77]:
-              - img [ref=e78]
-              - paragraph [ref=e82]: Login as Merchant
-            - button "Login as Admin" [ref=e83]:
-              - img [ref=e84]
-              - paragraph [ref=e86]: Login as Admin
-  - region "Notifications alt+T"
-  - alert [ref=e87]: Welcome back
+- heading "Welcome back" [level=1]
+- paragraph: Enter your credentials to sign in to OneMove
+- text: Could not authenticate user Email
+- textbox "Email":
+  - /placeholder: name@example.com
+- text: Password
+- textbox "Password"
+- button "Sign In"
+- text: Don't have an account?
+- link "Register here":
+  - /url: /auth/register
+- paragraph: Quick Demo Access
+- button "Login as Customer":
+  - paragraph: Login as Customer
+- button "Login as Partner / Driver":
+  - paragraph: Login as Partner / Driver
+- button "Login as Merchant":
+  - paragraph: Login as Merchant
+- button "Login as Admin":
+  - paragraph: Login as Admin
+- region "Notifications alt+T"
+- alert
 ```
 
 # Test source
@@ -110,8 +67,7 @@ Call log:
   12 |     await page.waitForURL('**/customer**');
   13 |     
   14 |     // Sign out
-> 15 |     await page.click('text="Sign Out"');
-     |                ^ Error: page.click: Test timeout of 30000ms exceeded.
+  15 |     await page.click('text="Sign Out"');
   16 |     await page.waitForURL('**/auth/login');
   17 |     
   18 |     // Attempt to navigate back via URL
@@ -124,7 +80,8 @@ Call log:
   25 |     await page.fill('input[type="email"]', 'customer001@onemove.demo');
   26 |     await page.fill('input[type="password"]', 'WrongPassword123');
   27 |     await page.click('button[type="submit"]');
-  28 |     await expect(page.locator('text="Invalid login credentials"')).toBeVisible();
+> 28 |     await expect(page.locator('text="Invalid login credentials"')).toBeVisible();
+     |                                                                    ^ Error: expect(locator).toBeVisible() failed
   29 |   });
   30 | 
   31 |   test('Ride Booking: Invalid inputs block booking', async ({ page }) => {

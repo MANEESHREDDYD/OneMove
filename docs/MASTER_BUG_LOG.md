@@ -18,3 +18,10 @@ This log consolidates the 10 major architectural and UX blockers preventing the 
 **Auditor Name**: Antigravity  
 **Audit Date**: 2026-06-01  
 **Audit Conclusion**: All 10 documented UI and backend blockers preventing the demo from operating realistically have been squashed and backed by E2E regression tests.
+
+---
+
+## Update: Advanced Real-Time QA & Intelligence Platform (Phase 1 & Phase 2)
+Subsequent to the initial bug log, a deeper Advanced QA was conducted which surfaced missing RLS policies for Admins/Partners, corrupted seed logic resulting in orphaned order items, Next.js server memory leaks due to unbound connections, and missing `metadata` schema columns.
+
+All architectural DB flaws were resolved gracefully without dropping tables. Next.js server processes were separated from parallel Playwright testing. Phase 1 (Data Engineering) and Phase 2 (Demand, Dispatch, and Risk ML Engines) were seamlessly deployed without re-triggering any regressions. E2E tests are stable and green.

@@ -15,135 +15,573 @@
 Test timeout of 30000ms exceeded.
 ```
 
-```
-Error: locator.click: Target page, context or browser has been closed
-Call log:
-  - waiting for locator('button').filter({ hasText: /Add \$/ }).first()
+# Page snapshot
 
-```
-
-# Test source
-
-```ts
-  1   | import { test, expect, chromium, Browser, BrowserContext } from '@playwright/test';
-  2   | import { assertNoConsoleErrors } from './helpers/assertNoConsoleErrors';
-  3   | 
-  4   | test.describe('OneMove Realtime Marketplace Flow', () => {
-  5   |   let browser: Browser;
-  6   |   let customerCtx: BrowserContext;
-  7   |   let merchantCtx: BrowserContext;
-  8   |   let partnerCtx: BrowserContext;
-  9   |   let adminCtx: BrowserContext;
-  10  | 
-  11  |   test.beforeAll(async () => {
-  12  |     browser = await chromium.launch();
-  13  |   });
-  14  | 
-  15  |   test.afterAll(async () => {
-  16  |     await browser.close();
-  17  |   });
-  18  | 
-  19  |   test('E2E Order Lifecycle across all 4 roles', async () => {
-  20  |     // 1. Setup contexts
-  21  |     customerCtx = await browser.newContext();
-  22  |     merchantCtx = await browser.newContext();
-  23  |     partnerCtx = await browser.newContext();
-  24  |     adminCtx = await browser.newContext();
-  25  | 
-  26  |     const customerPage = await customerCtx.newPage();
-  27  |     const merchantPage = await merchantCtx.newPage();
-  28  |     const partnerPage = await partnerCtx.newPage();
-  29  |     const adminPage = await adminCtx.newPage();
-  30  |     
-  31  |     const checkCustomerErrors = assertNoConsoleErrors(customerPage);
-  32  |     const checkMerchantErrors = assertNoConsoleErrors(merchantPage);
-  33  |     const checkPartnerErrors = assertNoConsoleErrors(partnerPage);
-  34  |     const checkAdminErrors = assertNoConsoleErrors(adminPage);
-  35  | 
-  36  |     // 2. Login all roles simultaneously
-  37  |     await Promise.all([
-  38  |       (async () => {
-  39  |         await customerPage.goto('http://localhost:3000/auth/login');
-  40  |         await customerPage.fill('input[type="email"]', 'customer001@onemove.demo');
-  41  |         await customerPage.fill('input[type="password"]', 'Customer@001Move');
-  42  |         await customerPage.click('button[type="submit"]');
-  43  |         await customerPage.waitForURL('**/customer**');
-  44  |       })(),
-  45  |       (async () => {
-  46  |         await merchantPage.goto('http://localhost:3000/auth/login');
-  47  |         await merchantPage.fill('input[type="email"]', 'merchant001@onemove.demo');
-  48  |         await merchantPage.fill('input[type="password"]', 'Merchant@001Move');
-  49  |         await merchantPage.click('button[type="submit"]');
-  50  |         await merchantPage.waitForURL('**/merchant**');
-  51  |       })(),
-  52  |       (async () => {
-  53  |         await partnerPage.goto('http://localhost:3000/auth/login');
-  54  |         await partnerPage.fill('input[type="email"]', 'partner001@onemove.demo');
-  55  |         await partnerPage.fill('input[type="password"]', 'Partner@001Move');
-  56  |         await partnerPage.click('button[type="submit"]');
-  57  |         await partnerPage.waitForURL('**/partner**');
-  58  |       })(),
-  59  |       (async () => {
-  60  |         await adminPage.goto('http://localhost:3000/auth/login');
-  61  |         await adminPage.fill('input[type="email"]', 'admin@onemove.demo');
-  62  |         await adminPage.fill('input[type="password"]', 'Demo@12345');
-  63  |         await adminPage.click('button[type="submit"]');
-  64  |         await adminPage.waitForURL('**/admin/command-center**');
-  65  |       })(),
-  66  |     ]);
-  67  | 
-  68  |     // 3. Customer places an order
-  69  |     await customerPage.goto('http://localhost:3000/customer/eats');
-  70  |     await customerPage.waitForSelector('a[href^="/customer/eats/"]');
-  71  |     await customerPage.click('a[href^="/customer/eats/"]');
-> 72  |     await customerPage.locator('button', { hasText: /Add \$/ }).first().click();
-      |                                                                         ^ Error: locator.click: Target page, context or browser has been closed
-  73  |     await customerPage.click('text=View Cart & Checkout');
-  74  |     await expect(customerPage).toHaveURL(/.*\/customer\/checkout/);
-  75  |     await customerPage.locator('button', { hasText: 'Demo Wallet' }).click();
-  76  |     await customerPage.click('text=Place Order');
-  77  |     
-  78  |     // Extract Order ID from tracking page
-  79  |     await customerPage.waitForURL(/.*\/customer\/orders\/.*/);
-  80  |     const orderUrl = customerPage.url();
-  81  |     const orderId = orderUrl.split('/').pop()!;
-  82  |     expect(orderId).toBeDefined();
-  83  | 
-  84  |     // 4. Merchant accepts order (assuming manual refresh if realtime is missing)
-  85  |     await merchantPage.reload(); // Fallback for lack of WebSockets
-  86  |     const acceptBtn = merchantPage.locator(`button[data-order-id="${orderId}"]`, { hasText: 'Accept' });
-  87  |     if (await acceptBtn.isVisible()) {
-  88  |       await acceptBtn.click();
-  89  |       await merchantPage.locator(`button[data-order-id="${orderId}"]`, { hasText: 'Ready' }).click();
-  90  |     } else {
-  91  |       // It might be in a different tab or not visible yet
-  92  |       // Click first Accept button found for demo robustness
-  93  |       await merchantPage.locator('button', { hasText: 'Accept' }).first().click();
-  94  |       await merchantPage.locator('button', { hasText: 'Ready' }).first().click();
-  95  |     }
-  96  | 
-  97  |     // 5. Partner accepts job
-  98  |     await partnerPage.reload();
-  99  |     await partnerPage.locator('button', { hasText: 'Accept Job' }).first().click();
-  100 |     await expect(partnerPage.locator('button', { hasText: 'Mark Picked Up' })).toBeVisible();
-  101 |     await partnerPage.locator('button', { hasText: 'Mark Picked Up' }).click();
-  102 |     await partnerPage.locator('button', { hasText: 'Mark Delivered' }).click();
-  103 | 
-  104 |     // 6. Customer sees tracking updated
-  105 |     await customerPage.reload();
-  106 |     await expect(customerPage.locator('text=delivered')).toBeVisible();
-  107 | 
-  108 |     // 7. Admin sees order in command center
-  109 |     await adminPage.reload();
-  110 |     await adminPage.goto(`http://localhost:3000/admin/orders/${orderId}`);
-  111 |     await expect(adminPage.locator('text=delivered')).toBeVisible();
-  112 |     
-  113 |     // 8. Assert no console errors
-  114 |     checkCustomerErrors();
-  115 |     checkMerchantErrors();
-  116 |     checkPartnerErrors();
-  117 |     checkAdminErrors();
-  118 |   });
-  119 | });
-  120 | 
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - link "OneMove" [ref=e5] [cursor=pointer]:
+        - /url: /
+      - navigation [ref=e6]:
+        - link "Dashboard" [ref=e7] [cursor=pointer]:
+          - /url: /customer
+          - img [ref=e8]
+          - generic [ref=e13]: Dashboard
+        - link "Rides" [ref=e14] [cursor=pointer]:
+          - /url: /customer/rides
+          - img [ref=e15]
+          - generic [ref=e19]: Rides
+        - link "Eats" [ref=e20] [cursor=pointer]:
+          - /url: /customer/eats
+          - img [ref=e21]
+          - generic [ref=e24]: Eats
+        - link "Grocery" [ref=e25] [cursor=pointer]:
+          - /url: /customer/grocery
+          - img [ref=e26]
+          - generic [ref=e29]: Grocery
+        - link "Courier" [ref=e30] [cursor=pointer]:
+          - /url: /customer/courier
+          - img [ref=e31]
+          - generic [ref=e35]: Courier
+        - link "Profile" [ref=e36] [cursor=pointer]:
+          - /url: /customer/profile
+          - img [ref=e37]
+          - generic [ref=e40]: Profile
+    - main [ref=e41]:
+      - generic [ref=e43]:
+        - generic [ref=e45]:
+          - heading "OneMove Eats" [level=1] [ref=e46]
+          - paragraph [ref=e47]: Craving something? We'll bring it.
+        - generic [ref=e48]:
+          - heading "Trending Near You" [level=2] [ref=e49]:
+            - img [ref=e50]
+            - text: Trending Near You
+          - generic [ref=e52]:
+            - link "restaurant Cuisine Pizza Napoli 5 25-40 min" [active] [ref=e53] [cursor=pointer]:
+              - /url: /customer/eats/dc02a591-10b8-4cbc-8f73-55f63c001f41
+              - generic [ref=e54]:
+                - paragraph [ref=e56]: restaurant Cuisine
+                - generic [ref=e57]:
+                  - generic [ref=e58]:
+                    - heading "Pizza Napoli" [level=3] [ref=e59]
+                    - generic [ref=e60]:
+                      - img [ref=e61]
+                      - text: "5"
+                  - generic [ref=e64]:
+                    - img [ref=e65]
+                    - text: 25-40 min
+            - link "restaurant Cuisine Green Bowl Co. 4.9 25-40 min" [ref=e68] [cursor=pointer]:
+              - /url: /customer/eats/c73f22fa-e851-4d30-9a99-0fd26528cea9
+              - generic [ref=e69]:
+                - paragraph [ref=e71]: restaurant Cuisine
+                - generic [ref=e72]:
+                  - generic [ref=e73]:
+                    - heading "Green Bowl Co." [level=3] [ref=e74]
+                    - generic [ref=e75]:
+                      - img [ref=e76]
+                      - text: "4.9"
+                  - generic [ref=e79]:
+                    - img [ref=e80]
+                    - text: 25-40 min
+            - link "restaurant Cuisine Little Italy Deli 4.9 25-40 min" [ref=e83] [cursor=pointer]:
+              - /url: /customer/eats/14f25878-ea6e-451d-b93d-340d3659b3d5
+              - generic [ref=e84]:
+                - paragraph [ref=e86]: restaurant Cuisine
+                - generic [ref=e87]:
+                  - generic [ref=e88]:
+                    - heading "Little Italy Deli" [level=3] [ref=e89]
+                    - generic [ref=e90]:
+                      - img [ref=e91]
+                      - text: "4.9"
+                  - generic [ref=e94]:
+                    - img [ref=e95]
+                    - text: 25-40 min
+            - link "restaurant Cuisine Fresh Kitchen 4.9 25-40 min" [ref=e98] [cursor=pointer]:
+              - /url: /customer/eats/e947a1d0-1e44-4f89-b5b6-f16ddfad545c
+              - generic [ref=e99]:
+                - paragraph [ref=e101]: restaurant Cuisine
+                - generic [ref=e102]:
+                  - generic [ref=e103]:
+                    - heading "Fresh Kitchen" [level=3] [ref=e104]
+                    - generic [ref=e105]:
+                      - img [ref=e106]
+                      - text: "4.9"
+                  - generic [ref=e109]:
+                    - img [ref=e110]
+                    - text: 25-40 min
+        - generic [ref=e113]:
+          - heading "All Restaurants" [level=2] [ref=e114]
+          - generic [ref=e115]:
+            - link "P Pizza Napoli Japanese cuisine • Free delivery over $25 5 20-35 min" [ref=e116] [cursor=pointer]:
+              - /url: /customer/eats/dc02a591-10b8-4cbc-8f73-55f63c001f41
+              - generic [ref=e117]:
+                - generic [ref=e119]: P
+                - generic [ref=e120]:
+                  - heading "Pizza Napoli" [level=3] [ref=e121]
+                  - paragraph [ref=e122]: Japanese cuisine • Free delivery over $25
+                  - generic [ref=e123]:
+                    - generic [ref=e124]:
+                      - img [ref=e125]
+                      - text: "5"
+                    - generic [ref=e127]:
+                      - img [ref=e128]
+                      - text: 20-35 min
+            - link "G Green Bowl Co. Mexican cuisine • Free delivery over $25 4.9 20-35 min" [ref=e131] [cursor=pointer]:
+              - /url: /customer/eats/c73f22fa-e851-4d30-9a99-0fd26528cea9
+              - generic [ref=e132]:
+                - generic [ref=e134]: G
+                - generic [ref=e135]:
+                  - heading "Green Bowl Co." [level=3] [ref=e136]
+                  - paragraph [ref=e137]: Mexican cuisine • Free delivery over $25
+                  - generic [ref=e138]:
+                    - generic [ref=e139]:
+                      - img [ref=e140]
+                      - text: "4.9"
+                    - generic [ref=e142]:
+                      - img [ref=e143]
+                      - text: 20-35 min
+            - link "L Little Italy Deli Chinese cuisine • Free delivery over $25 4.9 20-35 min" [ref=e146] [cursor=pointer]:
+              - /url: /customer/eats/14f25878-ea6e-451d-b93d-340d3659b3d5
+              - generic [ref=e147]:
+                - generic [ref=e149]: L
+                - generic [ref=e150]:
+                  - heading "Little Italy Deli" [level=3] [ref=e151]
+                  - paragraph [ref=e152]: Chinese cuisine • Free delivery over $25
+                  - generic [ref=e153]:
+                    - generic [ref=e154]:
+                      - img [ref=e155]
+                      - text: "4.9"
+                    - generic [ref=e157]:
+                      - img [ref=e158]
+                      - text: 20-35 min
+            - link "F Fresh Kitchen Chinese cuisine • Free delivery over $25 4.9 20-35 min" [ref=e161] [cursor=pointer]:
+              - /url: /customer/eats/e947a1d0-1e44-4f89-b5b6-f16ddfad545c
+              - generic [ref=e162]:
+                - generic [ref=e164]: F
+                - generic [ref=e165]:
+                  - heading "Fresh Kitchen" [level=3] [ref=e166]
+                  - paragraph [ref=e167]: Chinese cuisine • Free delivery over $25
+                  - generic [ref=e168]:
+                    - generic [ref=e169]:
+                      - img [ref=e170]
+                      - text: "4.9"
+                    - generic [ref=e172]:
+                      - img [ref=e173]
+                      - text: 20-35 min
+            - link "T The Pasta House Italian cuisine • Free delivery over $25 4.9 20-35 min" [ref=e176] [cursor=pointer]:
+              - /url: /customer/eats/922462c9-969b-4527-a6ff-970a9c47592b
+              - generic [ref=e177]:
+                - generic [ref=e179]: T
+                - generic [ref=e180]:
+                  - heading "The Pasta House" [level=3] [ref=e181]
+                  - paragraph [ref=e182]: Italian cuisine • Free delivery over $25
+                  - generic [ref=e183]:
+                    - generic [ref=e184]:
+                      - img [ref=e185]
+                      - text: "4.9"
+                    - generic [ref=e187]:
+                      - img [ref=e188]
+                      - text: 20-35 min
+            - link "E Effertz - Thompson Cafe Customizable full-range middleware 4.87 20-35 min" [ref=e191] [cursor=pointer]:
+              - /url: /customer/eats/72a643ec-2011-4c65-a6ba-b9444e14df3f
+              - generic [ref=e192]:
+                - generic [ref=e194]: E
+                - generic [ref=e195]:
+                  - heading "Effertz - Thompson Cafe" [level=3] [ref=e196]
+                  - paragraph [ref=e197]: Customizable full-range middleware
+                  - generic [ref=e198]:
+                    - generic [ref=e199]:
+                      - img [ref=e200]
+                      - text: "4.87"
+                    - generic [ref=e202]:
+                      - img [ref=e203]
+                      - text: 20-35 min
+            - link "T Tokyo Sushi Express Italian cuisine • Free delivery over $25 4.8 20-35 min" [ref=e206] [cursor=pointer]:
+              - /url: /customer/eats/8df737d9-1bcb-4c0e-8b5b-a3af411cf4bc
+              - generic [ref=e207]:
+                - generic [ref=e209]: T
+                - generic [ref=e210]:
+                  - heading "Tokyo Sushi Express" [level=3] [ref=e211]
+                  - paragraph [ref=e212]: Italian cuisine • Free delivery over $25
+                  - generic [ref=e213]:
+                    - generic [ref=e214]:
+                      - img [ref=e215]
+                      - text: "4.8"
+                    - generic [ref=e217]:
+                      - img [ref=e218]
+                      - text: 20-35 min
+            - link "B Blue Fin Sushi Japanese cuisine • Free delivery over $25 4.8 20-35 min" [ref=e221] [cursor=pointer]:
+              - /url: /customer/eats/ccb0aabf-7bef-49dc-b854-1de2a02b0c58
+              - generic [ref=e222]:
+                - generic [ref=e224]: B
+                - generic [ref=e225]:
+                  - heading "Blue Fin Sushi" [level=3] [ref=e226]
+                  - paragraph [ref=e227]: Japanese cuisine • Free delivery over $25
+                  - generic [ref=e228]:
+                    - generic [ref=e229]:
+                      - img [ref=e230]
+                      - text: "4.8"
+                    - generic [ref=e232]:
+                      - img [ref=e233]
+                      - text: 20-35 min
+            - link "B Burger Forge American cuisine • Free delivery over $25 4.8 20-35 min" [ref=e236] [cursor=pointer]:
+              - /url: /customer/eats/78c8231e-9ea6-491a-a501-a53848da6d1c
+              - generic [ref=e237]:
+                - generic [ref=e239]: B
+                - generic [ref=e240]:
+                  - heading "Burger Forge" [level=3] [ref=e241]
+                  - paragraph [ref=e242]: American cuisine • Free delivery over $25
+                  - generic [ref=e243]:
+                    - generic [ref=e244]:
+                      - img [ref=e245]
+                      - text: "4.8"
+                    - generic [ref=e247]:
+                      - img [ref=e248]
+                      - text: 20-35 min
+            - link "T Tokyo Sushi Express Italian cuisine • Free delivery over $25 4.7 20-35 min" [ref=e251] [cursor=pointer]:
+              - /url: /customer/eats/8077463f-15d1-4660-a1a5-cb0c3e8ae717
+              - generic [ref=e252]:
+                - generic [ref=e254]: T
+                - generic [ref=e255]:
+                  - heading "Tokyo Sushi Express" [level=3] [ref=e256]
+                  - paragraph [ref=e257]: Italian cuisine • Free delivery over $25
+                  - generic [ref=e258]:
+                    - generic [ref=e259]:
+                      - img [ref=e260]
+                      - text: "4.7"
+                    - generic [ref=e262]:
+                      - img [ref=e263]
+                      - text: 20-35 min
+            - link "T Toy, Wiegand and Hackett Cafe Phased dedicated model 4.68 20-35 min" [ref=e266] [cursor=pointer]:
+              - /url: /customer/eats/0970a998-ecbf-43c0-8d54-84d3300f5b5f
+              - generic [ref=e267]:
+                - generic [ref=e269]: T
+                - generic [ref=e270]:
+                  - heading "Toy, Wiegand and Hackett Cafe" [level=3] [ref=e271]
+                  - paragraph [ref=e272]: Phased dedicated model
+                  - generic [ref=e273]:
+                    - generic [ref=e274]:
+                      - img [ref=e275]
+                      - text: "4.68"
+                    - generic [ref=e277]:
+                      - img [ref=e278]
+                      - text: 20-35 min
+            - link "E El Fuego Tacos Chinese cuisine • Free delivery over $25 4.6 20-35 min" [ref=e281] [cursor=pointer]:
+              - /url: /customer/eats/b247827a-20c0-415f-9173-66d0b7fd71d8
+              - generic [ref=e282]:
+                - generic [ref=e284]: E
+                - generic [ref=e285]:
+                  - heading "El Fuego Tacos" [level=3] [ref=e286]
+                  - paragraph [ref=e287]: Chinese cuisine • Free delivery over $25
+                  - generic [ref=e288]:
+                    - generic [ref=e289]:
+                      - img [ref=e290]
+                      - text: "4.6"
+                    - generic [ref=e292]:
+                      - img [ref=e293]
+                      - text: 20-35 min
+            - link "P Pizza Napoli Japanese cuisine • Free delivery over $25 4.5 20-35 min" [ref=e296] [cursor=pointer]:
+              - /url: /customer/eats/068c62e3-67c5-4eb4-a725-89b65fd93df2
+              - generic [ref=e297]:
+                - generic [ref=e299]: P
+                - generic [ref=e300]:
+                  - heading "Pizza Napoli" [level=3] [ref=e301]
+                  - paragraph [ref=e302]: Japanese cuisine • Free delivery over $25
+                  - generic [ref=e303]:
+                    - generic [ref=e304]:
+                      - img [ref=e305]
+                      - text: "4.5"
+                    - generic [ref=e307]:
+                      - img [ref=e308]
+                      - text: 20-35 min
+            - link "T The Rustic Oven Mexican cuisine • Free delivery over $25 4.5 20-35 min" [ref=e311] [cursor=pointer]:
+              - /url: /customer/eats/daa3be3f-3861-411b-8c5c-9ba6e9e63cc8
+              - generic [ref=e312]:
+                - generic [ref=e314]: T
+                - generic [ref=e315]:
+                  - heading "The Rustic Oven" [level=3] [ref=e316]
+                  - paragraph [ref=e317]: Mexican cuisine • Free delivery over $25
+                  - generic [ref=e318]:
+                    - generic [ref=e319]:
+                      - img [ref=e320]
+                      - text: "4.5"
+                    - generic [ref=e322]:
+                      - img [ref=e323]
+                      - text: 20-35 min
+            - link "G Golden Wok American cuisine • Free delivery over $25 4.3 20-35 min" [ref=e326] [cursor=pointer]:
+              - /url: /customer/eats/6cb0384a-b556-4662-bc0d-929c597a08a7
+              - generic [ref=e327]:
+                - generic [ref=e329]: G
+                - generic [ref=e330]:
+                  - heading "Golden Wok" [level=3] [ref=e331]
+                  - paragraph [ref=e332]: American cuisine • Free delivery over $25
+                  - generic [ref=e333]:
+                    - generic [ref=e334]:
+                      - img [ref=e335]
+                      - text: "4.3"
+                    - generic [ref=e337]:
+                      - img [ref=e338]
+                      - text: 20-35 min
+            - link "M Murphy, McDermott and Stark Cafe Triple-buffered asynchronous utilisation 4.25 20-35 min" [ref=e341] [cursor=pointer]:
+              - /url: /customer/eats/143a8e64-2592-48b4-b2df-e3fc8ac09d1b
+              - generic [ref=e342]:
+                - generic [ref=e344]: M
+                - generic [ref=e345]:
+                  - heading "Murphy, McDermott and Stark Cafe" [level=3] [ref=e346]
+                  - paragraph [ref=e347]: Triple-buffered asynchronous utilisation
+                  - generic [ref=e348]:
+                    - generic [ref=e349]:
+                      - img [ref=e350]
+                      - text: "4.25"
+                    - generic [ref=e352]:
+                      - img [ref=e353]
+                      - text: 20-35 min
+            - link "T The Mediterranean Grill Japanese cuisine • Free delivery over $25 4.2 20-35 min" [ref=e356] [cursor=pointer]:
+              - /url: /customer/eats/bb1fdd1f-ada2-4e79-adae-19db3d6e17ee
+              - generic [ref=e357]:
+                - generic [ref=e359]: T
+                - generic [ref=e360]:
+                  - heading "The Mediterranean Grill" [level=3] [ref=e361]
+                  - paragraph [ref=e362]: Japanese cuisine • Free delivery over $25
+                  - generic [ref=e363]:
+                    - generic [ref=e364]:
+                      - img [ref=e365]
+                      - text: "4.2"
+                    - generic [ref=e367]:
+                      - img [ref=e368]
+                      - text: 20-35 min
+            - link "S Sakura Ramen Japanese cuisine • Free delivery over $25 4.2 20-35 min" [ref=e371] [cursor=pointer]:
+              - /url: /customer/eats/eaa7f7c9-1d9c-4fa9-91e5-b4c9a81bed5c
+              - generic [ref=e372]:
+                - generic [ref=e374]: S
+                - generic [ref=e375]:
+                  - heading "Sakura Ramen" [level=3] [ref=e376]
+                  - paragraph [ref=e377]: Japanese cuisine • Free delivery over $25
+                  - generic [ref=e378]:
+                    - generic [ref=e379]:
+                      - img [ref=e380]
+                      - text: "4.2"
+                    - generic [ref=e382]:
+                      - img [ref=e383]
+                      - text: 20-35 min
+            - link "P Pho Palace American cuisine • Free delivery over $25 4.1 20-35 min" [ref=e386] [cursor=pointer]:
+              - /url: /customer/eats/333147f5-483b-408c-a04f-f3b7db339911
+              - generic [ref=e387]:
+                - generic [ref=e389]: P
+                - generic [ref=e390]:
+                  - heading "Pho Palace" [level=3] [ref=e391]
+                  - paragraph [ref=e392]: American cuisine • Free delivery over $25
+                  - generic [ref=e393]:
+                    - generic [ref=e394]:
+                      - img [ref=e395]
+                      - text: "4.1"
+                    - generic [ref=e397]:
+                      - img [ref=e398]
+                      - text: 20-35 min
+            - link "S Smoke & Grill BBQ Mexican cuisine • Free delivery over $25 4 20-35 min" [ref=e401] [cursor=pointer]:
+              - /url: /customer/eats/9458cf59-35d5-44ec-a4fe-8077f3294773
+              - generic [ref=e402]:
+                - generic [ref=e404]: S
+                - generic [ref=e405]:
+                  - heading "Smoke & Grill BBQ" [level=3] [ref=e406]
+                  - paragraph [ref=e407]: Mexican cuisine • Free delivery over $25
+                  - generic [ref=e408]:
+                    - generic [ref=e409]:
+                      - img [ref=e410]
+                      - text: "4"
+                    - generic [ref=e412]:
+                      - img [ref=e413]
+                      - text: 20-35 min
+            - link "S Sakura Ramen Japanese cuisine • Free delivery over $25 3.9 20-35 min" [ref=e416] [cursor=pointer]:
+              - /url: /customer/eats/53125344-9925-4c61-84f9-00496fc14a9b
+              - generic [ref=e417]:
+                - generic [ref=e419]: S
+                - generic [ref=e420]:
+                  - heading "Sakura Ramen" [level=3] [ref=e421]
+                  - paragraph [ref=e422]: Japanese cuisine • Free delivery over $25
+                  - generic [ref=e423]:
+                    - generic [ref=e424]:
+                      - img [ref=e425]
+                      - text: "3.9"
+                    - generic [ref=e427]:
+                      - img [ref=e428]
+                      - text: 20-35 min
+            - link "S Seoul Kitchen Italian cuisine • Free delivery over $25 3.9 20-35 min" [ref=e431] [cursor=pointer]:
+              - /url: /customer/eats/39156a47-b2df-41a0-82fb-e0410e37f5f2
+              - generic [ref=e432]:
+                - generic [ref=e434]: S
+                - generic [ref=e435]:
+                  - heading "Seoul Kitchen" [level=3] [ref=e436]
+                  - paragraph [ref=e437]: Italian cuisine • Free delivery over $25
+                  - generic [ref=e438]:
+                    - generic [ref=e439]:
+                      - img [ref=e440]
+                      - text: "3.9"
+                    - generic [ref=e442]:
+                      - img [ref=e443]
+                      - text: 20-35 min
+            - link "M Mumbai Bites Italian cuisine • Free delivery over $25 3.9 20-35 min" [ref=e446] [cursor=pointer]:
+              - /url: /customer/eats/a4b4fc6e-c501-402b-b409-41cd4a8b63c4
+              - generic [ref=e447]:
+                - generic [ref=e449]: M
+                - generic [ref=e450]:
+                  - heading "Mumbai Bites" [level=3] [ref=e451]
+                  - paragraph [ref=e452]: Italian cuisine • Free delivery over $25
+                  - generic [ref=e453]:
+                    - generic [ref=e454]:
+                      - img [ref=e455]
+                      - text: "3.9"
+                    - generic [ref=e457]:
+                      - img [ref=e458]
+                      - text: 20-35 min
+            - link "T The Pasta House Italian cuisine • Free delivery over $25 3.8 20-35 min" [ref=e461] [cursor=pointer]:
+              - /url: /customer/eats/0b67ae5d-e916-4dd5-a851-f29873b8cd01
+              - generic [ref=e462]:
+                - generic [ref=e464]: T
+                - generic [ref=e465]:
+                  - heading "The Pasta House" [level=3] [ref=e466]
+                  - paragraph [ref=e467]: Italian cuisine • Free delivery over $25
+                  - generic [ref=e468]:
+                    - generic [ref=e469]:
+                      - img [ref=e470]
+                      - text: "3.8"
+                    - generic [ref=e472]:
+                      - img [ref=e473]
+                      - text: 20-35 min
+            - link "G Golden Wok American cuisine • Free delivery over $25 3.8 20-35 min" [ref=e476] [cursor=pointer]:
+              - /url: /customer/eats/4f59a64d-dbfb-48a3-ab67-0603f017e150
+              - generic [ref=e477]:
+                - generic [ref=e479]: G
+                - generic [ref=e480]:
+                  - heading "Golden Wok" [level=3] [ref=e481]
+                  - paragraph [ref=e482]: American cuisine • Free delivery over $25
+                  - generic [ref=e483]:
+                    - generic [ref=e484]:
+                      - img [ref=e485]
+                      - text: "3.8"
+                    - generic [ref=e487]:
+                      - img [ref=e488]
+                      - text: 20-35 min
+            - link "N Noodle Bar Chinese cuisine • Free delivery over $25 3.7 20-35 min" [ref=e491] [cursor=pointer]:
+              - /url: /customer/eats/0dbdc5f2-603b-4b9f-95ba-91dd61d7ee9b
+              - generic [ref=e492]:
+                - generic [ref=e494]: "N"
+                - generic [ref=e495]:
+                  - heading "Noodle Bar" [level=3] [ref=e496]
+                  - paragraph [ref=e497]: Chinese cuisine • Free delivery over $25
+                  - generic [ref=e498]:
+                    - generic [ref=e499]:
+                      - img [ref=e500]
+                      - text: "3.7"
+                    - generic [ref=e502]:
+                      - img [ref=e503]
+                      - text: 20-35 min
+            - link "F Fresh Kitchen Chinese cuisine • Free delivery over $25 3.7 20-35 min" [ref=e506] [cursor=pointer]:
+              - /url: /customer/eats/503c4153-d083-43a9-8f92-086eaf50bcc2
+              - generic [ref=e507]:
+                - generic [ref=e509]: F
+                - generic [ref=e510]:
+                  - heading "Fresh Kitchen" [level=3] [ref=e511]
+                  - paragraph [ref=e512]: Chinese cuisine • Free delivery over $25
+                  - generic [ref=e513]:
+                    - generic [ref=e514]:
+                      - img [ref=e515]
+                      - text: "3.7"
+                    - generic [ref=e517]:
+                      - img [ref=e518]
+                      - text: 20-35 min
+            - link "T Taco Republic American cuisine • Free delivery over $25 3.7 20-35 min" [ref=e521] [cursor=pointer]:
+              - /url: /customer/eats/3f1d4488-ade0-4d55-8dbd-915112577765
+              - generic [ref=e522]:
+                - generic [ref=e524]: T
+                - generic [ref=e525]:
+                  - heading "Taco Republic" [level=3] [ref=e526]
+                  - paragraph [ref=e527]: American cuisine • Free delivery over $25
+                  - generic [ref=e528]:
+                    - generic [ref=e529]:
+                      - img [ref=e530]
+                      - text: "3.7"
+                    - generic [ref=e532]:
+                      - img [ref=e533]
+                      - text: 20-35 min
+            - link "D Dragon Palace Mexican cuisine • Free delivery over $25 3.7 20-35 min" [ref=e536] [cursor=pointer]:
+              - /url: /customer/eats/8cdd4366-afc2-48c9-aebd-29fea96c4787
+              - generic [ref=e537]:
+                - generic [ref=e539]: D
+                - generic [ref=e540]:
+                  - heading "Dragon Palace" [level=3] [ref=e541]
+                  - paragraph [ref=e542]: Mexican cuisine • Free delivery over $25
+                  - generic [ref=e543]:
+                    - generic [ref=e544]:
+                      - img [ref=e545]
+                      - text: "3.7"
+                    - generic [ref=e547]:
+                      - img [ref=e548]
+                      - text: 20-35 min
+            - link "B Burger Forge American cuisine • Free delivery over $25 3.6 20-35 min" [ref=e551] [cursor=pointer]:
+              - /url: /customer/eats/11c65043-aa6d-4527-9421-5343b2e12dd9
+              - generic [ref=e552]:
+                - generic [ref=e554]: B
+                - generic [ref=e555]:
+                  - heading "Burger Forge" [level=3] [ref=e556]
+                  - paragraph [ref=e557]: American cuisine • Free delivery over $25
+                  - generic [ref=e558]:
+                    - generic [ref=e559]:
+                      - img [ref=e560]
+                      - text: "3.6"
+                    - generic [ref=e562]:
+                      - img [ref=e563]
+                      - text: 20-35 min
+            - link "G Green Bowl Co. Mexican cuisine • Free delivery over $25 3.6 20-35 min" [ref=e566] [cursor=pointer]:
+              - /url: /customer/eats/14269af1-7302-4d5e-a78b-d2bb410e37ae
+              - generic [ref=e567]:
+                - generic [ref=e569]: G
+                - generic [ref=e570]:
+                  - heading "Green Bowl Co." [level=3] [ref=e571]
+                  - paragraph [ref=e572]: Mexican cuisine • Free delivery over $25
+                  - generic [ref=e573]:
+                    - generic [ref=e574]:
+                      - img [ref=e575]
+                      - text: "3.6"
+                    - generic [ref=e577]:
+                      - img [ref=e578]
+                      - text: 20-35 min
+            - link "E El Fuego Tacos Chinese cuisine • Free delivery over $25 3.6 20-35 min" [ref=e581] [cursor=pointer]:
+              - /url: /customer/eats/73b010b1-512b-4d84-90f7-1dbfc252b178
+              - generic [ref=e582]:
+                - generic [ref=e584]: E
+                - generic [ref=e585]:
+                  - heading "El Fuego Tacos" [level=3] [ref=e586]
+                  - paragraph [ref=e587]: Chinese cuisine • Free delivery over $25
+                  - generic [ref=e588]:
+                    - generic [ref=e589]:
+                      - img [ref=e590]
+                      - text: "3.6"
+                    - generic [ref=e592]:
+                      - img [ref=e593]
+                      - text: 20-35 min
+            - link "S Smoke & Grill BBQ Mexican cuisine • Free delivery over $25 3.5 20-35 min" [ref=e596] [cursor=pointer]:
+              - /url: /customer/eats/67687ca7-198b-495b-91f6-a4b1d9926933
+              - generic [ref=e597]:
+                - generic [ref=e599]: S
+                - generic [ref=e600]:
+                  - heading "Smoke & Grill BBQ" [level=3] [ref=e601]
+                  - paragraph [ref=e602]: Mexican cuisine • Free delivery over $25
+                  - generic [ref=e603]:
+                    - generic [ref=e604]:
+                      - img [ref=e605]
+                      - text: "3.5"
+                    - generic [ref=e607]:
+                      - img [ref=e608]
+                      - text: 20-35 min
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e616] [cursor=pointer]:
+    - generic [ref=e619]:
+      - text: Compiling
+      - generic [ref=e620]:
+        - generic [ref=e621]: .
+        - generic [ref=e622]: .
+        - generic [ref=e623]: .
+  - alert [ref=e624]
 ```

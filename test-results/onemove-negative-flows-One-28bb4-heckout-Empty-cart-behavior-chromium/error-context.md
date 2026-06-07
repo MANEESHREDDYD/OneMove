@@ -60,7 +60,14 @@ Call log:
           - img [ref=e43]
           - paragraph [ref=e45]: Login as Admin
   - region "Notifications alt+T"
-  - alert [ref=e46]
+  - button "Open Next.js Dev Tools" [ref=e51] [cursor=pointer]:
+    - generic [ref=e54]:
+      - text: Compiling
+      - generic [ref=e55]:
+        - generic [ref=e56]: .
+        - generic [ref=e57]: .
+        - generic [ref=e58]: .
+  - alert [ref=e59]
 ```
 
 # Test source

@@ -123,3 +123,54 @@ CREATE INDEX IF NOT EXISTS idx_metric_snapshots_timestamp ON public.metric_snaps
 
 ALTER TABLE public.metric_snapshots ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "admin_all_metric_snapshots" ON public.metric_snapshots FOR ALL USING (is_admin());
+
+ALTER TABLE public.demand_forecasts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.risk_checks DISABLE ROW LEVEL SECURITY;
+
+-- ==========================================
+-- Phase 3: Recommendations, Segmentation, Trust
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.recommendations (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    customer_id UUID NOT NULL,
+    entity_type TEXT NOT NULL, -- 'merchant', 'ride_destination', 'item'
+    entity_id TEXT NOT NULL, -- The recommended item or merchant ID
+    score NUMERIC NOT NULL,
+    confidence NUMERIC NOT NULL,
+    reasoning TEXT[] DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.customer_segments (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    customer_id UUID NOT NULL,
+    segment_name TEXT NOT NULL,
+    feature_values JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.merchant_reliability_scores (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    merchant_id UUID NOT NULL,
+    reliability_score NUMERIC NOT NULL, -- 0-100
+    risk_level TEXT NOT NULL,
+    factors TEXT[] DEFAULT '{}',
+    metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.partner_trust_scores (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    partner_id UUID NOT NULL,
+    trust_score NUMERIC NOT NULL, -- 0-100
+    status TEXT NOT NULL,
+    factors TEXT[] DEFAULT '{}',
+    metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.recommendations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_segments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.merchant_reliability_scores DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.partner_trust_scores DISABLE ROW LEVEL SECURITY;

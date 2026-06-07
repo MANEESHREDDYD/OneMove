@@ -50,80 +50,81 @@ Test timeout of 30000ms exceeded.
           - generic [ref=e40]: Profile
     - main [ref=e41]:
       - generic [ref=e43]:
-        - generic [ref=e45]:
-          - heading "Pizza Napoli" [level=1] [ref=e46]
-          - paragraph [ref=e47]: Select items to add to your order
-        - generic [ref=e48]:
-          - generic [ref=e49]:
-            - generic [ref=e50]:
-              - heading "Spicy Tuna Roll" [level=3] [ref=e51]
-              - paragraph [ref=e52]: Japanese specialty
-              - paragraph [ref=e53]: $6.89
-            - button [ref=e55]:
-              - img [ref=e56]
-          - generic [ref=e57]:
-            - generic [ref=e58]:
-              - heading "Dragon Roll" [level=3] [ref=e59]
-              - paragraph [ref=e60]: Japanese specialty
-              - paragraph [ref=e61]: $24.48
-            - button [ref=e63]:
-              - img [ref=e64]
-          - generic [ref=e65]:
-            - generic [ref=e66]:
-              - heading "Miso Soup" [level=3] [ref=e67]
-              - paragraph [ref=e68]: Japanese specialty
-              - paragraph [ref=e69]: $12.02
-            - button [ref=e71]:
-              - img [ref=e72]
-          - generic [ref=e73]:
-            - generic [ref=e74]:
-              - heading "Edamame" [level=3] [ref=e75]
-              - paragraph [ref=e76]: Japanese specialty
-              - paragraph [ref=e77]: $18.64
-            - button [ref=e79]:
-              - img [ref=e80]
-          - generic [ref=e81]:
-            - generic [ref=e82]:
-              - heading "Teriyaki Chicken" [level=3] [ref=e83]
-              - paragraph [ref=e84]: Japanese specialty
-              - paragraph [ref=e85]: $26.52
-            - button [ref=e87]:
-              - img [ref=e88]
-          - generic [ref=e89]:
-            - generic [ref=e90]:
-              - heading "Ramen Tonkotsu" [level=3] [ref=e91]
-              - paragraph [ref=e92]: Japanese specialty
-              - paragraph [ref=e93]: $24.42
-            - button [ref=e95]:
-              - img [ref=e96]
-          - generic [ref=e97]:
-            - generic [ref=e98]:
-              - heading "Tempura Shrimp" [level=3] [ref=e99]
-              - paragraph [ref=e100]: Japanese specialty
-              - paragraph [ref=e101]: $13.79
-            - button [ref=e103]:
-              - img [ref=e104]
-          - generic [ref=e105]:
-            - generic [ref=e106]:
-              - heading "Salmon Sashimi" [level=3] [ref=e107]
-              - paragraph [ref=e108]: Japanese specialty
-              - paragraph [ref=e109]: $16.89
-            - button [ref=e111]:
-              - img [ref=e112]
-          - generic [ref=e113]:
-            - generic [ref=e114]:
-              - heading "Gyoza (6pc)" [level=3] [ref=e115]
-              - paragraph [ref=e116]: Japanese specialty
-              - paragraph [ref=e117]: $7.46
-            - button [ref=e119]:
-              - img [ref=e120]
-          - generic [ref=e121]:
-            - generic [ref=e122]:
-              - heading "Matcha Ice Cream" [level=3] [ref=e123]
-              - paragraph [ref=e124]: Japanese specialty
-              - paragraph [ref=e125]: $23.45
-            - button [ref=e127]:
-              - img [ref=e128]
+        - generic [ref=e44]:
+          - generic [ref=e46]:
+            - heading "Good Morning" [level=1] [ref=e47]
+            - paragraph [ref=e48]: Where to next?
+          - button "Sign Out" [ref=e49]:
+            - img
+            - text: Sign Out
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - heading "Active Orders" [level=2] [ref=e52]
+            - link "View all" [ref=e53] [cursor=pointer]:
+              - /url: /customer/orders
+          - generic [ref=e54]:
+            - link "ride • accepted Times Square" [ref=e55] [cursor=pointer]:
+              - /url: /customer/orders/b0a41999-cfd7-4d06-a4e2-e0ba87982265
+              - generic [ref=e56]:
+                - img [ref=e58]
+                - generic [ref=e62]:
+                  - heading "ride • accepted" [level=3] [ref=e63]
+                  - generic [ref=e64]:
+                    - img [ref=e65]
+                    - generic [ref=e68]: Times Square
+            - link "ride • pending 8812 Maymie Lodge, New York, NY" [ref=e69] [cursor=pointer]:
+              - /url: /customer/orders/2c2a8968-d342-4c18-ae00-7ba91e3b94a5
+              - generic [ref=e70]:
+                - img [ref=e72]
+                - generic [ref=e76]:
+                  - heading "ride • pending" [level=3] [ref=e77]
+                  - generic [ref=e78]:
+                    - img [ref=e79]
+                    - generic [ref=e82]: 8812 Maymie Lodge, New York, NY
+        - generic [ref=e83]:
+          - heading "Services" [level=2] [ref=e84]
+          - generic [ref=e85]:
+            - link "Rides Get there fast" [ref=e86] [cursor=pointer]:
+              - /url: /customer/rides
+              - generic [ref=e87]:
+                - img [ref=e90]
+                - generic [ref=e94]:
+                  - heading "Rides" [level=3] [ref=e95]
+                  - paragraph [ref=e96]: Get there fast
+            - link "Food Cravings delivered" [ref=e97] [cursor=pointer]:
+              - /url: /customer/eats
+              - generic [ref=e98]:
+                - img [ref=e101]
+                - generic [ref=e104]:
+                  - heading "Food" [level=3] [ref=e105]
+                  - paragraph [ref=e106]: Cravings delivered
+            - link "Grocery Fresh & fast" [ref=e107] [cursor=pointer]:
+              - /url: /customer/grocery
+              - generic [ref=e108]:
+                - img [ref=e111]
+                - generic [ref=e117]:
+                  - heading "Grocery" [level=3] [ref=e118]
+                  - paragraph [ref=e119]: Fresh & fast
+            - link "Courier Send packages" [ref=e120] [cursor=pointer]:
+              - /url: /customer/orders
+              - generic [ref=e121]:
+                - img [ref=e124]
+                - generic [ref=e128]:
+                  - heading "Courier" [level=3] [ref=e129]
+                  - paragraph [ref=e130]: Send packages
+        - generic [ref=e133]:
+          - heading "Try OneMove Prime" [level=3] [ref=e134]
+          - paragraph [ref=e135]: Get $0 delivery fees on eligible food and grocery orders, plus 5% off rides.
+          - button "Start Free Trial" [ref=e136]
+        - button [ref=e138]:
+          - img [ref=e139]
   - region "Notifications alt+T"
-  - alert [ref=e129]
+  - button "Open Next.js Dev Tools" [ref=e146] [cursor=pointer]:
+    - generic [ref=e149]:
+      - text: Compiling
+      - generic [ref=e150]:
+        - generic [ref=e151]: .
+        - generic [ref=e152]: .
+        - generic [ref=e153]: .
+  - alert [ref=e154]
 ```
