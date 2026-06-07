@@ -2,8 +2,10 @@
 
 import { GlassCard } from "@/components/common/GlassCard"
 import { Database } from "@/types/database.types"
-import { Shield, Activity, DollarSign, Users, Globe, CheckCircle, Clock } from "lucide-react"
+import { Shield, Activity, DollarSign, Users, Globe, CheckCircle, Clock, RefreshCw } from "lucide-react"
 import { LiveCityPreview } from "@/components/maps/LiveCityPreview"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 
 type Order = Database['public']['Tables']['orders']['Row']
 
@@ -22,6 +24,15 @@ export function AdminDashboardClient({
     completionRate: number
   }
 }) {
+  const router = useRouter()
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefresh = () => {
+    setIsRefreshing(true)
+    router.refresh()
+    setTimeout(() => setIsRefreshing(false), 500)
+  }
+
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -67,9 +78,18 @@ export function AdminDashboardClient({
 
       {/* Global Order Feed */}
       <div className="space-y-4">
-        <h2 className="text-lg font-bold flex items-center gap-2">
-          <Shield className="w-5 h-5 text-primary" /> Live Global Feed
-        </h2>
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" /> Live Global Feed
+          </h2>
+          <button 
+            onClick={handleRefresh}
+            className="flex items-center gap-2 text-xs font-bold bg-primary/10 text-primary px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors"
+          >
+            <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Force Sync
+          </button>
+        </div>
         
         <GlassCard className="overflow-hidden">
           <div className="overflow-x-auto">

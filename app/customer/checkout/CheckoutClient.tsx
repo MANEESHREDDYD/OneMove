@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useCartStore } from "@/store/cartStore"
 import { CreditCard, Wallet, Coins, MapPin, Receipt, ArrowRight, Loader2 } from "lucide-react"
 import { placeMarketplaceOrder } from "./actions"
+import { generateIdempotencyKey } from "@/utils/idempotency"
 
 export function CheckoutClient({ 
   userId, 
@@ -28,9 +29,13 @@ export function CheckoutClient({
   const [address, setAddress] = useState("123 Demo Street, New York, NY")
   const [instructions, setInstructions] = useState("")
   const [tipAmount, setTipAmount] = useState(3.00)
+  const [idempotencyKey, setIdempotencyKey] = useState<string>('')
 
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    setMounted(true)
+    setIdempotencyKey(generateIdempotencyKey())
+  }, [])
 
   if (!mounted) return null;
 
@@ -66,7 +71,8 @@ export function CheckoutClient({
         totalAmount: total,
         paymentMethod,
         address,
-        instructions
+        instructions,
+        idempotencyKey
       })
       
       if (res.error) {

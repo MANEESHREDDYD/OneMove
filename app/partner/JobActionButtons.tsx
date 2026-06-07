@@ -15,8 +15,8 @@ export function AcceptJobButton({ orderId }: { orderId: string }) {
     const res = await acceptJob(orderId)
     if (res?.error) {
       setError(res.error)
-      setLoading(false)
     }
+    setLoading(false)
   }
 
   return (
@@ -48,8 +48,8 @@ export function ActiveJobButtons({ orderId, currentStatus, serviceType = 'eats' 
     const res = await updateJobStatus(orderId, newStatus)
     if (res?.error) {
       setError(res.error)
-      setLoading(false)
     }
+    setLoading(false)
   }
 
   const isRide = serviceType === 'ride'

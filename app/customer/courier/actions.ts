@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { isValidIdempotencyKey } from '@/utils/idempotency'
 
 export async function requestCourierOrder(formData: FormData) {
   const supabase = await createClient()
@@ -18,9 +19,14 @@ export async function requestCourierOrder(formData: FormData) {
   const dropoffAddress = formData.get('dropoffAddress') as string
   const packageSize = formData.get('packageSize') as string
   const packageDetails = formData.get('packageDetails') as string
+  const idempotencyKey = formData.get('idempotencyKey') as string
 
   if (!pickupAddress || !dropoffAddress || !packageSize) {
     return { error: 'Please fill in all required fields' }
+  }
+
+  if (idempotencyKey && !isValidIdempotencyKey(idempotencyKey)) {
+    return { error: 'Invalid request signature' }
   }
 
   // Base pricing logic based on size
@@ -43,12 +49,23 @@ export async function requestCourierOrder(formData: FormData) {
           size: packageSize,
           details: packageDetails || 'No details provided'
         }
-      }
+      },
+      idempotency_key: idempotencyKey || null
     })
     .select('id')
     .single()
 
-  if (insertError || !order) {
+  if (insertError) {
+    if (insertError.code === '23505' && insertError.message.includes('idx_orders_idempotency')) {
+      const { data: existingOrder } = await supabase.from('orders').select('id').eq('idempotency_key', idempotencyKey).single();
+      if (existingOrder) {
+        return { success: true, orderId: existingOrder.id }
+      }
+    }
+    return { error: 'Failed to request courier' }
+  }
+
+  if (!order) {
     return { error: 'Failed to request courier' }
   }
 

@@ -38,7 +38,7 @@ export default async function DriverDashboard() {
     .select('*')
     .in('status', ['pending', 'ready', 'requested', 'created'])
     .or(`driver_id.is.null,driver_id.eq.${user.id}`)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(20)
 
   // Fetch orders that are actively assigned to THIS driver

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { GlassCard } from '@/components/common/GlassCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,7 @@ import { MapPin, Navigation, Car, Crown, AlertCircle, CreditCard, Wallet, Bankno
 import { requestRide } from './actions'
 import { calculateRideEstimate } from '@/utils/pricing'
 import { SafeLeafletMap } from '@/components/maps/SafeLeafletMap'
-
+import { generateIdempotencyKey } from '@/utils/idempotency'
 import { nycLandmarks, Landmark } from '@/lib/locations/nycLandmarks'
 
 type LocationType = Landmark
@@ -29,6 +29,13 @@ export function RideBookingForm() {
   
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  const [idempotencyKey, setIdempotencyKey] = useState<string>('')
+  
+  // Generate key on mount
+  useEffect(() => {
+    setIdempotencyKey(generateIdempotencyKey())
+  }, [])
 
   const pickupSuggestions = pickupInput.length > 0 ? nycLandmarks.filter(loc => loc.name.toLowerCase().includes(pickupInput.toLowerCase())) : nycLandmarks
   const dropoffSuggestions = dropoffInput.length > 0 ? nycLandmarks.filter(loc => loc.name.toLowerCase().includes(dropoffInput.toLowerCase())) : nycLandmarks
@@ -52,6 +59,7 @@ export function RideBookingForm() {
       formData.append('dropoff', JSON.stringify({ address: dropoff.name, lat: dropoff.lat, lng: dropoff.lng }))
       formData.append('serviceClass', selectedClass)
       formData.append('paymentMethod', paymentMethod)
+      formData.append('idempotencyKey', idempotencyKey)
 
       const result = await requestRide(formData)
       if (result?.error) {

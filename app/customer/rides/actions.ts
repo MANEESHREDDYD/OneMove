@@ -3,15 +3,21 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { calculateRideEstimate } from '@/utils/pricing'
+import { isValidIdempotencyKey } from '@/utils/idempotency'
 
 export async function requestRide(formData: FormData) {
   const pickupStr = formData.get('pickup') as string
   const dropoffStr = formData.get('dropoff') as string
   const serviceClass = formData.get('serviceClass') as string // 'economy' | 'premium'
   const paymentMethod = formData.get('paymentMethod') as string // 'demo_wallet', 'mock_card', etc.
+  const idempotencyKey = formData.get('idempotencyKey') as string
 
   if (!pickupStr || !dropoffStr || !serviceClass) {
     return { error: 'Missing required fields.' }
+  }
+
+  if (idempotencyKey && !isValidIdempotencyKey(idempotencyKey)) {
+    return { error: 'Invalid request signature.' }
   }
 
   const supabase = await createClient()
@@ -42,10 +48,23 @@ export async function requestRide(formData: FormData) {
     status: 'requested',
     total_amount: finalPrice,
     pickup_location: pickup,
-    dropoff_location: dropoff
+    dropoff_location: dropoff,
+    idempotency_key: idempotencyKey || null
   }).select('id').single()
 
-  if (orderError || !order) {
+  if (orderError) {
+    console.error('Ride order insertion error:', orderError);
+    // If idempotency constraint is violated (23505 = unique_violation)
+    if (orderError.code === '23505' && orderError.message.includes('idx_orders_idempotency')) {
+      const { data: existingOrder } = await supabase.from('orders').select('id').eq('idempotency_key', idempotencyKey).single();
+      if (existingOrder) {
+        redirect(`/customer/rides/${existingOrder.id}`);
+      }
+    }
+    return { error: 'Failed to request ride. Please try again.' }
+  }
+
+  if (!order) {
     return { error: 'Failed to request ride. Please try again.' }
   }
 

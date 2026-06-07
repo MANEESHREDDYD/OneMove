@@ -23,7 +23,7 @@ test.describe('OneMove Performance Budgets', () => {
   test('Admin command center loads efficiently', async ({ page }) => {
     await page.goto('http://localhost:3000/auth/login');
     await page.fill('input[type="email"]', 'admin001@onemove.demo'); // Assume admin credential structure
-    await page.fill('input[type="password"]', 'Admin@001Move');
+    await page.fill('input[type="password"]', 'Demo@12345');
     await page.click('button[type="submit"]');
     
     const startTime = Date.now();

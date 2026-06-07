@@ -3,24 +3,27 @@ import { redirect } from 'next/navigation'
 import { PageHeader } from '@/components/common/PageHeader'
 import { GlassCard } from '@/components/common/GlassCard'
 import { SafeLeafletMap } from '@/components/maps/SafeLeafletMap'
+import { AutoRefresh } from '@/components/common/AutoRefresh'
 
-export default async function CustomerRideDetail({ params }: { params: { id: string } }) {
+export default async function CustomerRideDetail({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
   if (!supabase) return redirect('/auth/login')
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return redirect('/auth/login')
 
+  const resolvedParams = await params
+
   const { data: order, error } = await supabase
     .from('orders')
     .select('*, order_status_events(*), driver:profiles!orders_driver_id_fkey(*)')
-    .eq('id', params.id)
+    .eq('id', resolvedParams.id)
     .single()
 
   if (error || !order) {
     return (
       <div className="p-8 text-center text-muted-foreground">
-        Ride not found (ID: {params.id})
+        Ride not found (ID: {resolvedParams.id})
       </div>
     )
   }
@@ -36,6 +39,7 @@ export default async function CustomerRideDetail({ params }: { params: { id: str
 
   return (
     <div className="space-y-6 pb-20">
+      <AutoRefresh intervalMs={5000} />
       <PageHeader title="Ride Details" description={`Ride #${order.id.slice(0, 8)}`} />
       
       <GlassCard className="h-64 relative overflow-hidden">

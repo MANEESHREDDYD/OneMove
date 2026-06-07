@@ -259,8 +259,9 @@ async function run() {
     
     const pickup = JSON.stringify(randomLocation()).replace(/'/g, "''");
     const dropoff = JSON.stringify(randomLocation()).replace(/'/g, "''");
+    const metadata = service === 'ride' ? JSON.stringify({ ride_type: 'economy', distance_miles: faker.number.float({min: 2, max: 15, fractionDigits: 1}) }) : '{}';
 
-    orders.push(`('${id}', '${custId}', ${merchIdStr}, ${driverIdStr}, '${service}', '${status}', ${amount}, '${pickup}', '${dropoff}', true, '${SEED_RUN_ID}', '${date}')`);
+    orders.push(`('${id}', '${custId}', ${merchIdStr}, ${driverIdStr}, '${service}', '${status}', ${amount}, '${pickup}', '${dropoff}', '${metadata}', true, '${SEED_RUN_ID}', '${date}')`);
 
     const paymentStatus = status === 'cancelled' ? 'refunded_demo' : (status === 'pending' ? 'pending_demo' : 'paid_demo');
     payments.push(`('${faker.string.uuid()}', '${id}', '${custId}', ${amount}, '${paymentStatus}', 'card', true, '${SEED_RUN_ID}', '${date}')`);
@@ -329,7 +330,7 @@ async function run() {
   for(let i=0; i<45; i++) await createOrder('courier', null);
 
   if (orders.length > 0) {
-    await client.query(`INSERT INTO orders (id, customer_id, merchant_id, driver_id, service_type, status, total_amount, pickup_location, dropoff_location, is_demo, seed_run_id, created_at) VALUES ${orders.join(',')}`);
+    await client.query(`INSERT INTO orders (id, customer_id, merchant_id, driver_id, service_type, status, total_amount, pickup_location, dropoff_location, metadata, is_demo, seed_run_id, created_at) VALUES ${orders.join(',')}`);
   }
   if (payments.length > 0) {
     await client.query(`INSERT INTO payments (id, order_id, customer_id, amount, status, method, is_demo, seed_run_id, created_at) VALUES ${payments.join(',')}`);
@@ -355,6 +356,29 @@ async function run() {
 
   console.log(`\n✅ Demo data generation complete.`);
   
+  // 6. Enforce Invariants
+  console.log(`\n🔍 Verifying Data Integrity Invariants...`);
+  
+  const checkAnomaly = async (name: string, query: string) => {
+    const { rows } = await client.query(query);
+    if (rows[0].count > 0) {
+      throw new Error(`Seed Anomaly Detected: ${name} (${rows[0].count} violations)`);
+    }
+  };
+
+  await checkAnomaly('Orphaned Payments', `SELECT COUNT(*) FROM payments WHERE is_demo = true AND order_id NOT IN (SELECT id FROM orders)`);
+  await checkAnomaly('Orphaned Order Items', `SELECT COUNT(*) FROM order_items WHERE is_demo = true AND order_id NOT IN (SELECT id FROM orders)`);
+  await checkAnomaly('Missing Payments for Completed Orders', `SELECT COUNT(*) FROM orders WHERE is_demo = true AND status = 'completed' AND id NOT IN (SELECT order_id FROM payments)`);
+  await checkAnomaly('Food/Grocery Orders missing items', `SELECT COUNT(*) FROM orders WHERE is_demo = true AND service_type IN ('eats', 'grocery') AND id NOT IN (SELECT order_id FROM order_items)`);
+  await checkAnomaly('Orders missing customer_id', `SELECT COUNT(*) FROM orders WHERE is_demo = true AND customer_id IS NULL`);
+  await checkAnomaly('Food/Grocery Orders missing merchant_id', `SELECT COUNT(*) FROM orders WHERE is_demo = true AND service_type IN ('eats', 'grocery') AND merchant_id IS NULL`);
+  await checkAnomaly('Duplicate Partner Assignments', `SELECT COUNT(*) FROM (SELECT id FROM orders WHERE is_demo = true AND driver_id IS NOT NULL GROUP BY id HAVING COUNT(driver_id) > 1) as dupes`);
+  await checkAnomaly('Invalid Statuses', `SELECT COUNT(*) FROM orders WHERE is_demo = true AND status NOT IN ('pending', 'placed', 'merchant_accepted', 'preparing', 'ready', 'requested', 'created', 'assigned', 'partner_assigned', 'accepted', 'picked_up', 'in_transit', 'arrived', 'started', 'completed', 'delivered', 'cancelled', 'refunded')`);
+  await checkAnomaly('Ride Order missing metadata', `SELECT COUNT(*) FROM orders WHERE is_demo = true AND service_type = 'ride' AND (metadata IS NULL OR metadata::text = '{}')`);
+  await checkAnomaly('Ride Order missing coordinates', `SELECT COUNT(*) FROM orders WHERE is_demo = true AND service_type = 'ride' AND (pickup_location IS NULL OR dropoff_location IS NULL)`);
+  
+  console.log(`✅ All invariants passed.`);
+
   await client.end();
 }
 

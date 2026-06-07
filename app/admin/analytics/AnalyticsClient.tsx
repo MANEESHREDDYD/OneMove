@@ -3,28 +3,52 @@
 import { GlassCard } from "@/components/common/GlassCard"
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts'
-import { PieChart as PieChartIcon, BarChart3 } from "lucide-react"
+import { PieChart as PieChartIcon, BarChart3, TrendingUp } from "lucide-react"
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
 
 export function AnalyticsClient({ 
+  trendData,
   revenueData,
   volumeData
 }: { 
+  trendData: { date: string, gmv: number, orders: number }[],
   revenueData: { name: string, revenue: number }[],
   volumeData: { name: string, value: number }[]
 }) {
   return (
-    <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
+      {/* 7 Day Trend */}
+      <GlassCard className="p-6">
+        <div className="flex items-center gap-2 mb-6">
+          <TrendingUp className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-bold">7-Day GMV Trend</h2>
+        </div>
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={trendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+              <XAxis dataKey="date" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
+              <RechartsTooltip 
+                contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+              />
+              <Line type="monotone" dataKey="gmv" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </GlassCard>
+
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Revenue Bar Chart */}
         <GlassCard className="p-6">
           <div className="flex items-center gap-2 mb-6">
             <BarChart3 className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-bold">Revenue by Vertical</h2>
+            <h2 className="text-lg font-bold">Revenue by Service</h2>
           </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">

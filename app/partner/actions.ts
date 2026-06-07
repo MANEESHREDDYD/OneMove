@@ -21,17 +21,20 @@ export async function acceptJob(orderId: string) {
     return { error: "Job is no longer available" }
   }
 
-  const { error } = await supabase
+  const { data: updatedOrder, error } = await supabase
     .from('orders')
     .update({
       driver_id: user.id,
       status: 'accepted'
     })
     .eq('id', orderId)
+    .is('driver_id', null)
+    .select('id')
+    .single()
 
-  if (error) {
+  if (error || !updatedOrder) {
     console.error('Accept job error:', error)
-    return { error: "Failed to accept job" }
+    return { error: "Failed to accept job. It may have been taken by another partner." }
   }
 
   await supabase.from('order_status_events').insert({
