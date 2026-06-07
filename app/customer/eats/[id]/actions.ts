@@ -2,8 +2,9 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { isValidIdempotencyKey } from '@/utils/idempotency'
 
-export async function placeEatsOrder(restaurantId: string, restaurantName: string, items: { id: string, name: string, price: number, quantity: number }[], totalAmount: number) {
+export async function placeEatsOrder(restaurantId: string, restaurantName: string, items: { id: string, name: string, price: number, quantity: number }[], totalAmount: number, idempotencyKey?: string) {
   const supabase = await createClient()
   if (!supabase) {
     return { error: 'Supabase is not configured. See docs/LOCAL_SETUP.md.' }
@@ -18,6 +19,10 @@ export async function placeEatsOrder(restaurantId: string, restaurantName: strin
     return { error: 'Cart is empty' }
   }
 
+  if (idempotencyKey && !isValidIdempotencyKey(idempotencyKey)) {
+    return { error: 'Invalid request signature' }
+  }
+
   // Create order
   const { data: order, error: insertError } = await supabase
     .from('orders')
@@ -29,12 +34,23 @@ export async function placeEatsOrder(restaurantId: string, restaurantName: strin
       total_amount: totalAmount,
       pickup_location: { address: restaurantName, lat: 0, lng: 0 },
       dropoff_location: { address: 'My Home Address', lat: 0, lng: 0 },
-      metadata: { items }
+      metadata: { items },
+      idempotency_key: idempotencyKey || null
     })
     .select('id')
     .single()
 
-  if (insertError || !order) {
+  if (insertError) {
+    if (insertError.code === '23505' && insertError.message.includes('idx_orders_idempotency')) {
+      const { data: existingOrder } = await supabase.from('orders').select('id').eq('idempotency_key', idempotencyKey).single();
+      if (existingOrder) {
+        return { success: true, orderId: existingOrder.id }
+      }
+    }
+    return { error: 'Failed to place order' }
+  }
+
+  if (!order) {
     return { error: 'Failed to place order' }
   }
 

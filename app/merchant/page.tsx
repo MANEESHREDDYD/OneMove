@@ -7,6 +7,7 @@ import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import { MerchantDashboardClient } from "./MerchantDashboardClient"
 import { MerchantRealtime } from "@/components/realtime/MerchantRealtime"
+import { AutoRefresh } from "@/components/common/AutoRefresh"
 
 export default async function MerchantDashboard() {
   const supabase = await createClient()
@@ -79,6 +80,7 @@ export default async function MerchantDashboard() {
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <AutoRefresh intervalMs={10000} />
       <MerchantRealtime merchantIds={merchantIds} />
       <div className="flex items-center justify-between">
         <PageHeader 

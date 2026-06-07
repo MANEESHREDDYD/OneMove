@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { CartItem } from '@/store/cartStore'
+import { isValidIdempotencyKey } from '@/utils/idempotency'
 
 export async function placeMarketplaceOrder({
   merchantId,
@@ -10,7 +11,8 @@ export async function placeMarketplaceOrder({
   totalAmount,
   paymentMethod,
   address,
-  instructions
+  instructions,
+  idempotencyKey
 }: {
   merchantId: string | null
   serviceType: string
@@ -19,12 +21,17 @@ export async function placeMarketplaceOrder({
   paymentMethod: string
   address: string
   instructions: string
+  idempotencyKey?: string
 }) {
   const supabase = await createClient()
   if (!supabase) return { error: "Database setup required" }
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "Authentication required" }
+
+  if (idempotencyKey && !isValidIdempotencyKey(idempotencyKey)) {
+    return { error: 'Invalid request signature' }
+  }
 
   // 1. Create the order
   const initialStatus = (serviceType === 'eats' || serviceType === 'grocery') ? 'placed' : 'pending'
@@ -39,13 +46,24 @@ export async function placeMarketplaceOrder({
       total_amount: totalAmount,
       pickup_location: { address: 'Merchant Location' }, // Should ideally fetch merchant address
       dropoff_location: { address, instructions },
-      metadata: { items_count: items.length }
+      metadata: { items_count: items.length },
+      idempotency_key: idempotencyKey || null
     })
     .select()
     .single()
 
-  if (orderError || !order) {
+  if (orderError) {
+    if (orderError.code === '23505' && orderError.message.includes('idx_orders_idempotency')) {
+      const { data: existingOrder } = await supabase.from('orders').select('id').eq('idempotency_key', idempotencyKey).single();
+      if (existingOrder) {
+        return { success: true, orderId: existingOrder.id }
+      }
+    }
     console.error('Order creation failed:', orderError)
+    return { error: "Failed to place order." }
+  }
+
+  if (!order) {
     return { error: "Failed to place order." }
   }
 

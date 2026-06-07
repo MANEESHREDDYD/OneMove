@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server"
 import { SetupRequired } from "@/components/common/SetupRequired"
 import { redirect } from "next/navigation"
 import { JobsClient } from "./JobsClient"
+import { AutoRefresh } from "@/components/common/AutoRefresh"
 
 export const dynamic = "force-dynamic"
 
@@ -25,13 +26,14 @@ export default async function AvailableJobsPage() {
   const { data: availableJobs } = await supabase
     .from('orders')
     .select('*')
-    .in('status', ['pending', 'ready'])
+    .in('status', ['pending', 'ready', 'requested'])
     .or(`driver_id.is.null,driver_id.eq.${user.id}`)
     .order('created_at', { ascending: false })
     .limit(20)
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <AutoRefresh intervalMs={5000} />
       <PageHeader 
         title="Job Marketplace" 
         description="Find and manage your deliveries and rides"

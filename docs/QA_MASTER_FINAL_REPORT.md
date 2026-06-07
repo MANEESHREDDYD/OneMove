@@ -1,28 +1,17 @@
-# QA Master Final Report
+# OneMove QA Master Final Report
 
-**Date:** June 2026
-**Environment:** Localhost
-**Status:** ✅ APPROVED FOR PRIVATE DEMO
+## Executive Summary
+This report summarizes the results of the Advanced Real-Time QA & Chaos Testing Audit for the OneMove application. 
+The suite encompassed a full end-to-end traversal of the Realtime Marketplace, Role Security, Idempotency, Contract validity, and Load characteristics.
 
-## Overview
-A comprehensive audit of the OneMove platform has been completed successfully. 
-We have conducted structural seed data validation, referential integrity tests, core UI functionality verification, and E2E Playwright test automation covering role-based security, concurrency, negative edge cases, and performance.
+## Go/No-Go Decision: 🔴 NO-GO (CONDITIONALLY FAILED)
+While the frontend UI is structurally robust, the underlying architecture and seed data have critical flaws that prevent a clean production deployment.
 
-### Final Verification Status
-- **Auth Roles & RLS Data Isolation:** ✅ PASS
-- **Admin Macro Queries (Command Center):** ✅ PASS
-- **Order Lifecycle (Merchant & Partner):** ✅ PASS
-- **Food & Grocery Checkouts:** ✅ PASS
-- **Ride Booking Engine:** ✅ PASS
-- **Database Structural Integrity:** ✅ PASS
+### Critical Blockers:
+1. **RLS Blocks Admin & Driver**: Admin users have no `SELECT` policy on the `orders` table. Drivers query `driver_id IS NULL`, which is blocked by RLS.
+2. **Missing Metadata Column**: The `orders` table lacks a `metadata` column, despite frontend references in the Courier flow.
+3. **Database Seed Integrity**: The seed script generates anomalous rows (missing payment records, missing order items).
+4. **Load & Concurrency Limits**: Next.js development server crashes under high concurrency (`ECONNRESET` under heavy Playwright load).
 
-## Blocker Resolution
-1. **Sign-out Failure:** Resolved. Sign out now effectively destroys the session and bounces unauthorized back-navigation.
-2. **Missing Enum Values:** Resolved. Fixed the DB `order_status` issue which prevented proper seed data insertion.
-3. **Dynamic Routes crashing Next.js 15:** Resolved. Correctly unwrapped `params` Promises in all detail page views (`/admin/orders/[id]`, `/customer/orders/[id]`, etc.).
-4. **Data Isolation (Admin vs Merchant vs Partner):** Resolved. Added strict page-level role redirect protections.
-5. **Missing Detail Records:** Resolved. Seed data now successfully guarantees proper associations between `orders`, `merchants`, `profiles`, and `payments`.
-
-## Go/No-Go Decision
-**GO.** 
-The product passes all required conditions for the localhost private demo. The application correctly simulates a real-time marketplace environment with cross-role functional interaction.
+## Detailed Findings
+Please refer to the supplementary reports in this directory for granular details on Contracts, Load, Realtime, Security, and Edge Cases.

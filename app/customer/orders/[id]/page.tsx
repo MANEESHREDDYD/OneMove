@@ -6,6 +6,7 @@ import { Car, Utensils, ShoppingBasket, Package, MapPin, Navigation, Clock, Chec
 import { CancelOrderButton } from './CancelOrderButton'
 import { Button } from '@/components/ui/button'
 import { SafeLeafletMap } from '@/components/maps/SafeLeafletMap'
+import { AutoRefresh } from '@/components/common/AutoRefresh'
 
 export const dynamic = "force-dynamic"
 
@@ -84,6 +85,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4">
+      <AutoRefresh intervalMs={5000} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Order Tracking</h1>
         <div className={`px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2 ${statusInfo.bg} ${statusInfo.color}`}>

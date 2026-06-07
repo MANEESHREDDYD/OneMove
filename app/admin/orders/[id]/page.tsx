@@ -33,7 +33,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     .select(`
       *,
       order_items (
-        id, quantity, unit_price,
+        id, quantity, price_at_time,
         products ( name )
       ),
       payments ( amount, method, status )
@@ -42,6 +42,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     .single()
 
   if (error || !order) {
+    console.error("ADMIN ORDER PAGE LOAD ERROR:", { error, resolvedParamsId: resolvedParams.id, orderFound: !!order });
     return (
       <div className="space-y-8 animate-in fade-in">
         <PageHeader title="Order Not Found" description="The requested record could not be loaded." />
@@ -106,7 +107,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                 {items.map((item: any) => (
                   <div key={item.id} className="flex justify-between items-center bg-background/50 p-2 rounded-lg text-sm">
                     <span><span className="font-bold mr-2">{item.quantity}x</span> {item.products?.name || 'Unknown'}</span>
-                    <span className="text-muted-foreground">${((item.unit_price || 0) * (item.quantity || 1)).toFixed(2)}</span>
+                    <span className="text-muted-foreground">${((item.price_at_time || 0) * (item.quantity || 1)).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
