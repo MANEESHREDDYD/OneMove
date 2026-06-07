@@ -46,7 +46,7 @@ export default async function ArchitecturePage() {
               <div className="h-6 border-l-2 border-dashed border-blue-300 ml-4 my-1"></div>
               <div className="flex items-center justify-between mb-2">
                 <span className="font-bold text-purple-700">2. Supabase DB</span>
-                <span className="text-xs text-gray-500">Real-time Pub/Sub Event Emitted</span>
+                <span className="text-xs text-gray-500">Realtime-ready refresh/fallback behavior</span>
               </div>
               <div className="h-6 border-l-2 border-dashed border-blue-300 ml-4 my-1"></div>
               <div className="flex items-center justify-between mb-2">

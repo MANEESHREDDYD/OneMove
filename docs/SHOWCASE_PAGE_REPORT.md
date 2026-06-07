@@ -2,7 +2,7 @@
 
 **Phase 5 Status: COMPLETE**
 **Private localhost portfolio demo: GO**
-**Production Status: NOT YET APPROVED**
+**Public production deployment: NOT YET APPROVED**
 **Known Limitation: Mobile Playwright experiment simulation may exceed default timeout under local hardware constraints; desktop flow and backend simulation pass.**
 
 ## Executive Summary
