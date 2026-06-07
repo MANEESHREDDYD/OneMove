@@ -67,6 +67,9 @@
     "ml:dispatch": "tsx scripts/ml/run-dispatch-simulation.ts",
     "ml:risk": "tsx scripts/ml/score-fraud-risk.ts",
     "ml:score-all": "tsx scripts/ml/score-all.ts",
+    "ml:ops": "tsx scripts/ml/generate-ops-insights.ts",
+    "support:route": "tsx scripts/support/route-support-tickets.ts",
+    "mlops:report": "tsx scripts/ml/log-ml-run.ts",
     "experiments:simulate": "tsx scripts/experiments/simulate-experiments.ts",
     "intelligence:refresh": "npm run pipeline:all && npm run analytics:refresh && npm run ml:score-all && npm run experiments:simulate"
   },
