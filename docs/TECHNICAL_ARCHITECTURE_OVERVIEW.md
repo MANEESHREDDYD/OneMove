@@ -23,13 +23,13 @@ sequenceDiagram
     participant A as Admin
 
     C->>DB: Place polymorphic order (Food/Ride/Courier)
-    DB-->>M: Real-time event: New Order
+    DB-->>M: Realtime-ready refresh/fallback behavior
     M->>DB: Accept & Prepare Order
     DB-->>A: Metric Store updated
     DB-->>P: Dispatch Optimizer offers job
     P->>DB: Accept Job
     P->>DB: Update Geolocation stream
-    DB-->>C: Order status realtime update
+    DB-->>C: Order status realtime-ready refresh/fallback
     P->>DB: Complete Delivery
     DB-->>A: ML Pipeline triggers (Trust/Reliability scoring)
 ```
@@ -80,7 +80,7 @@ graph TD
 Every scheduled ML execution logs its duration, status, and generated row counts to `ml_pipeline_runs`. This ensures observability and audibility for all AI/ML decisions.
 
 ## A/B Testing Platform
-The platform includes an internal experimentation engine to test feature variants. A simulator script injects synthetic traffic, automatically calculating impressions, conversions, conversion rates, revenue, and generating deterministic variant recommendations (e.g., "continue (winning)").
+The platform includes an internal experimentation engine to test feature variants. A simulator script injects synthetic traffic, generates deterministic directional experiment readouts using impressions, conversions, AOV, and revenue-per-user metrics. MVP directional experiment readout; not a production statistical inference engine.
 
 ## Testing Strategy
 - **Playwright E2E**: Exhaustive end-to-end flows covering happy paths.

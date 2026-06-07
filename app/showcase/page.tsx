@@ -86,7 +86,7 @@ export default function ShowcasePage() {
                 <li className="flex items-center text-gray-700"><Smartphone className="w-5 h-5 text-purple-500 mr-3" /> Customer B2C Interface</li>
                 <li className="flex items-center text-gray-700"><Server className="w-5 h-5 text-purple-500 mr-3" /> Merchant B2B Fulfillment</li>
                 <li className="flex items-center text-gray-700"><Activity className="w-5 h-5 text-purple-500 mr-3" /> Partner Gig-Economy Dispatch</li>
-                <li className="flex items-center text-gray-700"><Target className="w-5 h-5 text-purple-500 mr-3" /> Admin God-View Governance</li>
+                <li className="flex items-center text-gray-700"><Target className="w-5 h-5 text-purple-500 mr-3" /> Admin Platform-wide Operational View</li>
               </ul>
             </div>
             <div className="bg-gradient-to-tr from-purple-100 to-indigo-50 rounded-2xl p-8 shadow-inner border border-purple-100 h-full flex flex-col justify-center space-y-4">

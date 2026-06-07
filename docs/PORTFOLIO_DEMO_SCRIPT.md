@@ -10,10 +10,10 @@ This script provides a 3-5 minute guided walkthrough of the OneMove platform, de
 ### Setup & Credentials
 Navigate to `/showcase` to begin the demo.
 The Showcase page contains pre-configured one-click logins for the core personas:
-- **Customer**: `customer001@onemove.demo`
-- **Merchant**: `merchant001@onemove.demo`
-- **Partner**: `partner001@onemove.demo`
-- **Admin**: `admin001@onemove.demo`
+- **Customer**: `customer@onemove.demo`
+- **Merchant**: `merchant@onemove.demo`
+- **Partner**: `partner@onemove.demo`
+- **Admin**: `admin@onemove.demo`
 *(Password for all: `Demo@12345`)*
 
 ---
@@ -28,7 +28,7 @@ The Showcase page contains pre-configured one-click logins for the core personas
 **Script:**
 "Here we see the Customer experience. They can navigate between Eats, Rides, and Grocery. Let's place a food order. Behind the scenes, this inserts a polymorphic record into the database."
 *(Briefly show the merchant or partner dashboard if time permits, or simply explain the flow)*
-"Instantly, Supabase real-time subscriptions push this order to the Merchant for fulfillment, and subsequently to the Partner app for dispatch, completing the core transactional loop."
+"Instantly, the platform uses realtime-ready refresh/fallback behavior so Merchant, Partner, Customer, and Admin views stay updated after marketplace actions, completing the core transactional loop."
 
 ### 1:30–2:30 — Data and Analytics Layer
 **Action:** Switch to the Admin view and open `/admin/analytics`.
@@ -40,7 +40,7 @@ The Showcase page contains pre-configured one-click logins for the core personas
 **Script:**
 "What makes OneMove unique is its embedded intelligence. This isn't a thin wrapper around a paid LLM API. We built deterministic, explainable rule-based engines for Demand Forecasting, Dispatch Optimization, and Risk Scoring. 
 Here in the **Ops Assistant**, the system actively reads the Metric Store and generates prioritized, actionable operational insights.
-In the **Experiments** tab, we have a fully functional A/B testing engine. We can simulate synthetic traffic and the platform automatically calculates statistical winners and losers."
+In the **Experiments** tab, we have a fully functional A/B testing engine. We can simulate synthetic traffic and the platform generates deterministic directional experiment readouts using impressions, conversions, AOV, and revenue-per-user metrics. MVP directional experiment readout; not a production statistical inference engine."
 
 ### 3:30–4:30 — Security and Testing Architecture
 **Action:** Open `/admin/architecture`.

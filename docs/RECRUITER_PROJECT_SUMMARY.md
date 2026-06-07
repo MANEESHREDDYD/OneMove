@@ -16,7 +16,7 @@ OneMove is not just a UI layer; it is an end-to-end data product. It features a 
 - **Customer**: Browses services, places polymorphic orders, tracks deliveries, submits AI-routed support tickets.
 - **Merchant**: Manages inventory, fulfills orders, views localized analytics and dynamic ML insights.
 - **Partner (Courier/Driver)**: Accepts dispatched jobs, updates real-time geolocation, manages active deliveries.
-- **Admin**: Has God-view over the platform, managing risk, running A/B experiments, reviewing ML pipelines, and acting on Ops Assistant recommendations.
+- **Admin**: Has a platform-wide operational view, managing risk, running A/B experiments, reviewing ML pipelines, and acting on Ops Assistant recommendations.
 
 ## Advanced Intelligence Features
 - **Deterministic ML/AI Intelligence**: Explainable, rule-based logic (no fake LLM APIs) for demand forecasting, dispatch optimization, and risk modeling.
@@ -26,7 +26,7 @@ OneMove is not just a UI layer; it is an end-to-end data product. It features a 
 
 ## Tech Stack
 - **Frontend & Routing**: Next.js 14+ App Router, TypeScript, Tailwind CSS, Shadcn UI
-- **Backend & Database**: Supabase (PostgreSQL), Edge Functions, Server Actions
+- **Backend & Database**: Supabase PostgreSQL, Supabase Auth, Row Level Security, Next.js Server Actions
 - **Security**: Deep Multi-Tenant Row Level Security (RLS)
 - **Data Engineering**: Real-time subscriptions, polymorphic schema design, Metric Store
 - **Testing**: Playwright (E2E & Security), Vitest (Unit), Artillery (Performance)
