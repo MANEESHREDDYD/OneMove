@@ -1,7 +1,8 @@
 # Master Bug Log (Phase 4)
 
-Phase 4 Status: GO for private localhost portfolio review after validation.
+Phase 4 Status: GO for private localhost portfolio review.
 Production Status: NOT YET APPROVED.
+Known Limitation: Mobile Playwright experiment simulation may exceed default timeout under local hardware constraints; desktop flow and backend simulation pass.
 
 
 ## Resolved Bugs during Phase 4

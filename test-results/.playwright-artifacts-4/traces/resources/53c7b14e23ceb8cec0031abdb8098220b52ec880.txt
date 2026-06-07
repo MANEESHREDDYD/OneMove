@@ -1,0 +1,1 @@
+{"frames":[{"file":"file://C:/Users/md200/OneDrive/Desktop/OneMove/.next/dev/static/chunks/turbopack-_0p44nws._.js","line1":698,"column1":25,"methodName":"<unknown>","arguments":[]}],"isServer":false,"isEdgeServer":false,"isAppDirectory":true}
