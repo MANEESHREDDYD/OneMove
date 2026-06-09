@@ -1,0 +1,2 @@
+event_id,order_id,status,timestamp
+EVT-001,ORD-001,COMPLETED,2026-06-01T12:00:00Z

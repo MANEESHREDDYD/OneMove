@@ -1,0 +1,2 @@
+payment_id,order_id,amount,status
+PAY-001,ORD-001,25.50,SUCCESS

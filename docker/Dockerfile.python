@@ -1,0 +1,6 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY python/pyproject.toml ./
+RUN pip install -e .
+COPY python/src ./src
+CMD ["python", "-m", "onemove_intelligence.cli", "score-all"]

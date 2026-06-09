@@ -1,29 +1,25 @@
-# QA Master Final Report (Phase 4)
+# OneMove Final QA Master Report
 
-Phase 4 Status: GO for private localhost portfolio review.
-Production Status: NOT YET APPROVED.
-Known Limitation: Mobile Playwright experiment simulation may exceed default timeout under local hardware constraints; desktop flow and backend simulation pass.
+## Executive Summary
+This report concludes Phase 5 validations. OneMove has undergone rigorous automated and manual QA, including end-to-end Map rendering verification, SSR crash prevention, and local production smoke testing.
 
-### Overview
-Phase 4 (AI Assistants, Experiments, and MLOps) has been fully implemented, validated, and tested. The platform now features deterministic, rule-based intelligence capabilities acting on real seeded database rows. No external or paid LLM APIs are used. 
+The platform is strictly approved for local portfolio demonstration only.
 
-### What Was Built
-1. **Admin Ops Assistant:** Automatically surfaces priority operational issues across the platform based on real-time data from `orders`, `demand_forecasts`, `merchant_reliability_scores`, `risk_checks`, `partner_trust_scores`, and `data_quality_results`.
-2. **AI Support Assistant:** Simulates routing, categorisation, and resolution of inbound customer tickets dynamically. Evaluates refund eligibility and prioritises escalation.
-3. **A/B Experimentation Engine:** Deterministic routing using hash-based assignment for users and merchants. Tracks variants and records analytical metrics.
-4. **MLOps Dashboard:** Centralised logging for ML scoring pipelines tracking execution times, row counts, and failures for full observability.
+## Test Execution
+- **Unit & Integration:** Passed via `npm test`
+- **Lint & Types:** Passed via `npm run lint` and `npm run typecheck`
+- **E2E Smoke (Playwright):** Passed via `npm run test:e2e` for map rendering and core role dashbaords.
 
-### Validation
-- **SQL Scripts:** `phase4.sql` was safely applied.
-- **Node Scripts:** All `scripts/ml`, `scripts/support`, and `scripts/experiments` files successfully run without crashing, parsing variables correctly.
-- **Playwright E2E:** 13 major test suites pass. Phase 4 UI tests initially caught missing auth state but UI manually verified.
-- **Determinism:** Features correctly labeled `MVP deterministic rule-based intelligence...`.
+## Highlighted Fixes
+- **Map Rendering Collapse:** Leaflet SSR crashing and tiling issues have been fully resolved by isolating Leaflet in client-only wrappers and injecting specific CSS width calculations.
+- **Ride Form Hydration:** UI dynamically updates ETA, fare breakdowns, and determinist logic without triggering React hydration mismatches.
+- **Server Action Redirection:** Server action redirect logic was cleaned up to allow the client to show a toast message before executing standard router pushes.
 
-**Go/No-Go Decision:** GO.
+## Known Limitations & Risks
+1. **Experiment Simulators timeout:** As discovered in Phase 4, "Simulate Traffic" can exceed strict Playwright mobile timeouts. This remains a known condition.
+2. **Deterministic Intelligence:** Estimates, ETAs, and Demand indicators use a robust deterministic hash-based engine for presentation rather than live trained ML models.
+3. **Public Deployment Pending:** Strict rules prohibit exposing the DB strings to Vercel production until final cleanup.
 
-
-## Phase 5: Presentation & Portfolio Packaging
-**Status:** COMPLETE
-- /showcase and /admin/architecture routes implemented and verified.
-- All portfolio scripts and documentation finalized.
-- E2E tests maintain 100% pass rate post-additions.
+## Recommendation
+✅ **APPROVED FOR LOCAL HOST PORTFOLIO REVIEW**
+❌ **NOT APPROVED FOR PUBLIC PRODUCTION DEPLOYMENT**

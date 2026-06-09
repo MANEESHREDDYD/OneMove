@@ -1,8 +1,8 @@
 # OneMove
 
-**The Next-Generation Marketplace Intelligence Platform**
+**OneMove is a full-stack four-sided marketplace and intelligence platform.**
 
-*A four-sided super-app marketplace built with Next.js, Supabase, and a custom data engineering & deterministic AI layer.*
+*A super-app ecosystem built with Next.js, Supabase, Python Data Science packages, SQL Analytics Engineering, and robust Deployment topologies.*
 
 **Status:**
 - Private localhost portfolio demo: GO
@@ -10,38 +10,51 @@
 
 ---
 
+## Skills Demonstrated
+
+| Skill Area            | Evidence in Repo                                    |
+| --------------------- | --------------------------------------------------- |
+| Frontend/UI/UX        | Next.js App Router, dashboards, PWA-like UI         |
+| Backend               | Server Actions, Supabase Auth, Postgres, RLS        |
+| Data Engineering      | pipelines, quality checks, metric store             |
+| Analytics Engineering | marts, metric definitions, funnel/cohort SQL        |
+| ML Engineering        | Python scoring package and deterministic ML logic   |
+| AI Product Thinking   | explainable support/ops assistant rules             |
+| MLOps                 | ml_pipeline_runs, model monitoring, scoring logs    |
+| QA                    | Playwright, Vitest, pytest, RLS/security tests      |
+| Forward Deployment    | Vercel preview checklist, Docker docs, smoke tests  |
+
+## Repository Structure
+
+```text
+app/                 # Next.js App Router frontend and server actions
+supabase/            # Database migrations, RLS policies, and triggers
+python/              # Standalone Python package for ML scoring & DQ
+analytics/           # SQL data warehouse layer (marts, dimensions, facts)
+data/                # Synthetic deterministic CSV exports for local ML
+deploy/              # Deployment checklists, rollout plans, smoke tests
+docker/              # Dockerfiles and compose configs for web/intelligence
+.github/workflows/   # CI/CD pipelines for Node, Python, and SQL Quality
+docs/                # Extensive technical architecture and QA reports
+```
+
 ## The Problem
-Running a multi-sided marketplace (Rides, Eats, Grocery, Courier) requires extreme data coordination. Most MVPs focus purely on UI. OneMove focuses on the backend: secure data isolation (RLS), real-time synchronization, comprehensive data pipelines, and embedded operational intelligence.
+Running a multi-sided marketplace (Rides, Eats, Grocery, Courier) requires extreme data coordination. Most MVPs focus purely on UI. OneMove focuses on the backend: secure data isolation, complex multi-tenant data pipelines, Python-driven analytics, and forward-deployed Docker infrastructures.
 
 ## Key Features
-- **Four-Sided Dynamics:** Dedicated portals for Customers, Merchants, Partners (Drivers/Couriers), and Admins.
-- **Enterprise-Grade Security:** Deep multi-tenant Row Level Security (RLS) protects user data at the database layer.
-- **Polymorphic Architecture:** A single order pipeline elegantly handles Rides, Food Delivery, and Courier dispatches.
-- **Metric Store & Pipelines:** Automated cron jobs aggregate raw transactional events into daily snapshots for analytics.
-- **Intelligence Platform:** Deterministic scoring algorithms drive Demand Forecasting, Risk Modeling, and Dispatch Optimization.
-- **MLOps & Experimentation:** A fully simulated A/B testing engine tracks variant impressions, conversions, and revenue, backed by comprehensive pipeline logging.
+- **Four-Sided Dynamics:** Dedicated portals for Customers, Merchants, Partners, and Admins.
+- **Enterprise-Grade Security:** Deep multi-tenant Row Level Security (RLS).
+- **Polymorphic Architecture:** A single order pipeline elegantly handles multiple domain verticals.
+- **Metric Store & Pipelines:** Automated data engineering pipelines aggregating raw events into daily analytic snapshots.
+- **Intelligence Platform:** A full Python package (`onemove_intelligence`) providing deterministic scoring algorithms for Demand Forecasting, Risk Modeling, and Dispatch Optimization.
+- **MLOps & Experimentation:** A fully simulated A/B testing engine tracks variant impressions, conversions, and revenue.
 
 ## Tech Stack
 - **Frontend & Routing:** Next.js 14+ App Router, TypeScript, Tailwind CSS, Shadcn UI
-- **Backend & Database:** Supabase PostgreSQL, Supabase Auth, Row Level Security, Next.js Server Actions
-- **Data Engineering:** Real-time refresh/fallback synchronization, Polymorphic Schema Design, Metric Store
-- **Testing:** Playwright (E2E & Security), Vitest (Unit), Artillery (Performance)
-
-## Architecture Overview
-1. **Transaction Layer:** Customers place orders. Supabase acts as the central source of truth.
-2. **Fulfillment Layer:** Merchants and Partners receive real-time-ready updates to accept and complete tasks.
-3. **Data Layer:** Analytical pipelines ingest raw events and aggregate them into a Metric Store.
-4. **Intelligence Layer:** Deterministic ML scripts run on the Metric Store to generate scores, demand forecasts, and operational insights, logging execution to an MLOps pipeline.
-
-## Demo Routes
-Navigate through the application to see the different aspects of the marketplace:
-- `/showcase` (Start here for the high-level pitch and credentials)
-- `/admin/architecture` (Technical deep-dive diagrams)
-- `/admin/command-center` (Live operational metrics)
-- `/admin/data-platform` (Data engineering pipelines)
-- `/admin/analytics` (Metric store visualizations)
-- `/admin/mlops` (Pipeline logging and scoring execution)
-- `/admin/experiments` (A/B testing simulation engine)
+- **Backend & Database:** Supabase PostgreSQL, Supabase Auth, Next.js Server Actions
+- **Data & Intelligence:** Python, pandas, numpy, SQL (Dimensional Modeling)
+- **Deployment:** Docker, GitHub Actions CI
+- **Testing:** Playwright (E2E), Vitest (Unit), pytest (Python)
 
 ## Demo Credentials
 *(Use these pre-configured accounts on the showcase page)*
@@ -58,8 +71,9 @@ npm run dev
 # Refresh the deterministic ML/AI intelligence data
 npm run intelligence:refresh
 
-# Simulate experiment traffic (A/B testing)
-npm run experiments:simulate
+# Run Python Intelligence Package
+npm run py:install
+npm run py:ml
 ```
 
 ## Validation Commands
@@ -69,20 +83,11 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
-npm run test:e2e -- --workers=1
+npm run py:lint
+npm run py:test
 ```
 
 ## Known Limitations
 - Localhost portfolio demo only; not publicly deployed.
-- The intelligence layer relies on deterministic, rule-based scripts, not a trained neural network/LLM API.
-- The platform uses a refresh/fallback behavior for state synchronization rather than full end-to-end WebSocket realtime connections.
+- The intelligence layer relies on deterministic, rule-based scripts (or local data) rather than trained production neural networks to prevent external dependency bloat.
 - Playwright experiment simulation may timeout (>30s) on constrained machines.
-
-## Future Roadmap
-- Migrate deterministic intelligence scripts to dedicated Python/FastAPI microservices with trained ML models.
-- Implement Redis cache layer for high-velocity reads.
-- Add Vercel preview environments and Dockerize the stack for production.
-- Production observability and full Stripe payment gateway integration.
-
-## What This Project Demonstrates
-OneMove is not just a React application. It demonstrates the ability to architect complex database schemas, enforce strict data access boundaries, orchestrate reliable data engineering pipelines, and implement MLOps tracking around analytical processes.
