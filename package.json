@@ -72,7 +72,14 @@
     "support:route": "tsx scripts/support/route-support-tickets.ts",
     "mlops:report": "tsx scripts/ml/log-ml-run.ts",
     "experiments:simulate": "tsx scripts/experiments/simulate-experiments.ts",
-    "intelligence:refresh": "npm run pipeline:all && npm run analytics:refresh && npm run ml:score-all && npm run experiments:simulate"
+    "intelligence:refresh": "npm run pipeline:all && npm run analytics:refresh && npm run ml:score-all && npm run experiments:simulate",
+    "py:install": "cd python && python -m pip install -e .[dev]",
+    "py:lint": "cd python && python -m ruff check .",
+    "py:test": "cd python && python -m pytest",
+    "py:ml": "cd python && python -m onemove_intelligence.cli score-all",
+    "py:dq": "cd python && python -m onemove_intelligence.cli data-quality",
+    "py:analytics": "cd python && python -m onemove_intelligence.cli refresh-metrics",
+    "data:export-demo": "tsx scripts/export-demo-data.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
 import { calculateRideEstimate } from '@/utils/pricing'
 import { isValidIdempotencyKey } from '@/utils/idempotency'
 
@@ -27,7 +26,7 @@ export async function requestRide(formData: FormData) {
   const { data: { user }, error: userError } = await supabase.auth.getUser()
 
   if (userError || !user) {
-    redirect('/auth/login')
+    return { error: 'Authentication required. Please log in.' }
   }
 
   let pickup, dropoff
@@ -58,7 +57,7 @@ export async function requestRide(formData: FormData) {
     if (orderError.code === '23505' && orderError.message.includes('idx_orders_idempotency')) {
       const { data: existingOrder } = await supabase.from('orders').select('id').eq('idempotency_key', idempotencyKey).single();
       if (existingOrder) {
-        redirect(`/customer/rides/${existingOrder.id}`);
+        return { id: existingOrder.id };
       }
     }
     return { error: 'Failed to request ride. Please try again.' }
@@ -96,6 +95,6 @@ export async function requestRide(formData: FormData) {
     metadata: { order_id: order.id, serviceClass }
   })
 
-  // Redirect to unified tracker
-  redirect(`/customer/rides/${order.id}`)
+  // Return ID so client can show success toast before redirecting
+  return { id: order.id }
 }
