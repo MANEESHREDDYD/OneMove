@@ -26,7 +26,7 @@ export default async function CustomerDashboard() {
       .from('orders')
       .select('*')
       .eq('customer_id', user.id)
-      .in('status', ['pending', 'accepted', 'preparing', 'ready', 'in_transit'])
+      .in('status', ['pending', 'placed', 'merchant_accepted', 'accepted', 'preparing', 'ready', 'in_transit'])
       .order('created_at', { ascending: false })
       .limit(3)
     activeOrders = data || []

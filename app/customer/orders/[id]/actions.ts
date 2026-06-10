@@ -29,7 +29,7 @@ export async function cancelOrder(orderId: string) {
     return { error: 'Unauthorized' }
   }
 
-  if (order.status !== 'pending' && order.status !== 'accepted') {
+  if (!['pending', 'placed', 'merchant_accepted', 'accepted'].includes(order.status)) {
     return { error: 'Order cannot be canceled at this stage' }
   }
 

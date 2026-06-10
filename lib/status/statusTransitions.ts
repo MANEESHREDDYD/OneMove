@@ -30,7 +30,7 @@ export const VALID_TRANSITIONS: Record<string, Record<OrderStatus, OrderStatus[]
     completed: ['refunded'],
     cancelled: [],
     refunded: [],
-    requested: [], assigned: [], accepted: [], arrived: [], started: [], created: [], pending: []
+    requested: [], assigned: [], accepted: ['preparing', 'cancelled'], arrived: [], started: [], created: [], pending: ['merchant_accepted', 'cancelled']
   },
   grocery: {
     placed: ['merchant_accepted', 'cancelled'],
@@ -44,7 +44,7 @@ export const VALID_TRANSITIONS: Record<string, Record<OrderStatus, OrderStatus[]
     completed: ['refunded'],
     cancelled: [],
     refunded: [],
-    requested: [], assigned: [], accepted: [], arrived: [], started: [], created: [], pending: []
+    requested: [], assigned: [], accepted: ['preparing', 'cancelled'], arrived: [], started: [], created: [], pending: ['merchant_accepted', 'cancelled']
   },
   courier: {
     created: ['partner_assigned', 'accepted', 'cancelled'],

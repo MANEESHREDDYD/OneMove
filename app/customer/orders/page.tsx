@@ -25,7 +25,7 @@ export default async function CustomerOrders() {
   const allOrders = orders || []
 
   // Active vs Past
-  const activeStatuses = ['pending', 'accepted', 'preparing', 'ready', 'in_transit']
+  const activeStatuses = ['pending', 'placed', 'merchant_accepted', 'accepted', 'preparing', 'ready', 'in_transit']
   const activeOrders = allOrders.filter(o => activeStatuses.includes(o.status))
   const pastOrders = allOrders.filter(o => !activeStatuses.includes(o.status))
 

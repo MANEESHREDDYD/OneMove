@@ -26,8 +26,7 @@ export async function adminUpdateOrderStatus(orderId: string, newStatus: string)
   await supabase.from('order_status_events').insert({
     order_id: orderId,
     status: newStatus,
-    changed_by: user.id,
-    notes: `Admin forced status to ${newStatus}`
+    notes: `Admin ${user.id} forced status to ${newStatus}`
   })
 
   // Revalidate everything admin

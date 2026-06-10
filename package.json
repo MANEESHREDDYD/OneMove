@@ -23,7 +23,7 @@
     "export:demo-logins": "tsx scripts/export-demo-login-credentials.ts",
     "validate:env": "node scripts/validate-env.js",
     "preflight": "node scripts/validate-env.js && npm run lint && npm run typecheck && npm run build",
-    "seed:demo": "tsx scripts/seed-demo.ts",
+    "seed:demo": "tsx scripts/generate-production-demo-data.ts",
     "seed:production-demo": "tsx scripts/generate-production-demo-data.ts",
     "analytics:refresh": "tsx scripts/analytics/refresh-metric-store.ts",
     "dq:check": "node scripts/dq-check.js",
@@ -59,6 +59,7 @@
     "test:e2e:performance": "playwright test tests/e2e/onemove-performance.spec.ts",
     "test:e2e:accessibility": "playwright test tests/e2e/onemove-accessibility.spec.ts",
     "test:e2e:visual": "playwright test tests/e2e/onemove-visual.spec.ts",
+    "test:performance:local": "node tests/performance/local-load-smoke.js",
     "verify:demo-depth": "tsx scripts/verify-demo-data-depth.ts",
     "pipeline:ingest-events": "tsx scripts/pipeline/ingest-events.ts",
     "pipeline:compute-daily-metrics": "tsx scripts/pipeline/compute-daily-metrics.ts",
@@ -83,7 +84,8 @@
     "py:evaluate": "cd python && python -m onemove_intelligence.cli evaluate",
     "py:features": "cd python && python -m onemove_intelligence.cli features",
     "healthcheck": "tsx scripts/healthcheck.ts",
-    "data:export-demo": "tsx scripts/export-demo-data.ts"
+    "data:export-demo": "tsx scripts/export-demo-data.ts",
+    "demo:reset": "tsx scripts/reset-demo-state.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

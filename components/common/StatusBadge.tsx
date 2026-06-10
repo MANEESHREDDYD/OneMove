@@ -15,6 +15,8 @@ export function StatusBadge({ status }: StatusBadgeProps) {
       case "ready":
         return "bg-green-500/20 text-green-400 hover:bg-green-500/30"
       case "pending":
+      case "placed":
+      case "merchant_accepted":
       case "preparing":
       case "in_transit":
         return "bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"

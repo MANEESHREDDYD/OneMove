@@ -9,6 +9,10 @@ import { Database } from "@/types/database.types"
 
 type Order = Database['public']['Tables']['orders']['Row']
 
+function formatUtcDateTime(value: string) {
+  return `${new Date(value).toISOString().slice(0, 16).replace('T', ' ')} UTC`
+}
+
 export function MerchantDashboardClient({ 
   activeOrders, 
   historyOrders,
@@ -152,7 +156,7 @@ export function MerchantDashboardClient({
                       </div>
                       <div>
                         <p className="font-bold">Order #{order.id.split('-')[0]}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">{formatUtcDateTime(order.created_at)}</p>
                       </div>
                     </div>
                     <div className="text-right">

@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { SetupRequired } from '@/components/common/SetupRequired'
-import { Beaker, TrendingUp, Users, RefreshCw } from 'lucide-react'
+import { Beaker, RefreshCw } from 'lucide-react'
 
 export default async function AdminExperimentsPage() {
   const supabase = await createClient()
@@ -20,18 +20,18 @@ export default async function AdminExperimentsPage() {
     .order('variant_id', { ascending: true })
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center">
-          <Beaker className="w-8 h-8 text-purple-600 mr-3" />
-          <div>
-            <h1 className="text-3xl font-bold">A/B Experiments Platform</h1>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+        <div className="flex min-w-0 items-center">
+          <Beaker className="w-8 h-8 text-purple-600 mr-3 shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-2xl md:text-3xl font-bold leading-tight">A/B Experiments Platform</h1>
             <p className="text-gray-500">MVP directional experiment readout; not a production statistical inference engine.</p>
           </div>
         </div>
-        <form action="/admin/experiments/actions" method="POST">
+        <form action="/admin/experiments/actions" method="POST" className="w-full sm:w-auto">
           <input type="hidden" name="action" value="simulate" />
-          <button className="flex items-center bg-purple-600 text-white px-4 py-2 rounded shadow text-sm font-medium hover:bg-purple-700">
+          <button className="flex w-full items-center justify-center bg-purple-600 text-white px-4 py-2 rounded shadow text-sm font-medium hover:bg-purple-700 sm:w-auto">
             <RefreshCw className="w-4 h-4 mr-2" />
             Simulate Traffic
           </button>
@@ -44,8 +44,8 @@ export default async function AdminExperimentsPage() {
           
           return (
             <div key={exp.id} className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                <div>
+              <div className="px-4 py-4 md:px-6 border-b border-gray-200 bg-gray-50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <h2 className="text-xl font-bold text-gray-900">{exp.name}</h2>
                   <p className="text-sm text-gray-500">{exp.description}</p>
                 </div>
@@ -57,15 +57,15 @@ export default async function AdminExperimentsPage() {
               </div>
               
               {expMetrics.length > 0 ? (
-                <div className="p-6">
+                <div className="p-4 md:p-6">
                   <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     {expMetrics.map(m => (
-                      <div key={m.id} className={`p-4 rounded-lg border ${
+                      <div key={m.id} className={`min-w-0 p-4 rounded-lg border ${
                         m.recommendation === 'continue (winning)' ? 'bg-green-50 border-green-200' :
                         m.recommendation === 'stop (underperforming)' ? 'bg-red-50 border-red-200' :
                         'bg-gray-50 border-gray-200'
                       }`}>
-                        <div className="flex justify-between items-center mb-2">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-2">
                           <h3 className="font-bold text-gray-900">{m.variant?.name || 'Unknown Variant'}</h3>
                           <span className="text-xs text-gray-500">{m.variant?.allocation_percentage}% Alloc</span>
                         </div>
