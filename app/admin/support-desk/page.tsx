@@ -49,7 +49,7 @@ export default async function AdminSupportDeskPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {tickets?.map((ticket: any) => (
+            {tickets?.map((ticket: { id: string; priority: string; escalation_required?: boolean; customer?: { full_name?: string; email?: string } | null; category: string; description: string; order_id?: string | null; assistant_explanation?: string; refund_eligibility?: boolean; recommended_action?: string; status: string }) => (
               <tr key={ticket.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -74,7 +74,7 @@ export default async function AdminSupportDeskPage() {
                 <td className="px-6 py-4">
                   <div className="text-sm font-bold text-gray-900 uppercase mb-1">{ticket.category}</div>
                   <div className="text-sm text-gray-600 max-w-xs truncate" title={ticket.description}>
-                    "{ticket.description}"
+                    &quot;{ticket.description}&quot;
                   </div>
                   {ticket.order_id && (
                     <div className="text-xs text-indigo-600 font-mono mt-1">Order: {ticket.order_id.slice(0,8)}</div>

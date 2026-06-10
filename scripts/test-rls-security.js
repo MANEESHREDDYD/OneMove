@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 const { Client } = require('pg');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config({ path: '.env.local' });
@@ -22,7 +21,9 @@ async function runTests() {
   const logFail = (msg) => { console.log(`❌ [FAIL] ${msg}`); failed++; };
 
   // 1. Get user IDs
-  const { data: profiles, error } = await adminClient.from('profiles').select('id, email, role');
+  // Note: email lives in auth.users, not the public.profiles table; we only
+  // need id + role here to pick representative users per role.
+  const { data: profiles, error } = await adminClient.from('profiles').select('id, role');
   if (error) { logFail("Failed to list profiles"); process.exit(1); }
 
   const customerId = profiles.find(u => u.role === 'customer')?.id;

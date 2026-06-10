@@ -12,7 +12,21 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "Assist/**",
+    "python/**",
+    "playwright-report/**",
+    "test-results/**",
+    "coverage/**"
   ]),
+  // Operational/debug scripts are CommonJS dev tooling (not shipped app code).
+  // They legitimately use require() and loose typing for ad-hoc DB/ops tasks.
+  {
+    files: ["scripts/**/*.{js,ts}", "*.config.{js,mjs,cjs}"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

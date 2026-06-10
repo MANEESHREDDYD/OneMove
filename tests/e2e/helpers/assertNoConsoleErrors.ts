@@ -18,8 +18,13 @@ export function assertNoConsoleErrors(page: Page) {
   });
 
   page.on('requestfailed', (request) => {
-    if (!request.url().includes('favicon.ico')) {
-      errors.push(`Request failed: ${request.url()} - ${request.failure()?.errorText}`);
+    const errorText = request.failure()?.errorText ?? '';
+    // net::ERR_ABORTED is benign: Next.js cancels in-flight RSC prefetch
+    // requests (?_rsc=...) and navigations when the user moves on. These are
+    // not real failures, so we only flag genuine network errors.
+    const isAborted = errorText.includes('ERR_ABORTED');
+    if (!request.url().includes('favicon.ico') && !isAborted) {
+      errors.push(`Request failed: ${request.url()} - ${errorText}`);
     }
   });
   

@@ -1,0 +1,139 @@
+# OneMove Data Lineage Manifest
+#
+# Declares how raw operational tables flow through the analytics marts, the
+# metric store and the ML feature/scoring layer, and finally into the admin
+# intelligence surfaces. This is the machine-readable companion to
+# docs/DATA_LINEAGE_REPORT.md and is validated by the sql-quality workflow.
+#
+# node types: source | mart | metric | feature | model | surface
+
+version: 1
+
+sources:
+  - id: orders
+    type: source
+    table: public.orders
+    description: One row per ride / eats / grocery / courier order.
+  - id: order_items
+    type: source
+    table: public.order_items
+    description: Line items for eats/grocery orders.
+  - id: payments
+    type: source
+    table: public.payments
+    description: Payment record per order (demo settlement).
+  - id: order_status_events
+    type: source
+    table: public.order_status_events
+    description: Append-only status lifecycle log per order.
+  - id: profiles
+    type: source
+    table: public.profiles
+    description: User profile (role, name) — joined for display names.
+
+nodes:
+  # ---- Analytics marts (analytics/marts) -------------------------------
+  - id: fact_orders
+    type: mart
+    defined_by: analytics/marts/fact_orders.sql
+    inputs: [orders, payments, order_items]
+    description: Order-grain fact with revenue, status and service type.
+  - id: dim_customers
+    type: mart
+    defined_by: analytics/marts/dim_customers.sql
+    inputs: [orders, profiles]
+    description: Customer dimension with lifetime/recency attributes.
+  - id: mart_daily_marketplace_metrics
+    type: mart
+    defined_by: analytics/marts/mart_daily_marketplace_metrics.sql
+    inputs: [fact_orders]
+    description: Daily GMV, orders, completion and active-entity rollups.
+
+  # ---- Metric store (scripts/analytics, lib/metrics) -------------------
+  - id: daily_marketplace_metrics
+    type: metric
+    defined_by: scripts/analytics/refresh-metric-store.ts
+    inputs: [orders, payments, order_items]
+    description: Persisted daily metric table powering admin analytics cards.
+
+  # ---- ML features & scores (scripts/ml, python/.../ml) ---------------
+  - id: ml_features
+    type: feature
+    defined_by: scripts/pipeline/compute-feature-snapshots.ts
+    inputs: [orders, order_status_events]
+    description: Feature snapshots (see python feature_store registry).
+  - id: demand_forecast
+    type: model
+    defined_by: scripts/ml/generate-demand-forecast.ts
+    inputs: [ml_features, orders]
+    description: 24h demand forecast per zone.
+  - id: dispatch_scores
+    type: model
+    defined_by: scripts/ml/run-dispatch-simulation.ts
+    inputs: [ml_features]
+    description: Partner-to-order dispatch cost/assignment scores.
+  - id: fraud_risk
+    type: model
+    defined_by: scripts/ml/score-fraud-risk.ts
+    inputs: [orders, payments]
+    description: Per-order fraud-risk scores feeding risk_checks.
+  - id: recommendations
+    type: model
+    defined_by: scripts/ml/generate-recommendations.ts
+    inputs: [orders, order_items]
+    description: Per-customer product/merchant recommendations.
+  - id: customer_segments
+    type: model
+    defined_by: scripts/ml/segment-customers.ts
+    inputs: [dim_customers, orders]
+    description: RFM-style customer segments.
+  - id: merchant_reliability_scores
+    type: model
+    defined_by: scripts/ml/score-merchant-reliability.ts
+    inputs: [orders, order_status_events]
+    description: Merchant reliability scores.
+  - id: partner_trust_scores
+    type: model
+    defined_by: scripts/ml/score-partner-trust.ts
+    inputs: [orders]
+    description: Partner trust scores.
+
+  # ---- Admin / customer surfaces --------------------------------------
+  - id: admin_analytics
+    type: surface
+    route: /admin/analytics
+    inputs: [daily_marketplace_metrics, mart_daily_marketplace_metrics]
+  - id: admin_demand_intelligence
+    type: surface
+    route: /admin/demand-intelligence
+    inputs: [demand_forecast]
+  - id: admin_dispatch_optimizer
+    type: surface
+    route: /admin/dispatch-optimizer
+    inputs: [dispatch_scores]
+  - id: admin_risk_center
+    type: surface
+    route: /admin/risk-center
+    inputs: [fraud_risk]
+  - id: admin_customer_segments
+    type: surface
+    route: /admin/customer-segments
+    inputs: [customer_segments]
+  - id: admin_merchant_intelligence
+    type: surface
+    route: /admin/merchant-intelligence
+    inputs: [merchant_reliability_scores]
+  - id: admin_partner_intelligence
+    type: surface
+    route: /admin/partner-intelligence
+    inputs: [partner_trust_scores]
+  - id: customer_recommendations
+    type: surface
+    route: /customer/recommendations
+    inputs: [recommendations]
+
+# Primary documented flows (human summary):
+#   orders -> fact_orders -> mart_daily_marketplace_metrics -> /admin/analytics
+#   orders + payments + order_items -> daily_marketplace_metrics -> /admin/analytics
+#   order_status_events -> ml_features -> {merchant_reliability, partner_trust, demand_forecast}
+#   ML scores -> /admin/{demand-intelligence,dispatch-optimizer,risk-center,*-intelligence}

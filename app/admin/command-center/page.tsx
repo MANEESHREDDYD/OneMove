@@ -31,7 +31,14 @@ export default async function AdminCommandCenter() {
 
   // Admin God Mode: Fetch metrics via optimized RPC
   const { data: rpcData } = await supabase.rpc('get_admin_dashboard_metrics')
-  const dashboardMetrics = rpcData as any
+  const dashboardMetrics = rpcData as {
+    summary?: {
+      pending_orders?: number
+      active_orders?: number
+      completed_orders?: number
+      total_customers?: number
+    }
+  } | null
 
   // Fetch only recent orders for the feed and map
   const { data: ordersData } = await supabase
@@ -48,7 +55,7 @@ export default async function AdminCommandCenter() {
   const merchants = merchantsData || []
 
   // Platform Metrics Calculation
-  const totalOrders = dashboardMetrics?.summary?.pending_orders + dashboardMetrics?.summary?.active_orders + dashboardMetrics?.summary?.completed_orders || 0
+  const totalOrders = (dashboardMetrics?.summary?.pending_orders ?? 0) + (dashboardMetrics?.summary?.active_orders ?? 0) + (dashboardMetrics?.summary?.completed_orders ?? 0)
   const activeCustomers = dashboardMetrics?.summary?.total_customers || 0
   const completedOrders = dashboardMetrics?.summary?.completed_orders || 0
   const completionRate = totalOrders > 0 ? (completedOrders / totalOrders) * 100 : 0

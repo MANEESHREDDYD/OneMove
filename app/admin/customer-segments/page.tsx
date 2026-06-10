@@ -64,7 +64,7 @@ export default async function CustomerSegmentsPage() {
             <tbody>
               {segments?.slice(0, 50).map((s, i) => (
                 <tr key={i} className="border-b border-border/50 hover:bg-card/50 transition-colors">
-                  <td className="px-6 py-4 font-medium">{(s.profiles as any)?.full_name || 'Unknown'}</td>
+                  <td className="px-6 py-4 font-medium">{(s.profiles as { full_name?: string } | null)?.full_name || 'Unknown'}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
                       s.segment_name.includes('Risk') ? 'bg-destructive/20 text-destructive' :

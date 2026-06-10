@@ -37,9 +37,14 @@ export async function requestRide(formData: FormData) {
     return { error: 'Invalid location format' }
   }
 
-  // Calculate final price server-side for integrity
+  // Calculate final price server-side for integrity. estimate.prices[class] is a
+  // FareBreakdown object, so we must persist its numeric `.total` (not the object)
+  // into the numeric total_amount column, and honour every service class.
   const estimate = calculateRideEstimate(pickup.address, dropoff.address)
-  const finalPrice = serviceClass === 'premium' ? estimate.prices.premium : estimate.prices.economy
+  const priceKey = (['economy', 'comfort', 'xl', 'premium'].includes(serviceClass)
+    ? serviceClass
+    : 'economy') as keyof typeof estimate.prices
+  const finalPrice = estimate.prices[priceKey].total
 
   const { data: order, error: orderError } = await supabase.from('orders').insert({
     customer_id: user.id,

@@ -31,8 +31,11 @@ export function CheckoutClient({
   const [tipAmount, setTipAmount] = useState(3.00)
   const [idempotencyKey, setIdempotencyKey] = useState<string>('')
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+   
   useEffect(() => {
+    // Client-only initialization (mount flag + idempotency key) to avoid
+    // hydration mismatch from a server-rendered random value.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
     setIdempotencyKey(generateIdempotencyKey())
   }, [])

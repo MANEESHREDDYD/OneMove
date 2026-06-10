@@ -28,7 +28,7 @@ export function GroceryCartClient({
   const router = useRouter()
   const cartStore = useCartStore()
   const [mounted, setMounted] = useState(false)
-  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), [])
 
   const handleCheckout = () => {

@@ -88,7 +88,7 @@ export default async function ArchitecturePage() {
             </div>
             <div className="flex justify-between items-center p-3 bg-gray-800 text-white rounded text-sm">
               <span className="font-semibold">Admin Policy</span>
-              <span className="text-gray-300">Bypass RLS (`role = 'admin'`)</span>
+              <span className="text-gray-300">Bypass RLS (`role = &apos;admin&apos;`)</span>
             </div>
           </div>
         </div>

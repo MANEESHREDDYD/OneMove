@@ -56,8 +56,8 @@ export async function scorePartnerTrust(): Promise<PartnerTrust[]> {
     let totalRating = 0
     let ratingCount = 0
     jobs.forEach(j => {
-      if (j.metadata && (j.metadata as any).partner_rating) {
-        totalRating += (j.metadata as any).partner_rating
+      if (j.metadata && (j.metadata as { partner_rating?: number }).partner_rating) {
+        totalRating += (j.metadata as { partner_rating?: number }).partner_rating ?? 0
         ratingCount++
       }
     })

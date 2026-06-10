@@ -37,7 +37,7 @@ export default async function OpsAssistantPage() {
           </div>
         ) : (
           <ul className="divide-y divide-gray-200">
-            {insights.map((insight: any) => (
+            {insights.map((insight: { id: string; severity: string; category: string; explanation: string; recommended_action: string; source_table: string; source_id?: string }) => (
               <li key={insight.id} className="p-6 flex flex-col md:flex-row gap-4 items-start hover:bg-gray-50">
                 <div className="flex-shrink-0 mt-1">
                   {insight.severity === 'HIGH' && <AlertCircle className="w-6 h-6 text-red-500" />}

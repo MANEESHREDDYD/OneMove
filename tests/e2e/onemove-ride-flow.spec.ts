@@ -67,8 +67,8 @@ test.describe('OneMove Ride Flow', () => {
     await customerPage.fill('input[placeholder*="Where to?"]', 'Times Square');
     await customerPage.click('text=Times Square');
 
-    // Select Economy Ride
-    await customerPage.locator('button', { hasText: 'Confirm Economy' }).click();
+    // Select Economy Ride (Economy is the default selected tier)
+    await customerPage.locator('button', { hasText: 'Request Economy' }).click();
 
     // Ensure ride is created and we are redirected to tracking
     await customerPage.waitForURL(/.*\/customer\/rides\/.*/);

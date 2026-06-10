@@ -98,7 +98,7 @@ export default async function AdminExperimentsPage() {
                 </div>
               ) : (
                 <div className="p-8 text-center text-gray-500">
-                  <p>No metrics collected yet. Click "Simulate Traffic" to generate data.</p>
+                  <p>No metrics collected yet. Click &quot;Simulate Traffic&quot; to generate data.</p>
                 </div>
               )}
             </div>

@@ -14,10 +14,11 @@ test.describe('OneMove Idempotency', () => {
     
     // Add item and checkout
     await page.goto('http://localhost:3000/customer/eats');
+    await page.waitForSelector('a[href^="/customer/eats/"]');
     await page.click('a[href^="/customer/eats/"]');
-    await page.locator('button', { hasText: /Add \$/ }).first().click();
-    await page.click('text=View Cart & Checkout');
-    
+    await page.locator('button:has(.lucide-plus)').first().click();
+    await page.click('text=Go to Checkout');
+
     await page.waitForURL(/.*\/customer\/checkout/);
     await page.locator('button', { hasText: 'Demo Wallet' }).click();
     await page.locator('button', { hasText: 'Place Order' }).click();

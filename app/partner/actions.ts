@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import type { OrderStatus } from '@/lib/status/statusTransitions'
 
 export async function acceptJob(orderId: string) {
   const supabase = await createClient()
@@ -66,7 +67,7 @@ export async function updateJobStatus(orderId: string, newStatus: string) {
   if (!order) return { error: "Order not found" }
 
   const { isValidTransition } = await import('@/lib/status/statusTransitions')
-  if (!isValidTransition(order.service_type || 'eats', order.status as any, newStatus as any)) {
+  if (!isValidTransition(order.service_type || 'eats', order.status as OrderStatus, newStatus as OrderStatus)) {
     return { error: `Invalid transition from ${order.status} to ${newStatus}` }
   }
 

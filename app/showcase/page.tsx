@@ -31,7 +31,7 @@ export default function ShowcasePage() {
               The Next-Generation <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600">Marketplace Intelligence</span> Platform
             </h1>
             <p className="text-xl text-gray-600 mb-10 leading-relaxed">
-              OneMove is not just a UI. It's a full-stack, four-sided marketplace powered by a real-time data orchestration engine, an MLOps platform, and deterministic AI intelligence.
+              OneMove is not just a UI. It&apos;s a full-stack, four-sided marketplace powered by a real-time data orchestration engine, an MLOps platform, and deterministic AI intelligence.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               <Link href="/admin/architecture" className="bg-gray-900 text-white px-8 py-3 rounded-lg font-bold hover:bg-gray-800 transition flex items-center shadow-lg">

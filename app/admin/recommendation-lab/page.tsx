@@ -43,7 +43,7 @@ export default async function RecommendationLabPage() {
           <GlassCard key={i} className="p-6">
             <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-border/50 pb-4 mb-4">
               <div>
-                <h3 className="font-bold font-mono">{(rec.profiles as any)?.full_name || 'Customer'}</h3>
+                <h3 className="font-bold font-mono">{(rec.profiles as { full_name?: string } | null)?.full_name || 'Customer'}</h3>
                 <p className="text-xs text-muted-foreground">ID: {rec.customer_id}</p>
               </div>
               <div className="flex gap-2">

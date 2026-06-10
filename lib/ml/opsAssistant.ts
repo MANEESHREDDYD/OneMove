@@ -9,7 +9,7 @@ export interface OpsInsightData {
   source_table: string
   source_id?: string
   entity_id?: string
-  features: Record<string, any>
+  features: Record<string, unknown>
   explanation: string
   recommended_action: string
 }

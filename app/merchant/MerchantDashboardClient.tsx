@@ -85,7 +85,7 @@ export function MerchantDashboardClient({
               </GlassCard>
             ) : (
               activeOrders.map((order) => {
-                const orderData = order as unknown as any;
+                const orderData = order as unknown as { order_items?: Array<{ quantity: number; products?: { name?: string } | null }> };
                 const items = orderData.order_items || [];
                 
                 return (
@@ -114,7 +114,7 @@ export function MerchantDashboardClient({
                         {items.length === 0 ? (
                           <p className="text-xs text-muted-foreground italic">No specific items listed.</p>
                         ) : (
-                          items.map((item: any, idx: number) => (
+                          items.map((item: { quantity: number; products?: { name?: string } | null }, idx: number) => (
                             <div key={idx} className="flex justify-between text-sm">
                               <span className="font-medium">
                                 <span className="text-orange-500 mr-2">{item.quantity}x</span> 

@@ -70,7 +70,7 @@ export default async function MLOpsPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {runs?.map((run: any) => (
+            {runs?.map((run: { id: string; status: string; run_name: string; model_family: string; started_at: string; duration_ms: number; error_count: number }) => (
               <tr key={run.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   {run.status === 'SUCCESS' ? (

@@ -104,7 +104,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             <GlassCard className="p-6">
               <h3 className="font-bold flex items-center gap-2 mb-4"><Package className="w-5 h-5 text-primary" /> Items</h3>
               <div className="space-y-2">
-                {items.map((item: any) => (
+                {items.map((item: { id: string; quantity: number; price_at_time: number; products?: { name?: string } | null }) => (
                   <div key={item.id} className="flex justify-between items-center bg-background/50 p-2 rounded-lg text-sm">
                     <span><span className="font-bold mr-2">{item.quantity}x</span> {item.products?.name || 'Unknown'}</span>
                     <span className="text-muted-foreground">${((item.price_at_time || 0) * (item.quantity || 1)).toFixed(2)}</span>
@@ -122,14 +122,14 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                   <div className="mt-1 bg-blue-500/20 p-1.5 rounded-full"><MapPin className="w-4 h-4 text-blue-500" /></div>
                   <div>
                     <p className="text-xs font-bold text-muted-foreground uppercase">Pickup</p>
-                    <p className="text-sm">{(order.pickup_location as any)?.address || 'N/A'}</p>
+                    <p className="text-sm">{(order.pickup_location as { address?: string } | null)?.address || 'N/A'}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <div className="mt-1 bg-destructive/20 p-1.5 rounded-full"><MapPin className="w-4 h-4 text-destructive" /></div>
                   <div>
                     <p className="text-xs font-bold text-muted-foreground uppercase">Dropoff</p>
-                    <p className="text-sm">{(order.dropoff_location as any)?.address || 'N/A'}</p>
+                    <p className="text-sm">{(order.dropoff_location as { address?: string } | null)?.address || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -142,7 +142,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
           <GlassCard className="p-6 border-t-4 border-t-green-500">
             <h3 className="font-bold flex items-center gap-2 mb-4"><DollarSign className="w-5 h-5 text-green-500" /> Payment & Totals</h3>
             <div className="text-3xl font-black mb-4">${order.total_amount?.toFixed(2)}</div>
-            {payments.map((p: any, idx: number) => (
+            {payments.map((p: { method: string; status: string; amount: number }, idx: number) => (
               <div key={idx} className="bg-background/50 p-3 rounded-lg text-sm space-y-1 mb-2">
                 <div className="flex justify-between"><span className="text-muted-foreground">Method:</span> <span className="capitalize">{p.method.replace('_', ' ')}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Status:</span> <span className="font-bold">{p.status.replace('_', ' ')}</span></div>
