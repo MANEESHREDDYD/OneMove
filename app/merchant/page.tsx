@@ -63,7 +63,7 @@ export default async function MerchantDashboard() {
   const allOrders = ordersData || []
 
   // Split into active and history
-  const activeOrders = allOrders.filter(o => ['pending', 'accepted', 'preparing', 'ready', 'in_transit'].includes(o.status))
+  const activeOrders = allOrders.filter(o => ['pending', 'placed', 'merchant_accepted', 'accepted', 'preparing', 'ready', 'in_transit'].includes(o.status))
   // For history, we'll take completed or cancelled
   const historyOrders = allOrders.filter(o => ['completed', 'cancelled'].includes(o.status))
 

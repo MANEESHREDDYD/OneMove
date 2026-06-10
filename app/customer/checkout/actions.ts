@@ -97,8 +97,7 @@ export async function placeMarketplaceOrder({
   await supabase.from('order_status_events').insert({
     order_id: order.id,
     status: initialStatus,
-    changed_by: user.id,
-    notes: 'Order placed by customer via checkout'
+    notes: `Order placed by customer ${user.id} via checkout`
   })
 
   // 5. Create analytics event

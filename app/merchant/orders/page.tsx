@@ -28,7 +28,7 @@ export default async function OrderHistoryPage() {
       .from('orders')
       .select('*')
       .in('merchant_id', merchantIds)
-      .in('status', ['pending', 'accepted', 'preparing', 'ready', 'in_transit'])
+      .in('status', ['pending', 'placed', 'merchant_accepted', 'accepted', 'preparing', 'ready', 'in_transit'])
       .order('created_at', { ascending: false })
       .limit(50)
     orders = data || []

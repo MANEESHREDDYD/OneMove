@@ -1,6 +1,10 @@
 import { createClient } from '@/utils/supabase/server'
 import { SetupRequired } from '@/components/common/SetupRequired'
-import { Activity, Clock, CheckCircle, XCircle } from 'lucide-react'
+import { Activity, Clock, CheckCircle, RefreshCw, XCircle } from 'lucide-react'
+
+function formatUtcDateTime(value: string) {
+  return `${new Date(value).toISOString().slice(0, 16).replace('T', ' ')} UTC`
+}
 
 export default async function MLOpsPage() {
   const supabase = await createClient()
@@ -18,19 +22,19 @@ export default async function MLOpsPage() {
   const totalProcessed = runs?.reduce((acc, run) => acc + (run.input_row_count || 0) + (run.output_row_count || 0), 0) || 0
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center">
-          <Activity className="w-8 h-8 text-teal-600 mr-3" />
-          <div>
-            <h1 className="text-3xl font-bold">MLOps Dashboard</h1>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+        <div className="flex min-w-0 items-center">
+          <Activity className="w-8 h-8 text-teal-600 mr-3 shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-2xl md:text-3xl font-bold leading-tight">MLOps Dashboard</h1>
             <p className="text-gray-500">Monitoring for deterministic pipelines and scoring models.</p>
           </div>
         </div>
-        <form action="/admin/mlops/actions" method="POST">
+        <form action="/admin/mlops/actions" method="POST" className="w-full sm:w-auto">
           <input type="hidden" name="action" value="score_all" />
-          <button className="flex items-center bg-teal-600 text-white px-4 py-2 rounded shadow text-sm font-medium hover:bg-teal-700">
-            <RefreshCwIcon />
+          <button className="flex w-full items-center justify-center bg-teal-600 text-white px-4 py-2 rounded shadow text-sm font-medium hover:bg-teal-700 sm:w-auto">
+            <RefreshCw className="w-4 h-4 mr-2" />
             Rerun All Pipelines
           </button>
         </form>
@@ -54,73 +58,67 @@ export default async function MLOpsPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div className="px-4 py-4 md:px-6 border-b border-gray-200 bg-gray-50">
           <h2 className="text-lg font-semibold text-gray-800">Pipeline Execution History</h2>
         </div>
         
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Run Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Family</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Errors</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {runs?.map((run: { id: string; status: string; run_name: string; model_family: string; started_at: string; duration_ms: number; error_count: number }) => (
-              <tr key={run.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {run.status === 'SUCCESS' ? (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-red-500" />
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {run.run_name}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase tracking-wider">
-                  {run.model_family}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div className="flex items-center">
-                    <Clock className="w-4 h-4 mr-1 text-gray-400" />
-                    {new Date(run.started_at).toLocaleString()}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {run.duration_ms} ms
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  {run.error_count > 0 ? (
-                    <span className="text-red-600">{run.error_count}</span>
-                  ) : (
-                    <span className="text-green-600">0</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {(!runs || runs.length === 0) && (
+        <div className="w-full overflow-x-auto">
+          <table className="min-w-[760px] divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                  No pipeline runs recorded.
-                </td>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Run Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Family</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Errors</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {runs?.map((run: { id: string; status: string; run_name: string; model_family: string; started_at: string; duration_ms: number; error_count: number }) => (
+                <tr key={run.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    {run.status === 'SUCCESS' ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <XCircle className="w-5 h-5 text-red-500" />
+                    )}
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {run.run_name}
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 uppercase tracking-wider">
+                    {run.model_family}
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <div className="flex items-center">
+                      <Clock className="w-4 h-4 mr-1 text-gray-400" />
+                      {formatUtcDateTime(run.started_at)}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {run.duration_ms} ms
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                    {run.error_count > 0 ? (
+                      <span className="text-red-600">{run.error_count}</span>
+                    ) : (
+                      <span className="text-green-600">0</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {(!runs || runs.length === 0) && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                    No pipeline runs recorded.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
-  )
-}
-
-function RefreshCwIcon() {
-  return (
-    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-    </svg>
   )
 }

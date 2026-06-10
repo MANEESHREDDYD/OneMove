@@ -15,11 +15,26 @@ export async function updateMerchantOrderStatus(orderId: string, newStatus: stri
     return { error: 'Authentication required' }
   }
 
-  // Ensure order is accessible (In a real app, we would verify this order belongs to the merchant's restaurant)
+  const { data: merchants, error: merchantError } = await supabase
+    .from('merchants')
+    .select('id')
+    .eq('owner_id', user.id)
+
+  if (merchantError) {
+    return { error: 'Unable to verify merchant ownership' }
+  }
+
+  const merchantIds = merchants?.map((merchant) => merchant.id) || []
+  if (merchantIds.length === 0) {
+    return { error: 'No merchant profile found for this account' }
+  }
+
+  // Ensure order belongs to one of the signed-in merchant account's stores.
   const { data: order, error: fetchError } = await supabase
     .from('orders')
     .select('status, service_type')
     .eq('id', orderId)
+    .in('merchant_id', merchantIds)
     .single()
 
   if (fetchError || !order) {
@@ -45,8 +60,7 @@ export async function updateMerchantOrderStatus(orderId: string, newStatus: stri
   await supabase.from('order_status_events').insert({
     order_id: orderId,
     status: newStatus,
-    changed_by: user.id,
-    notes: `Merchant marked order as ${newStatus}`
+    notes: `Merchant ${user.id} marked order as ${newStatus}`
   })
 
   revalidatePath('/merchant')

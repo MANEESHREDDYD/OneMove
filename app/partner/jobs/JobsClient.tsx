@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { GlassCard } from "@/components/common/GlassCard"
 import { Button } from "@/components/ui/button"
 import { acceptJob, updateJobStatus } from "../actions"
-import { CheckCircle2, Navigation, Loader2 } from "lucide-react"
+import { AlertCircle, CheckCircle2, Navigation, Loader2 } from "lucide-react"
 import { useRealtimePartnerJobs } from "@/hooks/useRealtimePartnerJobs"
 
 export function JobsClient({ 
@@ -18,23 +19,40 @@ export function JobsClient({
   activeJobs: any[],
   driverId: string
 }) {
+  const router = useRouter()
   useRealtimePartnerJobs(driverId)
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const handleAccept = async (id: string) => {
     setLoadingId(id)
-    await acceptJob(id)
+    setError(null)
+    const result = await acceptJob(id)
+    if (result?.error) setError(result.error)
+    else router.refresh()
     setLoadingId(null)
   }
 
   const handleUpdate = async (id: string, newStatus: string) => {
     setLoadingId(id)
-    await updateJobStatus(id, newStatus)
+    setError(null)
+    const result = await updateJobStatus(id, newStatus)
+    if (result?.error) setError(result.error)
+    else router.refresh()
     setLoadingId(null)
   }
 
   return (
     <div className="space-y-8">
+      {error && (
+        <GlassCard className="border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>{error}</p>
+          </div>
+        </GlassCard>
+      )}
+
       {/* Active Jobs */}
       {activeJobs.length > 0 && (
         <div className="space-y-4">
@@ -83,7 +101,10 @@ export function JobsClient({
               <GlassCard key={job.id} className="p-5 flex flex-col justify-between">
                 <div>
                   <div className="flex justify-between items-start mb-2">
-                    <span className="bg-secondary/50 px-2 py-1 rounded-md text-xs font-bold uppercase">{job.service_type}</span>
+                    <div>
+                      <span className="bg-secondary/50 px-2 py-1 rounded-md text-xs font-bold uppercase">{job.service_type}</span>
+                      <h3 className="font-bold text-base mt-2">Order {job.id.split('-')[0]}</h3>
+                    </div>
                     <p className="text-xl font-bold">${job.total_amount?.toFixed(2)}</p>
                   </div>
                   <div className="text-sm text-muted-foreground space-y-1 mb-4">

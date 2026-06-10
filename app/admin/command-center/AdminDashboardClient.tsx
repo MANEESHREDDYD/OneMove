@@ -9,6 +9,10 @@ import { useState } from "react"
 
 type Order = Database['public']['Tables']['orders']['Row']
 
+function formatUtcDateTime(value: string) {
+  return `${new Date(value).toISOString().slice(0, 16).replace('T', ' ')} UTC`
+}
+
 export function AdminDashboardClient({ 
   globalOrders,
   merchants,
@@ -121,11 +125,11 @@ export function AdminDashboardClient({
                     </td>
                     <td className="px-6 py-4 font-bold">${order.total_amount?.toFixed(2)}</td>
                     <td className="px-6 py-4 text-muted-foreground text-xs">
-                      {new Date(order.created_at).toLocaleString()}
+                      {formatUtcDateTime(order.created_at)}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <a href={`/admin/orders/${order.id}`} className="text-xs font-bold text-primary hover:underline">
-                        View Details →
+                        View Details -&gt;
                       </a>
                     </td>
                   </tr>

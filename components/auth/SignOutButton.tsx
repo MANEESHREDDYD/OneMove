@@ -2,8 +2,6 @@
 
 import { Button } from "@/components/ui/button"
 import { LogOut } from "lucide-react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { signout } from "@/app/auth/actions"
 
 interface SignOutButtonProps {
@@ -13,37 +11,22 @@ interface SignOutButtonProps {
 }
 
 export function SignOutButton({ className = "", variant = "ghost", showLabel = true }: SignOutButtonProps) {
-  const [loading, setLoading] = useState(false)
-
-  const handleSignOut = async () => {
-    setLoading(true)
-    try {
-      // Clear localStorage (e.g. cartStore)
-      localStorage.clear()
-      sessionStorage.clear()
-      
-      // Call the server action to clear Supabase cookies
-      await signout()
-      
-      // The server action redirects, but as a fallback/hard reload:
-      window.location.href = '/auth/login'
-    } catch (e) {
-      console.error("Sign out failed", e)
-      window.location.href = '/auth/login'
-    } finally {
-      setLoading(false)
-    }
+  const clearBrowserState = () => {
+    localStorage.clear()
+    sessionStorage.clear()
   }
 
   return (
-    <Button 
-      variant={variant} 
-      className={className} 
-      onClick={handleSignOut}
-      disabled={loading}
-    >
-      <LogOut className={`h-4 w-4 ${showLabel ? 'mr-2' : ''}`} />
-      {showLabel && "Sign Out"}
-    </Button>
+    <form action={signout}>
+      <Button
+        type="submit"
+        variant={variant}
+        className={className}
+        onClick={clearBrowserState}
+      >
+        <LogOut className={`h-4 w-4 ${showLabel ? 'mr-2' : ''}`} />
+        {showLabel && "Sign Out"}
+      </Button>
+    </form>
   )
 }

@@ -74,6 +74,8 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
   const getStatusDisplay = (status: string) => {
     switch(status) {
       case 'pending': return { label: 'Finding a Partner...', color: 'text-yellow-500', bg: 'bg-yellow-500/20' }
+      case 'placed': return { label: 'Order Placed', color: 'text-yellow-500', bg: 'bg-yellow-500/20' }
+      case 'merchant_accepted': return { label: 'Merchant Accepted', color: 'text-blue-500', bg: 'bg-blue-500/20' }
       case 'accepted': return { label: 'Partner Assigned', color: 'text-blue-500', bg: 'bg-blue-500/20' }
       case 'preparing': return { label: 'Preparing', color: 'text-orange-500', bg: 'bg-orange-500/20' }
       case 'ready': return { label: 'Ready for Pickup', color: 'text-teal-500', bg: 'bg-teal-500/20' }
@@ -85,7 +87,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
   }
 
   const statusInfo = getStatusDisplay(order.status)
-  const isCancellable = order.status === 'pending' || order.status === 'accepted'
+  const isCancellable = ['pending', 'placed', 'merchant_accepted', 'accepted'].includes(order.status)
 
   const subtotal = orderItems?.reduce((sum, item) => sum + (item.price_at_time * item.quantity), 0) || 0
   const deliveryFee = 2.99
@@ -99,7 +101,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Order Tracking</h1>
         <div className={`px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2 ${statusInfo.bg} ${statusInfo.color}`}>
-          {order.status === 'in_transit' || order.status === 'pending' || order.status === 'preparing' ? (
+          {order.status === 'in_transit' || order.status === 'pending' || order.status === 'placed' || order.status === 'merchant_accepted' || order.status === 'preparing' ? (
             <span className="relative flex h-2 w-2">
               <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-current`}></span>
               <span className={`relative inline-flex rounded-full h-2 w-2 bg-current`}></span>
