@@ -23,14 +23,24 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     .from('orders')
     .select(`
       *,
-      merchants (name),
-      driver:profiles!driver_id (full_name, phone)
+      merchants (name)
     `)
     .eq('id', resolvedParams.id)
     .single()
 
   if (error || !order || order.customer_id !== user.id) {
     redirect('/customer/orders')
+  }
+
+  // Driver display name via the safe card view (no phone/email exposed by RLS).
+  let driver: { full_name?: string } | null = null
+  if (order.driver_id) {
+    const { data: card } = await supabase
+      .from('safe_profile_cards')
+      .select('display_name')
+      .eq('id', order.driver_id)
+      .maybeSingle()
+    if (card) driver = { full_name: card.display_name ?? undefined }
   }
 
   // Fetch Items
@@ -133,11 +143,11 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
               <span className="text-muted-foreground">Order Placed</span>
               <span className="font-medium">{new Date(order.created_at).toLocaleTimeString()}</span>
             </div>
-            {order.driver && (
+            {driver && (
               <div className="p-3 bg-primary/10 rounded-lg flex justify-between items-center mt-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Assigned Partner</p>
-                  <p className="font-bold">{(order.driver as { full_name?: string }).full_name}</p>
+                  <p className="font-bold">{driver.full_name}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-muted-foreground mb-1">Contact</p>

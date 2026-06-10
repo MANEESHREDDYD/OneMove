@@ -13,6 +13,7 @@
     "db:push": "supabase db push",
     "db:reset": "supabase db reset",
     "db:fix-advanced": "tsx scripts/apply-advanced-schema-rls-fixes.ts",
+    "db:harden-rls": "tsx scripts/apply-rls-hardening.ts",
     "types:generate": "supabase gen types typescript --local > types/database.types.ts",
     "test:supabase": "node scripts/test-supabase-connection.js",
     "verify:supabase": "node scripts/verify-supabase-schema.js",

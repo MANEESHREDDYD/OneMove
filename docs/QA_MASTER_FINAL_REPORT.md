@@ -39,7 +39,7 @@ See [PRODUCTION_READINESS_SCORECARD.md](PRODUCTION_READINESS_SCORECARD.md).
 | Intelligence refresh | `npm run intelligence:refresh` | ✅ pipeline + ML + experiments |
 | Data integrity | `npm run debug:data-integrity` | ✅ 10/10 checks |
 | Intelligence data | `npm run debug:intelligence` | ✅ all tables populated |
-| RLS probe | `npm run test:rls` | ✅ runs; 2 documented prod-hardening items |
+| RLS probe | `npm run test:rls` | ✅ 16/16 — tenant isolation verified |
 | Healthcheck | `npm run healthcheck` | ✅ all required green |
 | E2E (Chromium) | Playwright | ✅ smoke, core flows, ride flow, role security, negative/edge, idempotency, session, intelligence, maps |
 
@@ -76,11 +76,22 @@ All real, tested, documented and wired into OneMove:
   [LOCAL_HEALTHCHECK_REPORT.md](LOCAL_HEALTHCHECK_REPORT.md).
 - **Production readiness scorecard** — [PRODUCTION_READINESS_SCORECARD.md](PRODUCTION_READINESS_SCORECARD.md).
 
+## RLS isolation hardening (Phase 6.1)
+
+- **Profiles locked** to own-row + admin; `safe_profile_cards` / `safe_partner_cards`
+  / `safe_merchant_cards` views serve display names with **no phone/email**. The
+  two customer pages that showed a driver name were repointed to the safe view.
+- **Tenant isolation verified** by a rewritten 16-check `npm run test:rls`:
+  customer→own only, merchant→own-store orders/items/payments only (0 cross-tenant),
+  partner→assigned/available only, admin→platform-wide, anonymous→denied.
+- The old "merchant can read other merchants' orders" finding was a **false
+  positive** in the previous probe (compared store id to user id); the policy was
+  always correct and is now proven so.
+- Applied via `supabase/fixes/2026_rls_hardening.sql` (`npm run db:harden-rls`).
+
 ## Known limitations & risks
 
-1. **RLS production hardening (RLS-001/002):** `profiles` is broadly readable
-   (incl. `phone`) and a merchant can read other merchants' orders. Data is
-   synthetic; Low for localhost, High for production — production blockers.
+1. **No cross-tenant data leakage** — RLS-001/002 are fixed/verified (above).
 2. **E2E matrix not fully gated:** "Simulate Traffic" can exceed strict Playwright
    mobile timeouts on local hardware; cross-browser/mobile not gated in CI.
 3. **Deterministic intelligence:** ETAs, demand and scores use deterministic
