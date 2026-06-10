@@ -19,7 +19,7 @@ export default async function CustomerRideDetail({ params }: { params: Promise<{
 
   const { data: order, error } = await supabase
     .from('orders')
-    .select('*, order_status_events(*), driver:profiles!orders_driver_id_fkey(*), payments(*)')
+    .select('*, order_status_events(*), payments(*)')
     .eq('id', resolvedParams.id)
     .single()
 
@@ -30,6 +30,17 @@ export default async function CustomerRideDetail({ params }: { params: Promise<{
         <p>Ride not found (ID: {resolvedParams.id})</p>
       </div>
     )
+  }
+
+  // Driver display name via the safe card view (no phone/email exposed by RLS).
+  let driver: { full_name?: string } | null = null
+  if (order.driver_id) {
+    const { data: card } = await supabase
+      .from('safe_profile_cards')
+      .select('display_name')
+      .eq('id', order.driver_id)
+      .maybeSingle()
+    if (card) driver = { full_name: card.display_name ?? undefined }
   }
 
   const pickup = order.pickup_location as { lat?: number; lng?: number; address?: string } | null
@@ -121,13 +132,13 @@ export default async function CustomerRideDetail({ params }: { params: Promise<{
         <div className="space-y-6">
           <GlassCard className="p-6 space-y-4">
             <h3 className="font-bold flex items-center gap-2"><Car className="w-5 h-5 text-orange-500" /> Partner Assignment</h3>
-            {order.driver ? (
+            {driver ? (
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center font-bold text-xl text-primary">
-                  {order.driver.full_name?.charAt(0)}
+                  {driver.full_name?.charAt(0)}
                 </div>
                 <div>
-                  <p className="font-bold">{order.driver.full_name}</p>
+                  <p className="font-bold">{driver.full_name}</p>
                   <p className="text-sm text-muted-foreground capitalize">{serviceClass} Vehicle</p>
                 </div>
               </div>

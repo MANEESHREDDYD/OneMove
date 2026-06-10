@@ -39,7 +39,8 @@ async function run() {
   const files = [
     'supabase/fixes/2026_advanced_qa_schema_fixes.sql',
     'supabase/fixes/2026_advanced_qa_rls_fixes.sql',
-    'supabase/fixes/2026_admin_metrics_rpc.sql'
+    'supabase/fixes/2026_admin_metrics_rpc.sql',
+    'supabase/fixes/2026_rls_hardening.sql'
   ];
 
   for (const file of files) {

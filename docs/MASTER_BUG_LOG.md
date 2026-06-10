@@ -142,26 +142,38 @@ Full audit pass. Every bug below has reproduction, root cause, fix and retest.
 
 ---
 
-## Documented production-hardening items (NOT product bugs for the localhost demo)
+---
 
-Data is synthetic (`is_demo = true`, faker-generated) — no real PII — so the
-localhost-demo impact is **Low**; these are **High** for production and are why
-production is NOT YET APPROVED. Surfaced by `npm run test:rls`. Tracked in
-[PRODUCTION_READINESS_SCORECARD.md](PRODUCTION_READINESS_SCORECARD.md).
+# Phase 6.1 — RLS isolation hardening (2026-06-10)
 
-### RLS-001 — `profiles` broadly readable by any authenticated user
-- **Severity:** Low (localhost demo) / High (production)
-- **Detail:** Authenticated users can read all `profiles` rows, including a `phone` column. The marketplace legitimately needs cross-user *name* visibility (driver/merchant names), but `phone`/full-table read should be restricted via a view or column grants. **Not patched** against the hosted demo DB (policy-level, outward-facing change); documented as a production blocker.
+Applied `supabase/fixes/2026_rls_hardening.sql` (reproducible via
+`npm run db:harden-rls`). Verified by the rewritten 16-check
+`npm run test:rls` matrix (all pass).
 
-### RLS-002 — Merchant can read other merchants' orders
-- **Severity:** Low (localhost demo) / High (production)
-- **Detail:** The `orders` SELECT policy lets a merchant read rows for other merchants. *Fix for prod:* scope to `merchant_id = their merchant`. **Not patched** against the hosted demo DB; documented as a production blocker.
+## RLS-001 — `profiles` broadly readable (incl. phone) — ✅ FIXED
+- **Severity:** was Low (localhost) / High (production)
+- **Route/file:** `public.profiles` policies; `app/customer/orders/[id]/page.tsx`, `app/customer/rides/[id]/page.tsx`
+- **Steps to reproduce (before):** as a customer, `SELECT * FROM profiles` returned 293 rows incl. 41 phone numbers.
+- **Expected:** a customer reads only their own profile; no broad phone/email exposure.
+- **Actual (before):** a permissive `USING (auth.role() = 'authenticated')` SELECT policy exposed all profile columns to every authenticated user.
+- **Root cause:** legacy MVP-permissive profiles policy (+ a `role IN ('merchant','driver')` policy) left in place.
+- **Fix applied:** dropped the broad policies; `profiles` SELECT is now own-row (`id = auth.uid()`) + `is_admin()` only. Added safe display views `safe_profile_cards` / `safe_partner_cards` / `safe_merchant_cards` exposing only `id, display_name, role, avatar_url` (and merchant `rating/category`) — **no phone/email**. Repointed the two customer pages that showed a driver name to read from `safe_profile_cards`.
+- **Retest result:** customer now sees **1** profile (own); `safe_profile_cards` has no phone/email column; driver name still renders. `test:rls` green; e2e (incl. ride-flow → customer ride detail) green.
+- **Final status:** ✅ Fixed.
 
-> Not a defect: customers can read the `merchants` catalog table — **by design**
-> (needed to browse restaurants/stores).
+## RLS-002 — "Merchant can read other merchants' orders" — ✅ FALSE POSITIVE, isolation verified
+- **Severity:** was reported Low/High; actual product impact: **none**.
+- **Route/file:** `scripts/test-rls-security.js`; `public.orders` policies.
+- **Root cause:** the **old probe** compared `orders.merchant_id` (a *store* id) to the merchant's *user* id, which never matches — so it reported "cross-merchant" even though the policy (`merchants.owner_id = auth.uid()`) was correct. Empirical check: merchant saw 2 orders, **0** cross-tenant.
+- **Fix applied:** rewrote `test:rls` to compute the merchant's owned store ids and assert tenancy correctly; reasserted the merchant `orders`/`order_items` policies and **added** a scoped `merchant_select_payments` policy (own orders only). Added anonymous-denied + partner-scope checks.
+- **Retest result:** merchant reads only own-store orders/items/payments (0 cross-tenant); anonymous denied; partner sees only assigned/available jobs. `test:rls` 16/16 green.
+- **Final status:** ✅ Fixed/verified (no cross-tenant order visibility).
+
+> Not a defect: customers can read the `merchants` catalog + `safe_*_cards` views — **by design** (browse stores / show names without PII).
 
 ## Final bug status
 - **Open Critical:** 0
 - **Open High:** 0
 - **Open Medium:** 0
-- **Open Low / documented limitations:** RLS-001, RLS-002 (production-hardening, synthetic data), full cross-browser/mobile e2e matrix not gated, no APM/alerting. All consistent with "localhost demo: GO / production: NOT YET APPROVED".
+- **No known cross-tenant order/data visibility bugs.**
+- **Open Low / documented limitations:** full cross-browser/mobile e2e matrix not gated in CI; no production APM/alerting/rate-limiting. None can cause cross-tenant data leakage. Consistent with "localhost demo: GO / production: NOT YET APPROVED".

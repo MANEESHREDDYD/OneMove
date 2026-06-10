@@ -47,3 +47,13 @@ the run.
 - After `npm run intelligence:refresh`, to confirm the ML tables populated.
 - As a fast triage step if a page renders empty (is the data there? is the user
   seeded? did the ML run succeed?).
+
+## Note on RLS
+
+`healthcheck` uses the **service-role** client, so it is unaffected by the
+row-level-security lockdown applied in `supabase/fixes/2026_rls_hardening.sql`.
+Per-role tenant isolation (profiles locked to own+admin, merchant/customer/partner
+order scoping, anonymous denied) is covered separately by `npm run test:rls`
+(16-check matrix). After the lockdown, application display names are served by the
+`safe_profile_cards` / `safe_partner_cards` / `safe_merchant_cards` views, which
+expose no phone/email.
