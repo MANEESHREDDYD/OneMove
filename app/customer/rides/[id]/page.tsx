@@ -32,18 +32,18 @@ export default async function CustomerRideDetail({ params }: { params: Promise<{
     )
   }
 
-  const pickup = order.pickup_location as any
-  const dropoff = order.dropoff_location as any
+  const pickup = order.pickup_location as { lat?: number; lng?: number; address?: string } | null
+  const dropoff = order.dropoff_location as { lat?: number; lng?: number; address?: string } | null
 
   const markers = []
   if (pickup?.lat && pickup?.lng) markers.push({ position: [pickup.lat, pickup.lng] as [number, number], label: 'Pickup' })
   if (dropoff?.lat && dropoff?.lng) markers.push({ position: [dropoff.lat, dropoff.lng] as [number, number], label: 'Dropoff' })
   
   const mapCenter = markers.length > 0 ? markers[0].position : [40.7128, -74.0060]
-  const polyline: [number, number][] | undefined = (pickup?.lat && dropoff?.lat) ? [[pickup.lat, pickup.lng], [dropoff.lat, dropoff.lng]] : undefined
+  const polyline: [number, number][] | undefined = (pickup?.lat && pickup?.lng && dropoff?.lat && dropoff?.lng) ? [[pickup.lat, pickup.lng], [dropoff.lat, dropoff.lng]] : undefined
 
   // Infer the service class or recalculate breakdown
-  const estimate = pickup && dropoff ? calculateRideEstimate(pickup.address, dropoff.address) : null
+  const estimate = pickup && dropoff ? calculateRideEstimate(pickup.address ?? '', dropoff.address ?? '') : null
   const payment = order.payments?.[0]
   
   // Guess class by matching total to estimate prices
@@ -104,7 +104,7 @@ export default async function CustomerRideDetail({ params }: { params: Promise<{
           <GlassCard className="p-6 space-y-4">
             <h3 className="font-bold flex items-center gap-2"><Activity className="w-5 h-5 text-blue-500" /> Timeline</h3>
             <div className="space-y-3">
-              {(order.order_status_events || []).map((ev: any, idx: number) => (
+              {(order.order_status_events || []).map((ev: { created_at: string; status: string; notes?: string }, idx: number) => (
                 <div key={idx} className="flex gap-4 text-sm">
                   <div className="w-16 text-muted-foreground text-xs">{new Date(ev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                   <div>

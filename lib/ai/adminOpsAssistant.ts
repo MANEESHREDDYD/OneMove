@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { generateOpsInsights, OpsInsightData } from '../ml/opsAssistant'
 
 export async function runAdminOpsAssistant(supabaseUrl: string, supabaseServiceKey: string) {
@@ -27,7 +27,7 @@ export async function runAdminOpsAssistant(supabaseUrl: string, supabaseServiceK
   return { count: insights.length, message: `Successfully generated ${insights.length} operational insights.` }
 }
 
-export async function getActiveOpsInsights(supabase: any) {
+export async function getActiveOpsInsights(supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from('ops_insights')
     .select('*')
@@ -42,10 +42,13 @@ export async function getActiveOpsInsights(supabase: any) {
 
   // Sort: HIGH first, then MEDIUM, then LOW
   const severityOrder: Record<string, number> = { HIGH: 1, MEDIUM: 2, LOW: 3 }
-  return data.sort((a: any, b: any) => severityOrder[a.severity] - severityOrder[b.severity])
+  return (data ?? []).sort(
+    (a: { severity: string }, b: { severity: string }) =>
+      severityOrder[a.severity] - severityOrder[b.severity]
+  )
 }
 
-export async function markInsightReviewed(supabase: any, insightId: string) {
+export async function markInsightReviewed(supabase: SupabaseClient, insightId: string) {
   const { error } = await supabase
     .from('ops_insights')
     .update({ is_reviewed: true })

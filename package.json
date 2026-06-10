@@ -79,6 +79,9 @@
     "py:ml": "cd python && python -m onemove_intelligence.cli score-all",
     "py:dq": "cd python && python -m onemove_intelligence.cli data-quality",
     "py:analytics": "cd python && python -m onemove_intelligence.cli refresh-metrics",
+    "py:evaluate": "cd python && python -m onemove_intelligence.cli evaluate",
+    "py:features": "cd python && python -m onemove_intelligence.cli features",
+    "healthcheck": "tsx scripts/healthcheck.ts",
     "data:export-demo": "tsx scripts/export-demo-data.ts"
   },
   "dependencies": {

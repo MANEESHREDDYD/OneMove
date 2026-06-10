@@ -21,7 +21,10 @@ test.describe('OneMove Core Marketplace E2E Flows', () => {
     await page.fill('input[type="email"]', 'customer001@onemove.demo');
     await page.fill('input[type="password"]', 'Customer@001Move');
     await page.click('button[type="submit"]');
-    
+    // Wait for authentication to complete before navigating, otherwise the
+    // protected route redirects back to /auth/login.
+    await page.waitForURL(/.*\/customer/);
+
     await page.goto('http://localhost:3000/customer/rides');
     
     await page.fill('input[placeholder*="Where from?"]', 'JFK');
@@ -31,16 +34,16 @@ test.describe('OneMove Core Marketplace E2E Flows', () => {
     await page.click('text=Times Square');
     
     await page.waitForSelector('text=Select a Ride');
-    await page.click('text=OneMove Economy');
-    await page.click('text=Demo Wallet');
-    
-    const confirmButton = page.locator('button', { hasText: 'Confirm Economy' });
+    await page.getByText('Economy', { exact: true }).first().click();
+    await page.getByRole('button', { name: 'Demo Wallet' }).click();
+
+    const confirmButton = page.locator('button', { hasText: 'Request Economy' });
     await expect(confirmButton).toBeEnabled();
-    
+
     await confirmButton.click();
-    
-    // Should redirect to a valid details page
-    await expect(page).toHaveURL(/.*\/customer\/rides\/.+/);
+
+    // Booking shows a success state then redirects after a short delay.
+    await expect(page).toHaveURL(/.*\/customer\/rides\/.+/, { timeout: 15000 });
   });
 
   // Test 3: Eats Flow
@@ -49,23 +52,25 @@ test.describe('OneMove Core Marketplace E2E Flows', () => {
     await page.fill('input[type="email"]', 'customer001@onemove.demo');
     await page.fill('input[type="password"]', 'Customer@001Move');
     await page.click('button[type="submit"]');
-    
+    // Wait for authentication to complete before navigating.
+    await page.waitForURL(/.*\/customer/);
+
     await page.goto('http://localhost:3000/customer/eats');
     
     // Click the first restaurant link
     await page.waitForSelector('a[href^="/customer/eats/"]');
     await page.click('a[href^="/customer/eats/"]');
     
-    // Ensure detail page loads properly and we see products or at least the menu client
-    await page.waitForSelector('text=Menu');
-    
-    // Look for an "Add to Cart" button
-    const addButton = page.locator('button', { hasText: /Add \$/ }).first();
+    // Ensure the menu detail page loads (items render with an add "+" button)
+    await page.waitForSelector('button:has(.lucide-plus)');
+
+    // Add the first menu item to the cart (icon-only "+" button)
+    const addButton = page.locator('button:has(.lucide-plus)').first();
     if (await addButton.isVisible()) {
       await addButton.click();
-      
+
       // Proceed to checkout
-      await page.click('text=Proceed to Checkout');
+      await page.click('text=Go to Checkout');
       await expect(page).toHaveURL(/.*\/customer\/checkout/);
       
       // Select demo wallet and Place Order

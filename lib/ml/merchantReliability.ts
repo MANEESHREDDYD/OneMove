@@ -51,9 +51,9 @@ export async function scoreMerchantReliability(): Promise<MerchantReliability[]>
 
     // Simulated average prep time from metadata if it exists, else default 20
     let avgPrepTime = 20
-    const ordersWithPrep = orders.filter(o => o.metadata && (o.metadata as any).prep_time_mins)
+    const ordersWithPrep = orders.filter(o => o.metadata && (o.metadata as { prep_time_mins?: number }).prep_time_mins)
     if (ordersWithPrep.length > 0) {
-      const totalPrep = ordersWithPrep.reduce((sum, o) => sum + ((o.metadata as any).prep_time_mins || 0), 0)
+      const totalPrep = ordersWithPrep.reduce((sum, o) => sum + ((o.metadata as { prep_time_mins?: number }).prep_time_mins || 0), 0)
       avgPrepTime = totalPrep / ordersWithPrep.length
     }
 

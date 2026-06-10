@@ -89,7 +89,7 @@ export function calculateRideEstimate(pickup: string, dropoff: string, pickupZon
   const nearestPartnerMinutes = Math.max(1, (hash % 8) + 1)
   const confidenceScore = 95 - (distanceMiles > 10 ? 15 : 0) - (surgeMultiplier > 1.2 ? 10 : 0)
 
-  let fareExplanation = isHighDemand 
+  const fareExplanation = isHighDemand 
     ? `Fare is higher because ${pickupZone} demand is elevated and available partner supply is low.` 
     : `Standard pricing applies. Partner supply in ${pickupZone} is optimal.`
 

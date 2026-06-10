@@ -103,12 +103,12 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
         <div className="absolute inset-0 z-0">
           <SafeLeafletMap 
             center={[
-              ((order.pickup_location as any)?.lat || 40.7128), 
-              ((order.pickup_location as any)?.lng || -74.0060)
+              ((order.pickup_location as { lat?: number; lng?: number })?.lat || 40.7128), 
+              ((order.pickup_location as { lat?: number; lng?: number })?.lng || -74.0060)
             ]} 
             markers={[
-              { position: [((order.pickup_location as any)?.lat || 40.7128), ((order.pickup_location as any)?.lng || -74.0060)], label: 'Pickup' },
-              { position: [((order.dropoff_location as any)?.lat || 40.7128), ((order.dropoff_location as any)?.lng || -74.0060)], label: 'Dropoff' }
+              { position: [((order.pickup_location as { lat?: number; lng?: number })?.lat || 40.7128), ((order.pickup_location as { lat?: number; lng?: number })?.lng || -74.0060)], label: 'Pickup' },
+              { position: [((order.dropoff_location as { lat?: number; lng?: number })?.lat || 40.7128), ((order.dropoff_location as { lat?: number; lng?: number })?.lng || -74.0060)], label: 'Dropoff' }
             ]}
             height="100%"
           />
@@ -137,7 +137,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
               <div className="p-3 bg-primary/10 rounded-lg flex justify-between items-center mt-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Assigned Partner</p>
-                  <p className="font-bold">{(order.driver as any).full_name}</p>
+                  <p className="font-bold">{(order.driver as { full_name?: string }).full_name}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-muted-foreground mb-1">Contact</p>
@@ -176,7 +176,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
           <GlassCard className="p-6">
             <h3 className="font-bold mb-4 flex items-center gap-2 border-b border-primary/10 pb-2"><Receipt className="w-5 h-5"/> Order Details</h3>
             <div className="space-y-3 text-sm">
-              {orderItems?.map((item: any, i) => (
+              {(orderItems as unknown as Array<{ quantity: number; price_at_time: number; products?: { name?: string } | null }> | null)?.map((item, i) => (
                 <div key={i} className="flex justify-between items-start">
                   <div className="flex gap-2">
                     <span className="font-bold text-primary">{item.quantity}x</span>

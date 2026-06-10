@@ -110,7 +110,7 @@ export default async function DataPlatformPage() {
             Data Quality Anomalies
           </h2>
           <div className="space-y-3">
-            {failingChecks.length === 0 && qualityResults?.length! > 0 ? (
+            {failingChecks.length === 0 && (qualityResults?.length ?? 0) > 0 ? (
               <GlassCard className="p-6 text-center border-green-500/20">
                 <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
                 <p className="font-medium text-green-500">All Quality Checks Passed</p>

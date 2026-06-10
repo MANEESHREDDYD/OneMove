@@ -71,7 +71,7 @@ export default async function CustomerSupportPage() {
           <h2 className="text-xl font-semibold mb-4">Your Recent Tickets</h2>
           {tickets && tickets.length > 0 ? (
             <div className="space-y-4">
-              {tickets.map((ticket: any) => (
+              {tickets.map((ticket: { id: string; category: string; status: string; description: string; assistant_explanation?: string; created_at: string }) => (
                 <div key={ticket.id} className="bg-white rounded-lg shadow border border-gray-200 p-4">
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-sm font-semibold uppercase text-gray-600">{ticket.category}</span>
@@ -81,7 +81,7 @@ export default async function CustomerSupportPage() {
                       {ticket.status}
                     </span>
                   </div>
-                  <p className="text-gray-800 text-sm mb-3">"{ticket.description}"</p>
+                  <p className="text-gray-800 text-sm mb-3">&quot;{ticket.description}&quot;</p>
                   
                   {ticket.assistant_explanation && (
                     <div className="bg-blue-50 text-blue-800 p-2 text-xs rounded mb-2 border border-blue-100">

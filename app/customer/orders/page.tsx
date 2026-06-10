@@ -48,7 +48,7 @@ export default async function CustomerOrders() {
   
   const avgOrderValue = recentOrders.length > 0 ? totalSpent / recentOrders.length : 0
 
-  const OrderCard = ({ order }: { order: any }) => (
+  const OrderCard = ({ order }: { order: { id: string; merchants?: { name?: string } | null; service_type: string; created_at: string; status: string; total_amount?: number } }) => (
     <Link href={`/customer/orders/${order.id}`}>
       <GlassCard className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-white/5 transition-colors group">
         <div>

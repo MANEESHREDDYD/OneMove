@@ -17,7 +17,7 @@ export async function simulateExperiments(supabaseUrl: string, supabaseServiceKe
     const { data: variants } = await supabase.from('experiment_variants').select('id').eq('experiment_id', exp.id)
     if (!variants || variants.length === 0) continue
 
-    let variantAssignments = variants.map(v => ({ id: v.id, count: 0, conversions: 0, revenue: 0 }))
+    const variantAssignments = variants.map(v => ({ id: v.id, count: 0, conversions: 0, revenue: 0 }))
 
     for (const customer of customers) {
       // Assignment

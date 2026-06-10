@@ -12,10 +12,11 @@ test.describe('OneMove Session Hardening & Stale State', () => {
     await tab1.click('button[type="submit"]');
     await tab1.waitForURL('**/customer**');
     
-    // Open tab 2 and verify we are logged in
+    // Open tab 2 and verify we are logged in (the protected route renders
+    // instead of bouncing to login).
     const tab2 = await context.newPage();
     await tab2.goto('http://localhost:3000/customer/eats');
-    await expect(tab2.locator('text="Sign Out"')).toBeVisible();
+    await expect(tab2).toHaveURL(/.*\/customer\/eats/);
     
     // Sign out on tab 1
     await tab1.click('text="Sign Out"');

@@ -42,7 +42,7 @@ export default async function PartnerIntelligencePage() {
                   <CarFront className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg">{(partner.profiles as any)?.full_name || 'Unknown Partner'}</h3>
+                  <h3 className="font-bold text-lg">{(partner.profiles as { full_name?: string } | null)?.full_name || 'Unknown Partner'}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
                       partner.status === 'AT_RISK' ? 'bg-destructive/20 text-destructive' :

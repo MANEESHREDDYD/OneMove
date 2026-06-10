@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import type { OrderStatus } from '@/lib/status/statusTransitions'
 
 export async function updateMerchantOrderStatus(orderId: string, newStatus: string) {
   const supabase = await createClient()
@@ -26,7 +27,7 @@ export async function updateMerchantOrderStatus(orderId: string, newStatus: stri
   }
 
   const { isValidTransition } = await import('@/lib/status/statusTransitions')
-  if (!isValidTransition(order.service_type || 'eats', order.status as any, newStatus as any)) {
+  if (!isValidTransition(order.service_type || 'eats', order.status as OrderStatus, newStatus as OrderStatus)) {
     return { error: `Invalid status transition from ${order.status} to ${newStatus}` }
   }
 

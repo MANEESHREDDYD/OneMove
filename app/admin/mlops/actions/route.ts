@@ -3,7 +3,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { spawn } from 'child_process'
+import { exec } from 'child_process'
 import path from 'path'
 
 export async function POST(request: Request) {
@@ -17,7 +17,6 @@ export async function POST(request: Request) {
     // We cannot reliably await a long-running background process in a server action without timing out
     // But for demo purposes we can spawn it
     const scriptPath = path.join(process.cwd(), 'scripts', 'ml', 'score-all.ts')
-    const { exec } = require('child_process')
     const child = exec(`node --env-file=.env.local node_modules/tsx/dist/cli.mjs ${scriptPath}`)
     child.unref()
   }

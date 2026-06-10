@@ -36,6 +36,9 @@ export function RideBookingForm() {
   const [idempotencyKey, setIdempotencyKey] = useState<string>('')
   
   useEffect(() => {
+    // Generate the idempotency key on the client after mount to avoid a
+    // server/client hydration mismatch from a random value.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIdempotencyKey(generateIdempotencyKey())
   }, [])
 
@@ -238,7 +241,7 @@ export function RideBookingForm() {
                       return (
                         <div 
                           key={tier.id}
-                          onClick={() => setSelectedClass(tier.id as any)}
+                          onClick={() => setSelectedClass(tier.id as 'economy' | 'comfort' | 'xl' | 'premium')}
                           className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${selectedClass === tier.id ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-muted/20 hover:bg-muted/50'}`}
                         >
                           <div className="flex items-center gap-3">

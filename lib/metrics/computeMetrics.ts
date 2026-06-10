@@ -20,20 +20,20 @@ export async function computeDailyMetrics(supabaseAdmin: SupabaseClient, targetD
 
   // Calculate Aggregates
   let gmv = 0
-  let totalOrders = orders.length
+  const totalOrders = orders.length
   let completedOrders = 0
   let cancelledOrders = 0
-  let refundCount = 0
+  const refundCount = 0
 
   const activeCustomers = new Set<string>()
   const activePartners = new Set<string>()
   const activeMerchants = new Set<string>()
 
   // Merchant, Partner, Customer, and Service Type Aggregations
-  const merchantStats: Record<string, any> = {}
-  const partnerStats: Record<string, any> = {}
-  const customerStats: Record<string, any> = {}
-  const serviceStats: Record<string, any> = {}
+  const merchantStats: Record<string, { orders: number; completed: number; gmv: number }> = {}
+  const partnerStats: Record<string, { completed: number; earnings: number }> = {}
+  const customerStats: Record<string, { orders: number; spend: number }> = {}
+  const serviceStats: Record<string, { gmv: number; total: number; completed: number }> = {}
 
   for (const order of orders) {
     const isCompleted = order.status === 'completed' || order.status === 'delivered'

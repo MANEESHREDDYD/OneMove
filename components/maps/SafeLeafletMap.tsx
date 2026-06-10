@@ -52,10 +52,12 @@ export function SafeLeafletMap({ center, zoom = 13, markers = [], polyline, heig
   const [mapError, setMapError] = useState(false)
 
   useEffect(() => {
+    // Client-only mount flag to avoid SSR/CSR hydration mismatch on the map.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
     // Safely configure Leaflet icons on the client side
     import('leaflet').then((L) => {
-      delete (L.Icon.Default.prototype as any)._getIconUrl
+      delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
         iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',

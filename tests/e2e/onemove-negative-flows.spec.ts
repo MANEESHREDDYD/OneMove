@@ -15,9 +15,11 @@ test.describe('OneMove E2E Negative & Edge Case Flows', () => {
     await page.click('text="Sign Out"');
     await page.waitForURL('**/auth/login');
     
-    // Attempt to navigate back via URL
-    await page.goto('http://localhost:3000/customer');
-    
+    // Attempt to navigate back via URL. The middleware redirects the stale
+    // session to login mid-navigation, which aborts the goto — that abort is
+    // the expected behaviour, so we swallow it and assert the redirect.
+    await page.goto('http://localhost:3000/customer').catch(() => {});
+
     // Should be rejected back to login
     await page.waitForURL('**/auth/login');
     
@@ -25,7 +27,7 @@ test.describe('OneMove E2E Negative & Edge Case Flows', () => {
     await page.fill('input[type="email"]', 'customer001@onemove.demo');
     await page.fill('input[type="password"]', 'WrongPassword123');
     await page.click('button[type="submit"]');
-    await expect(page.locator('text="Invalid login credentials"')).toBeVisible();
+    await expect(page.locator('text=Could not authenticate user')).toBeVisible();
   });
 
   test('Ride Booking: Invalid inputs block booking', async ({ page }) => {
@@ -37,8 +39,8 @@ test.describe('OneMove E2E Negative & Edge Case Flows', () => {
     await page.waitForURL('**/customer**');
     await page.goto('http://localhost:3000/customer/rides');
     
-    // Button should be disabled initially
-    const bookButton = page.locator('button:has-text("Book Ride")');
+    // The submit button is disabled until both destinations are entered.
+    const bookButton = page.locator('button:has-text("Enter Destinations")');
     await expect(bookButton).toBeDisabled();
     
     // Put same pickup and dropoff
@@ -59,7 +61,8 @@ test.describe('OneMove E2E Negative & Edge Case Flows', () => {
     await page.fill('input[type="email"]', 'customer001@onemove.demo');
     await page.fill('input[type="password"]', 'Customer@001Move');
     await page.click('button[type="submit"]');
-    
+    await page.waitForURL('**/customer**');
+
     // Force direct navigate to a merchant without adding items
     await page.goto('http://localhost:3000/customer/eats');
     await page.waitForSelector('a[href^="/customer/eats/"]');
