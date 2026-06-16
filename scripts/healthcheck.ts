@@ -14,7 +14,7 @@ async function checkHealth() {
     const supabase = createClient(supabaseUrl, supabaseKey);
     
     // Check connection
-    const { data, error } = await supabase.from('users').select('id').limit(1);
+    const { data, error } = await supabase.from('profiles').select('id').limit(1);
     if (error) throw error;
     
     console.log("✅ Supabase Connection: OK");
