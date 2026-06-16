@@ -39,7 +39,7 @@ docker/              # Dockerfiles and compose configs for web/intelligence
 docs/                # Extensive technical architecture and QA reports
 ```
 
-*Java and C are optional portfolio subsystems. They are not required for the core localhost demo. They demonstrate how marketplace platforms split specialized workloads by language.*
+*Java and C are optional portfolio subsystems. They are not required for the core localhost demo. They are validated through CI where Java/Maven and GCC/Make are available.*
 
 ## The Problem
 Running a multi-sided marketplace (Rides, Eats, Grocery, Courier) requires extreme data coordination. Most MVPs focus purely on UI. OneMove focuses on the backend: secure data isolation, complex multi-tenant data pipelines, Python-driven analytics, and forward-deployed Docker infrastructures.
