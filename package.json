@@ -85,7 +85,10 @@
     "py:features": "cd python && python -m onemove_intelligence.cli features",
     "healthcheck": "tsx scripts/healthcheck.ts",
     "data:export-demo": "tsx scripts/export-demo-data.ts",
-    "demo:reset": "tsx scripts/reset-demo-state.ts"
+    "demo:reset": "tsx scripts/reset-demo-state.ts",
+    "java:test": "cd java/onemove-risk-service && mvn test",
+    "java:build": "cd java/onemove-risk-service && mvn package",
+    "c:test": "cd c/dispatch-engine && make test"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -127,7 +130,7 @@
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
     "autocannon": "^8.0.0",
-    "dotenv": "^16.4.5",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "fast-check": "^4.8.0",
