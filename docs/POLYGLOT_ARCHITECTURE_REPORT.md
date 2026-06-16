@@ -10,4 +10,4 @@ OneMove has evolved from a pure Next.js application into a mature, multi-languag
 - **Java**: Demonstrates an enterprise backend risk service (`java/onemove-risk-service`).
 - **C**: Demonstrates a high-performance dispatch candidate ranking engine (`c/dispatch-engine`).
 
-*Note: Java and C are optional portfolio subsystems. They are not required for the core localhost demo. They demonstrate how marketplace platforms split specialized workloads by language.*
+*Java and C are optional portfolio subsystems. They are not required for the core localhost demo. They are validated through CI where Java/Maven and GCC/Make are available.*

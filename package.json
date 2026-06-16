@@ -88,7 +88,9 @@
     "demo:reset": "tsx scripts/reset-demo-state.ts",
     "java:test": "cd java/onemove-risk-service && mvn test",
     "java:build": "cd java/onemove-risk-service && mvn package",
-    "c:test": "cd c/dispatch-engine && make test"
+    "c:build": "cd c/dispatch-engine && make",
+    "c:test": "cd c/dispatch-engine && make test",
+    "c:benchmark": "cd c/dispatch-engine && make benchmark"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

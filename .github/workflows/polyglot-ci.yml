@@ -1,0 +1,43 @@
+name: Polyglot CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  java-ci:
+    name: Java Risk Service CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+          
+      - name: Build and Test Java Risk Service
+        run: |
+          npm run java:build
+          npm run java:test
+
+  c-ci:
+    name: C Dispatch Engine CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+          
+      - name: Build, Test, and Benchmark C Engine
+        run: |
+          npm run c:build
+          npm run c:test
+          npm run c:benchmark
