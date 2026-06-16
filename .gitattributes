@@ -5,12 +5,7 @@ test-results/** linguist-generated=true
 coverage/** linguist-generated=true
 docs/**/*.html linguist-generated=true
 *.tsbuildinfo linguist-generated=true
-
-# Ignore Next.js App UI and Shadcn UI components as they skew TS percentages
-# We want to showcase our Python ML, SQL Analytics, and core backend logic
-app/** linguist-vendored=true
-components/** linguist-vendored=true
-tests/e2e/** linguist-vendored=true
+.next/** linguist-generated=true
 
 # Force Jupyter Notebooks to be classified as Python instead of "Other"
 *.ipynb linguist-language=Python

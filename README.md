@@ -1,8 +1,7 @@
 # OneMove
 
-**OneMove is a full-stack four-sided marketplace and intelligence platform.**
-
-*A super-app ecosystem built with Next.js, Supabase, Python Data Science packages, SQL Analytics Engineering, and robust Deployment topologies.*
+**OneMove is a full-stack polyglot Data/ML marketplace intelligence platform:**
+*Next.js + Supabase/Postgres/RLS + Python ML/Data + SQL analytics + Java risk service + C dispatch engine.*
 
 **Status:**
 - Private localhost portfolio demo: GO
@@ -31,12 +30,16 @@ app/                 # Next.js App Router frontend and server actions
 supabase/            # Database migrations, RLS policies, and triggers
 python/              # Standalone Python package for ML scoring & DQ
 analytics/           # SQL data warehouse layer (marts, dimensions, facts)
+java/                # Java Spring Boot Risk/Order Validation service
+c/                   # High-performance C Dispatch/Distance ranking engine
 data/                # Synthetic deterministic CSV exports for local ML
 deploy/              # Deployment checklists, rollout plans, smoke tests
 docker/              # Dockerfiles and compose configs for web/intelligence
 .github/workflows/   # CI/CD pipelines for Node, Python, and SQL Quality
 docs/                # Extensive technical architecture and QA reports
 ```
+
+*Java and C are optional portfolio subsystems. They are not required for the core localhost demo. They demonstrate how marketplace platforms split specialized workloads by language.*
 
 ## The Problem
 Running a multi-sided marketplace (Rides, Eats, Grocery, Courier) requires extreme data coordination. Most MVPs focus purely on UI. OneMove focuses on the backend: secure data isolation, complex multi-tenant data pipelines, Python-driven analytics, and forward-deployed Docker infrastructures.
