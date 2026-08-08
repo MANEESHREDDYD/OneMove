@@ -53,3 +53,8 @@ __pycache__/
 
 # Nested/embedded project (not part of OneMove)
 Assist/
+
+# Ignore large raw command logs
+reports/zonepilot_build/raw_logs/COMMAND_LOG_ARCHIVE.txt
+
+reports/zonepilot_build/raw_logs/

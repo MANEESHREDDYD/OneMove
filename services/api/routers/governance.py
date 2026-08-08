@@ -1,24 +1,19 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
 
-router = APIRouter()
+router = APIRouter(prefix="/governance", tags=["Governance"])
 
-class ConsentLog(BaseModel):
-    participant_id: str
-    consent_version: str
+@router.post("/consent")
+def submit_consent(participant_id: str, agreed: bool):
+    return {"status": "CONSENT_RECORDED", "participant_id": participant_id, "agreed": agreed}
 
-@router.post("/v1/governance/consent")
-async def log_consent(consent: ConsentLog):
-    """
-    Log participant consent for ZonePilot study.
-    """
-    return {"status": "success"}
+@router.post("/withdraw")
+def withdraw_participant(participant_id: str):
+    return {"status": "WITHDRAWN", "participant_id": participant_id}
 
-@router.post("/v1/governance/withdraw/{participant_id}")
-async def process_withdrawal(participant_id: str):
-    """
-    FR-4b: Data withdrawal mechanics.
-    Sets all operational records for participant to 'WITHDRAWN' status.
-    PII masking occurs downstream.
-    """
-    return {"status": "success", "message": f"Participant {participant_id} withdrawn."}
+@router.post("/activate")
+def activate_participant(participant_id: str):
+    return {"status": "ACTIVATED", "participant_id": participant_id}
+
+@router.get("/retention")
+def retention_audit():
+    return {"status": "AUDIT_RUNNING", "flagged_records": 0}

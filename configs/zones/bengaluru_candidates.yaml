@@ -1,0 +1,34 @@
+status: CANDIDATE_NOT_OWNER_APPROVED
+city: Bengaluru
+state: Karnataka
+country: India
+timezone: Asia/Kolkata
+candidates:
+  - name: Koramangala
+    id: BLR_Z1_KRM
+    typology: dense_commercial
+    description: Core Koramangala polygon. Highest density of cloud kitchens and quick-commerce.
+    anchor_cells_h3_8:
+      - 8861892529fffff
+      - 886189252bfffff
+  - name: HSR Layout
+    id: BLR_Z2_HSR
+    typology: dense_residential
+    description: Sectors 1-7. Ordered grid, high tech-worker population.
+    anchor_cells_h3_8:
+      - 88618924e3fffff
+      - 88618924e1fffff
+  - name: Indiranagar
+    id: BLR_Z3_IND
+    typology: premium_mixed
+    description: 100ft road corridor, premium restaurants, high AOV, arterial bottleneck.
+    anchor_cells_h3_8:
+      - 88618925a3fffff
+      - 88618925a1fffff
+  - name: Whitefield
+    id: BLR_Z4_WHF
+    typology: peripheral_tech_hub
+    description: ITPL and surrounding enclaves. Long delivery distances, campus delays.
+    anchor_cells_h3_8:
+      - 88618921e3fffff
+      - 88618921e1fffff

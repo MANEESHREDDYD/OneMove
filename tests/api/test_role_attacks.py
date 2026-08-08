@@ -1,0 +1,44 @@
+import pytest
+import requests
+import os
+
+SUPABASE_URL = "http://127.0.0.1:54321"
+ANON_KEY = "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
+
+def test_role_attacks():
+    email = "attacker@onemove.com"
+    password = "password123"
+    
+    auth_url = f"{SUPABASE_URL}/auth/v1/signup"
+    headers = {"apikey": ANON_KEY, "Content-Type": "application/json"}
+    
+    # Try to signup with malicious raw_user_meta_data assigning admin
+    res = requests.post(auth_url, json={"email": email, "password": password, "data": {"role": "admin"}}, headers=headers)
+    if res.status_code != 200:
+        res = requests.post(f"{SUPABASE_URL}/auth/v1/token?grant_type=password", json={"email": email, "password": password}, headers=headers)
+    
+    user = res.json()
+    token = user["access_token"]
+    user_id = user["user"]["id"]
+
+    headers_auth = {
+        "apikey": ANON_KEY, 
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    # Verify that the trigger forced them to customer
+    prof = requests.get(f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{user_id}", headers=headers_auth).json()
+    assert prof[0]["role"] == "customer", "Trigger failed to force customer role on signup"
+
+    # Try self role update
+    res = requests.patch(f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{user_id}", headers=headers_auth, json={"role": "admin"})
+    
+    prof = requests.get(f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{user_id}", headers=headers_auth).json()
+    assert prof[0]["role"] == "customer", "Role update attack succeeded!"
+    print("Role attacks blocked successfully.")
+
+    # Try reading studies
+    res = requests.get(f"{SUPABASE_URL}/rest/v1/studies", headers=headers_auth)
+    assert len(res.json()) == 0, "Non-admin could read studies table!"
+
