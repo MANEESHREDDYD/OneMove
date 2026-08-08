@@ -49,18 +49,20 @@ function CaptureForm() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
-      const payloadData = {
-         ...formData,
-         observationTimestamp: new Date().toISOString(),
-         timeQuality: "PRECISE"
-      };
-
       const eventPayload = {
-         order_id: order_id,
-         event_type: "PROBE",
-         occurred_at: new Date().toISOString(),
-         provenance: "OBSERVED",
-         payload: payloadData
+         study_id: searchParams?.get('study_id') || '00000000-0000-0000-0000-000000000000',
+         assignment_id: searchParams?.get('assignment_id') || '00000000-0000-0000-0000-000000000000',
+         zone_cluster: 'Z-01',
+         platform: 'UBER',
+         intent: 'GO_TO_CENTER',
+         protocol: 'ANCHOR',
+         observed_at_device: new Date().toISOString(),
+         eta_low_min: formData.etaLow ? parseInt(formData.etaLow, 10) : null,
+         eta_high_min: formData.etaHigh ? parseInt(formData.etaHigh, 10) : null,
+         option_count: formData.optionCount ? parseInt(formData.optionCount, 10) : null,
+         availability_state: formData.availability === 'AVAILABLE' ? 'IN_STOCK' : 'UNAVAILABLE',
+         reference_basket_price: formData.basketPrice ? parseFloat(formData.basketPrice) : null,
+         protocol_version: '1.0'
       };
 
       saveToOutbox(eventPayload).then(() => { 

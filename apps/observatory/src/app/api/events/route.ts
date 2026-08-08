@@ -5,7 +5,10 @@ export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization') || '';
   
   try {
-    const res = await fetch("http://127.0.0.1:8000/v1/events", {
+    const isProbe = data.protocol !== undefined;
+    const backendEndpoint = isProbe ? "http://127.0.0.1:8000/v1/probes" : "http://127.0.0.1:8000/v1/events";
+
+    const res = await fetch(backendEndpoint, {
       method: "POST",
       headers: {
         "Authorization": authHeader,

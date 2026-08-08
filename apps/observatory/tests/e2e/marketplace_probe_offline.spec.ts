@@ -1,10 +1,15 @@
 import { test, expect } from '@playwright/test';
 
-const SUPABASE_URL = "http://127.0.0.1:54321";
-const ANON_KEY = process.env.SUPABASE_ANON_KEY || "sb_publishable" + "_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH";
-const LOCAL_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "sb_secret" + "_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz";
+const SUPABASE_URL = process.env.SUPABASE_URL || "http://127.0.0.1:54321";
+const ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const LOCAL_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!ANON_KEY || !LOCAL_SERVICE_KEY) {
+    throw new Error("Missing Supabase test keys in environment. Run via run_e2e.ps1 or inject from npx supabase status.");
+}
 
 let order_id = '';
+let study_id = '';
 let test_token = '';
 
 test.beforeAll(async () => {
@@ -42,7 +47,7 @@ test.beforeAll(async () => {
         })
     });
     const study = await studyRes.json();
-    const study_id = study[0].id;
+    study_id = study[0].id;
 
     await fetch(`${SUPABASE_URL}/rest/v1/participants`, {
         method: 'POST',
@@ -68,7 +73,7 @@ test.describe('Offline Outbox Behavior', () => {
         localStorage.setItem('zonepilot_jwt', token);
     }, test_token);
 
-    await page.goto(`/capture?order_id=${order_id}`);
+    await page.goto(`/capture?study_id=${study_id}&assignment_id=00000000-0000-0000-0000-000000000000`);
     
     await context.setOffline(true);
     
@@ -87,7 +92,7 @@ test.describe('Offline Outbox Behavior', () => {
     await page.reload();
     await page.waitForTimeout(3000);
     
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/volunteer_order_events?order_id=eq.${order_id}`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/probe_observations?study_id=eq.${study_id}`, {
         headers: {
             "apikey": ANON_KEY,
             "Authorization": `Bearer ${test_token}`
@@ -96,7 +101,8 @@ test.describe('Offline Outbox Behavior', () => {
     const data = await res.json();
     
     expect(data.length).toBe(1);
-    expect(data[0].event_type).toBe('PROBE');
-    expect(data[0].payload.etaLow).toBe('20');
+    expect(data[0].protocol).toBe('ANCHOR');
+    expect(data[0].eta_low_min).toBe(20);
+    expect(data[0].eta_high_min).toBe(25);
   });
 });

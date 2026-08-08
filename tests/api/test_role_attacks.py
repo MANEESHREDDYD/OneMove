@@ -2,8 +2,8 @@ import pytest
 import requests
 import os
 
-SUPABASE_URL = "http://127.0.0.1:54321"
-ANON_KEY = "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://127.0.0.1:54321")
+ANON_KEY = os.environ["SUPABASE_ANON_KEY"]
 
 def test_role_attacks():
     email = "attacker@onemove.com"
