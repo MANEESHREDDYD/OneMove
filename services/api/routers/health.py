@@ -1,4 +1,5 @@
 import os
+
 import httpx
 from fastapi import APIRouter, Response
 
@@ -10,24 +11,18 @@ def liveness_probe():
     return {"status": "ok"}
 
 @router.get("/readyz")
-async def readiness_probe(response: Response):
+def readiness_probe(response: Response):
     """Readiness probe checking critical dependencies like DB"""
-    supabase_url = os.environ.get("SUPABASE_URL")
-    supabase_anon_key = os.environ.get("SUPABASE_ANON_KEY")
+    db_url = os.environ.get("ZONEPILOT_DB_URL")
     
     db_connected = False
     
-    if supabase_url and supabase_anon_key:
+    if db_url:
+        import psycopg
         try:
-            # Quick lightweight HTTP HEAD check against the Supabase REST API
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                res = await client.head(
-                    f"{supabase_url}/rest/v1/",
-                    headers={"apikey": supabase_anon_key}
-                )
-                if res.status_code in (200, 401, 403, 404): 
-                    # If it responds with HTTP logic, it's reachable. 
-                    # 404/401 implies reachable but maybe path/auth mismatch, still "connected" to network.
+            with psycopg.connect(db_url, connect_timeout=3) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
                     db_connected = True
         except Exception:
             pass
