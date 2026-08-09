@@ -36,40 +36,45 @@ def check_lifecycle_ordering(record: Dict[str, Any]) -> bool:
     delivered = to_ts(record.get('delivered_at'))
     
     # We only assert if BOTH adjacent timestamps exist
-    if ordered and accepted and ordered > accepted: return False
-    if accepted and ready and accepted > ready: return False
-    if ready and pickup and ready > pickup: return False
-    if pickup and delivered and pickup > delivered: return False
+    if ordered and accepted and ordered > accepted:
+        return False
+    if accepted and ready and accepted > ready:
+        return False
+    if ready and pickup and ready > pickup:
+        return False
+    if pickup and delivered and pickup > delivered:
+        return False
     
     return True
 
-def check_future_leakage(records: List[Dict[str, Any]]) -> bool:
-    """Ensure no timestamps are in the future relative to execution time."""
-    now_ts = datetime.now(timezone.utc).timestamp()
+def check_temporal_semantics(records: List[Dict[str, Any]], decision_time_ts: float) -> bool:
+    """
+    Ensure no temporal leakage.
+    information_available_at <= decision_time
+    valid_at may be in the future.
+    """
     for record in records:
-        for key, value in record.items():
-            if isinstance(value, str) and (key.endswith('_at') or key.endswith('_time')):
-                ts = to_ts(value)
-                if ts and ts > now_ts + 300: # allow 5 min clock skew
-                    return False
+        info_at = to_ts(record.get('information_available_at')) or to_ts(record.get('retrieved_at'))
+        if info_at and info_at > decision_time_ts + 300: # allow 5 min skew
+            return False
+            
+        # We explicitly allow valid_at > decision_time_ts
     return True
 
 def check_invalid_coordinates(records: List[Dict[str, Any]]) -> bool:
-    """Ensure latitudes and longitudes are physically valid for Bengaluru pilot (approx)."""
+    """Ensure latitudes and longitudes are globally valid. Tag if outside Bengaluru/Pilot."""
     for record in records:
-        # Check standard point schemas
         lat = record.get('lat') or record.get('latitude')
         lon = record.get('lon') or record.get('longitude')
+        
         if lat is not None and lon is not None:
-            if not (12.0 <= float(lat) <= 13.5): return False
-            if not (77.0 <= float(lon) <= 78.5): return False
+            if not (-90.0 <= float(lat) <= 90.0):
+                return False
+            if not (-180.0 <= float(lon) <= 180.0):
+                return False
             
-        # Check pickup/dropoff points if exist
-        pickup_loc = record.get('pickup_location')
-        if pickup_loc and isinstance(pickup_loc, dict):
-            plat = pickup_loc.get('lat')
-            plon = pickup_loc.get('lon')
-            if plat is not None and not (12.0 <= float(plat) <= 13.5): return False
+            record['in_bengaluru'] = (12.0 <= float(lat) <= 13.5) and (77.0 <= float(lon) <= 78.5)
+            record['in_pilot_bbox'] = (12.90 <= float(lat) <= 12.98) and (77.58 <= float(lon) <= 77.65)
             
     return True
 
@@ -107,8 +112,9 @@ def run_dq_checks(silver_records: List[Dict[str, Any]]) -> bool:
         print("DQ FAILED: Staging/Synthetic data detected in official records.")
         return False
         
-    if not check_future_leakage(silver_records):
-        print("DQ FAILED: Future temporal leakage detected.")
+    now_ts = datetime.now(timezone.utc).timestamp()
+    if not check_temporal_semantics(silver_records, now_ts):
+        print("DQ FAILED: Temporal leakage detected (information_available_at > decision_time).")
         return False
         
     if not check_invalid_coordinates(silver_records):
