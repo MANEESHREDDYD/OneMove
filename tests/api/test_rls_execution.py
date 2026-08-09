@@ -68,6 +68,7 @@ def setup_users():
         "study_phase": "DRY_RUN",
         "status": "planned"
     })
+    assert study_res.status_code in (200, 201), f"Failed to create study: {study_res.text}"
     study_id = study_res.json()[0]["id"]
     
     # 2. Add participants (auth triggers might have done this, but we do it manually to be safe if no trigger)
@@ -80,12 +81,12 @@ def setup_users():
     a1_res = requests.post(f"{SUPABASE_URL}/rest/v1/assignments", headers=service_headers, json={
         "study_id": study_id,
         "participant_id": user1["id"],
-        "zone_cluster": "Indiranagar",
-        "platform": "SWIGGY",
-        "intent": "FOOD",
-        "protocol": "ANCHOR",
-        "status": "ACTIVE"
+        "zone_cluster": "BGLR-1",
+        "platform": "APP",
+        "intent": "TEST",
+        "protocol": "ANCHOR"
     })
+    assert a1_res.status_code in (200, 201), f"Failed to create assignment 1: {a1_res.text}"
     assign1 = a1_res.json()[0]["id"]
     
     a2_res = requests.post(f"{SUPABASE_URL}/rest/v1/assignments", headers=service_headers, json={

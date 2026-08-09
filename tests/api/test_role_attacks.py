@@ -39,7 +39,10 @@ def test_role_attacks():
     }
 
     # Verify that the trigger forced them to customer
-    prof = requests.get(f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{user_id}", headers=headers_auth).json()
+    prof_res = requests.get(f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{user_id}", headers=headers_auth)
+    assert prof_res.status_code == 200, f"Failed to get profile: {prof_res.text}"
+    prof = prof_res.json()
+    assert len(prof) > 0, f"Profile not found for user {user_id}. DB state might be corrupt or RLS failed."
     assert prof[0]["role"] == "customer", "Trigger failed to force customer role on signup"
 
     # Try self role update
