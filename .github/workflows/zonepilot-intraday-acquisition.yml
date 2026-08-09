@@ -1,0 +1,50 @@
+name: ZonePilot Intraday Acquisition
+
+on:
+  schedule:
+    - cron: '*/15 * * * *' # Every 15 minutes
+  workflow_dispatch:
+
+permissions:
+  contents: write # Needed if we decide to commit interval fragments to registry, else read.
+
+jobs:
+  intraday-snapshot:
+    runs-on: ubuntu-latest
+    
+    concurrency:
+      group: zonepilot-intraday
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          pip install httpx pyyaml pytz
+
+      - name: Run Intraday Collector
+        env:
+          ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/data_root
+          PYTHONPATH: ${{ github.workspace }}
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+        run: |
+          python services/collectors/scheduler_intraday.py
+
+      - name: Bundle Intraday Artifacts
+        run: |
+          cd ${{ github.workspace }}/data_root/private/official
+          tar -cvf intraday_interval.tar raw/
+        
+      - name: Upload Research Data Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zp-intraday-bundle-${{ github.run_id }}
+          path: ${{ github.workspace }}/data_root/private/official/intraday_interval.tar
+          retention-days: 365

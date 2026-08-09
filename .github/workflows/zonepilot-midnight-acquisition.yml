@@ -1,0 +1,64 @@
+name: ZonePilot Midnight Acquisition
+
+on:
+  schedule:
+    - cron: '30 18 * * *' # 18:30 UTC = 00:00 IST
+  workflow_dispatch: # Allows manual trigger
+
+permissions:
+  contents: write # Needed to commit rolling metadata/manifests
+
+jobs:
+  midnight-rollover:
+    runs-on: ubuntu-latest
+    
+    concurrency:
+      group: zonepilot-midnight
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          pip install httpx pyyaml pytz
+
+      - name: Run Midnight Collector
+        env:
+          ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/data_root
+          PYTHONPATH: ${{ github.workspace }}
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+        run: |
+          python services/collectors/scheduler_midnight.py
+
+      - name: Check rolling cutoff and Retention Cleanup
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python scripts/retention_manager.py
+
+      - name: Bundle Daily Artifacts
+        run: |
+          cd ${{ github.workspace }}/data_root/private/official
+          tar -cvf raw_day.tar raw/
+          # Ideally, you would extract paths relevant to the day logic here.
+
+      - name: Upload Research Data Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zp-daily-bundle-${{ github.run_id }}
+          path: ${{ github.workspace }}/data_root/private/official/raw_day.tar
+          retention-days: 365
+
+      - name: Commit Rolling Summary Data
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/rolling/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "data: finalize external evidence rollover" && git push)
