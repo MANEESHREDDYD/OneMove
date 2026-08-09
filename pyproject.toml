@@ -32,7 +32,8 @@ extend-exclude = [
     "node_modules",
     "apps/observatory/node_modules",
     "java",
-    "c"
+    "c",
+    "*.ipynb"
 ]
 line-length = 120
 
