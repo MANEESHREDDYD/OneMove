@@ -44,6 +44,7 @@ const eslintConfig = defineConfig([
       "**/test-results/**",
       "**/coverage/**",
       "**/.supabase/**",
+      "**/supabase/.temp/**",
       "**/.cache/**",
       "**/data_root/**"
     ],
