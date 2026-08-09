@@ -146,11 +146,19 @@ def run_etl_pipeline() -> Dict[str, Any]:
     rules.append({"id": "DQ-002", "name": "ETA high >= ETA low", "status": "PASS" if r2 else "FAIL"})
     
     # Rule 3: Non-negative ETA low
-    r3 = bool((df_raw['eta_low_min'] >= 0).all()) if (not df_raw.empty and 'eta_low_min' in df_raw and df_raw['eta_low_min'].notnull().any()) else True
+    if not df_raw.empty and 'eta_low_min' in df_raw:
+        valid_eta_low = df_raw['eta_low_min'].notnull()
+        r3 = bool((df_raw.loc[valid_eta_low, 'eta_low_min'] >= 0).all()) if valid_eta_low.any() else True
+    else:
+        r3 = True
     rules.append({"id": "DQ-003", "name": "Non-negative ETA low", "status": "PASS" if r3 else "FAIL"})
     
     # Rule 4: Non-negative Option Count
-    r4 = bool((df_raw['option_count'] >= 0).all()) if (not df_raw.empty and 'option_count' in df_raw and df_raw['option_count'].notnull().any()) else True
+    if not df_raw.empty and 'option_count' in df_raw:
+        valid_opt = df_raw['option_count'].notnull()
+        r4 = bool((df_raw.loc[valid_opt, 'option_count'] >= 0).all()) if valid_opt.any() else True
+    else:
+        r4 = True
     rules.append({"id": "DQ-004", "name": "Non-negative Option Count", "status": "PASS" if r4 else "FAIL"})
     
     # Rule 5: Valid Protocol (ANCHOR/BURST)
