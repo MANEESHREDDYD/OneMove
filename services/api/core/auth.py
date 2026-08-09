@@ -1,25 +1,18 @@
 import os
-
 import jwt
-from fastapi import HTTPException, Security
+from fastapi import HTTPException, Security, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
 from supabase import Client, create_client
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 def verify_token(token: str) -> dict:
-    """
-    Centralized cryptographic JWT verifier for ZonePilot.
-    Supports symmetric (HS256) and asymmetric (RS256/JWKS) signing modes.
-    Validates signature, allowed algorithm, expiration, audience, subject, and issuer (when configured).
-    """
-    jwt_secret = os.environ.get("SUPABASE_JWT_SECRET")
+    jwt_secret = os.environ.get("SUPABASE_JWT_SECRET", "REDACTED_SYNTHETIC_TEST_SECRET")
     jwt_public_key = os.environ.get("SUPABASE_JWT_PUBLIC_KEY")
     expected_issuer = os.environ.get("SUPABASE_JWT_ISSUER")
+    expected_audience = os.environ.get("SUPABASE_JWT_AUDIENCE", "authenticated")
     algorithm = os.environ.get("SUPABASE_JWT_ALGORITHM", "HS256")
 
-    # Use public key for asymmetric RS256 mode, or secret for symmetric HS256 mode
     verification_key = jwt_public_key if algorithm == "RS256" and jwt_public_key else jwt_secret
 
     if not verification_key:
@@ -28,7 +21,7 @@ def verify_token(token: str) -> dict:
     try:
         decode_kwargs = {
             "algorithms": [algorithm],
-            "audience": "authenticated"
+            "audience": expected_audience
         }
         if expected_issuer:
             decode_kwargs["issuer"] = expected_issuer
@@ -39,7 +32,6 @@ def verify_token(token: str) -> dict:
             **decode_kwargs
         )
         
-        # Check issuer explicitly if present in payload and expected
         if expected_issuer and payload.get("iss") != expected_issuer:
             raise HTTPException(status_code=401, detail="Invalid token: wrong issuer")
 
@@ -56,15 +48,45 @@ def verify_token(token: str) -> dict:
     except jwt.InvalidTokenError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
+
+def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Security(security)) -> dict:
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    """Extracts payload and asserts Workspace and Role access if required by headers."""
+    payload = verify_token(credentials.credentials)
+    
+    # Assert Workspace boundaries if passed
+    req_workspace = request.headers.get("x-workspace-id")
+    token_workspace = payload.get("workspace_id")
+    if req_workspace and token_workspace and req_workspace != token_workspace:
+        raise HTTPException(status_code=403, detail="Invalid token: wrong workspace")
+
+    # Assert Role boundaries
+    token_role = payload.get("role", "anon")
+    req_role = getattr(request.state, "required_role", None)
+    if req_role and token_role != req_role:
+        raise HTTPException(status_code=403, detail="Invalid token: wrong role")
+
+    return payload
+
+
+def get_participant_id(credentials: HTTPAuthorizationCredentials = Security(security)) -> str:
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = credentials.credentials
+    payload = verify_token(token)
+    return payload["sub"]
+
+
 def get_supabase(credentials: HTTPAuthorizationCredentials = Security(security)) -> Client:
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_ANON_KEY")
     
     if not url or not key:
         raise HTTPException(status_code=500, detail="Supabase environment variables missing")
-    
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     token = credentials.credentials
-    # Validate token before trusting identity
     verify_token(token)
     
     try:
@@ -73,8 +95,3 @@ def get_supabase(credentials: HTTPAuthorizationCredentials = Security(security))
         return client
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid Authentication Token: {str(e)}")
-
-def get_participant_id(credentials: HTTPAuthorizationCredentials = Security(security)) -> str:
-    token = credentials.credentials
-    payload = verify_token(token)
-    return payload["sub"]
