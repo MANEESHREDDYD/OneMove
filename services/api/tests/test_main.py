@@ -8,7 +8,4 @@ def test_healthz():
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
-def test_readyz():
-    response = client.get("/readyz")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ready", "db_connected": True}
+

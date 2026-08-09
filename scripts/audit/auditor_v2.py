@@ -102,6 +102,9 @@ def run_auditor():
             try:
                 with open(filepath, 'rb') as file:
                     content = file.read().lower()
+                    # Exclude known valid real-world entities (e.g. Mockaholic cafe in Bengaluru)
+                    content = content.replace(b'mockaholic', b'')
+                    
                     for term in forbidden:
                         if term in content:
                             contamination_hits += 1

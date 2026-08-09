@@ -1,5 +1,8 @@
 
-from fastapi import APIRouter, HTTPException, Request
+import h3
+import os
+from fastapi import APIRouter, HTTPException, Request, Depends
+from services.api.core.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1", tags=["observatory"])
 
@@ -17,10 +20,29 @@ def standard_error(code: str, message: str, status_code: int = 400):
     )
 
 @router.get("/zones")
-def get_zones():
+def get_zones(user: dict = Depends(get_current_user)):
     """Return all modeled zones (H3 cells or custom boundaries)"""
-    # Pending actual DB extraction of real graph
-    return {"data": []}
+    resolution = int(os.environ.get("ZONEPILOT_H3_RESOLUTION", "9"))
+    
+    # Pilot BBOX: 77.58,12.90,77.65,12.98
+    poly = h3.LatLngPoly([
+        (12.90, 77.58),
+        (12.90, 77.65),
+        (12.98, 77.65),
+        (12.98, 77.58)
+    ])
+    
+    hexagons = h3.polygon_to_cells(poly, resolution)
+    
+    zones = []
+    for h in hexagons:
+        zones.append({
+            "zone_id": h,
+            "resolution": resolution,
+            "boundary": h3.cell_to_boundary(h)
+        })
+        
+    return {"data": zones}
 
 @router.get("/zones/{zone_id}/state")
 def get_zone_state(zone_id: str):

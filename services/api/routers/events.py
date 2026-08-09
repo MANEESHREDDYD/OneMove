@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from core.auth import get_supabase
+from services.api.core.auth import get_supabase
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
@@ -72,7 +72,7 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
     token = auth_header.split(" ")[1]
     
     # Cryptographic JWT verification
-    from core.auth import verify_token
+    from services.api.core.auth import verify_token
     payload = verify_token(token)
     participant_id = payload["sub"]
     
