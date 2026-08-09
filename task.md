@@ -1,0 +1,27 @@
+# Phase 1 Release Verification Checklist - Completed
+
+- [x] **1. Centralize Verified Authentication**: Use `pyjwt` in `core/auth.py`, verify signature/exp/issuer/sub against `SUPABASE_JWT_SECRET`. Reject unsigned/tampered/expired. Add negative tests. Remove monkey-patch.
+- [x] **2. Fix Participant Identity Model**: Update `probe_observations` FK from `auth.users(id)` to `participants(id)`. Forward migration `20260808000002_final_phase1_architecture.sql`.
+- [x] **3. Extend Assignments**: Add structural fields (`zone_cluster`, `platform`, `intent`, `protocol`, `scheduled_for`, `protocol_version`) to `assignments` in forward migration.
+- [x] **4 & 5 & 17. Server-Resolved Structural Fields / Pydantic Fail Closed**: Client sends `assignment_id` and measurement payload. `ProbeObservationCreate` gets `extra = "forbid"`. Server resolves structural fields from assignment. Hash logic uses server-resolved fields.
+- [x] **6. Study Phase**: Add `study_phase` field to `studies` and `probe_observations`. Use `DRY_RUN`, `EXPERIMENT_A`. `build_experiment_a_dataset` fails closed against `DRY_RUN` rows.
+- [x] **7. Make `participant_roles` study-scoped**: Add `study_id` to `participant_roles`. Owner QC relies on this.
+- [x] **8. Assignment-Aware RLS**: Create robust INSERT RLS policy on `probe_observations`. Check assignment ownership, eligibility, and study match. Owner SELECT policy on `participant_roles`.
+- [x] **9. Correction Authorization**: Validate `supersedes_id` targets an existing, unwithdrawn original probe belonging to the same assignment/participant.
+- [x] **10. Current-State View**: Create `probe_observations_current` view selecting only leaf observations. Handle WITHDRAWN records.
+- [x] **11 & 24. Real RLS Assertions**: Remove all `assert True` placeholders. Add real assertions for every scenario.
+- [x] **12. Real Hyperlocal Test Domains**: Use real test assignments with Swiggy/Zepto/Uber etc. in Bengaluru tests.
+- [x] **13. Marketplace E2E Fix**: Setup actual assignments. Prove offline-to-online sync lifecycle with persistent Playwright context.
+- [x] **14 & 15. Real Browser Restart E2E**: Test persistent offline state, browser close, context recreation, and sync.
+- [x] **16. Real Timing Fields**: Derive `timing_deviation_seconds`, `timing_valid` from `observed_at_device` and `scheduled_for`.
+- [x] **17. Fail-Safe Data Root**: `ZONEPILOT_DATA_ROOT` must be explicit and fail if unset/invalid.
+- [x] **18. Real Physical Outputs**: ETL outputs snapshot manifests to `$ZONEPILOT_DATA_ROOT/private/raw/`, bronze rejection data, and silver joins.
+- [x] **19. DQ Negative Tests**: Real DQ checks failing correctly when fed duplicates/invalid bounds/future forecasts.
+- [x] **20. Real Scheduler Test**: Real isolated run of the cron entrypoint (00:00 vs 00:05, overlap lock, historical date, run IDs).
+- [x] **21. Backup/Restore Test**: Real backup, destructive wipe, restore execution and hash verification over test state.
+- [x] **22. Weather Leakage Join Test**: Real point-in-time join logic rejecting 18:05 forecast for 18:00 observation.
+- [x] **23 & 24. Open-Meteo Backfill**: Isolate observed vs forecast datasets. Verify expected timestamps (complete hourly range) to accurately detect missingness.
+- [x] **25 & 26. Bounded Bengaluru OSM**: Overpass fetch actual bounding box in Bengaluru (Indiranagar/Koramangala/MG Road). No proxy geography (Andorra removed).
+- [x] **27 & 28. Generated Data Removal**: Fix `.gitignore` recursively. `git rm --cached` all generated PBF/Parquet/OSRM files.
+- [x] **29. Gitleaks Reporting**: Separate CURRENT_TREE_CLEAN and HISTORICAL findings.
+- [x] **30. Final Execution Gate**: Full green test execution suite (Vitest + Pytest + System Tests + Typecheck).

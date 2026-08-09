@@ -58,3 +58,9 @@ Assist/
 reports/zonepilot_build/raw_logs/COMMAND_LOG_ARCHIVE.txt
 
 reports/zonepilot_build/raw_logs/
+
+# Raw datasets & geo binaries
+data/
+*.parquet
+*.pbf
+*.osm

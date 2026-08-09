@@ -1,45 +1,61 @@
 import datetime
+import pandas as pd
+from services.collectors.openmeteo_real import select_point_in_time_forecast
+from services.api.scheduler import job_midnight, job_midnight_five
+from services.etl.backup_restore import verify_backup_restore_cycle
+from services.etl.pipeline import build_experiment_a_dataset
 
 def test_weather_leakage():
-    print("\n--- Running Weather Leakage Test ---")
-    observation_time = datetime.datetime(2026, 8, 8, 10, 30)
-    # The weather data must only use forecasts available AT OR BEFORE observation_time
-    weather_forecast_publish_time = datetime.datetime(2026, 8, 8, 10, 00)
-    weather_future_publish_time = datetime.datetime(2026, 8, 8, 11, 00)
+    print("\n--- Executing Point-in-Time Weather Leakage Test ---")
+    prediction_time = pd.Timestamp("2026-08-08 18:00:00+05:30")
+    valid_time = pd.Timestamp("2026-08-08 19:00:00+05:30")
     
-    print(f"Observation Time: {observation_time}")
-    print(f"Valid Forecast (10:00): {'ALLOWED' if weather_forecast_publish_time <= observation_time else 'LEAKAGE'}")
-    print(f"Future Forecast (11:00): {'ALLOWED' if weather_future_publish_time <= observation_time else 'BLOCKED (Leakage Prevented)'}")
-    print("Result: PASS (No forward-looking bias)")
+    forecasts = pd.DataFrame([
+        {"id": "forecast_valid", "issued_at": pd.Timestamp("2026-08-08 17:30:00+05:30"), "valid_at": valid_time, "temp": 24.5},
+        {"id": "forecast_future", "issued_at": pd.Timestamp("2026-08-08 18:05:00+05:30"), "valid_at": valid_time, "temp": 28.0}
+    ])
+    
+    selected = select_point_in_time_forecast(forecasts, prediction_time, valid_time)
+    assert selected is not None and selected["id"] == "forecast_valid"
+    print("Result: PASS (Future forecast 18:05 correctly rejected at 18:00 prediction time)")
 
 def test_scheduler_execution():
-    print("\n--- Running Scheduler Execution Test ---")
-    print("Scheduler initialized.")
-    print("Job: 'etl_daily_batch' scheduled at 00:00 UTC")
-    print("Executing job manually for verification...")
-    print("Job completed. Exit code: 0")
-    print("Result: PASS (Scheduler configured correctly)")
+    print("\n--- Executing Scheduler Test ---")
+    res_0000 = job_midnight("2026-08-08")
+    assert res_0000["status"] == "SUCCESS"
+    res_0005 = job_midnight_five("2026-08-08")
+    assert res_0005["status"] == "SUCCESS"
+    print("Result: PASS (Scheduler 00:00 and 00:05 jobs completed successfully)")
 
 def test_backup_restore():
-    print("\n--- Running Backup/Restore Execution Test ---")
-    print("Simulating pg_dump of public schema...")
-    print("Backup size: 2.1 MB")
-    print("Simulating pg_restore to temporary schema 'restore_test'...")
-    print("Comparing rows in public.probe_observations vs restore_test.probe_observations...")
-    print("Differences: 0")
-    print("Result: PASS (Backup/Restore verified)")
+    print("\n--- Executing Backup/Restore Verification Test ---")
+    sample_records = [
+        {"id": "probe-1", "assignment_id": "assign-1", "provenance": "OBSERVED", "eta_low_min": 10},
+        {"id": "probe-2", "assignment_id": "assign-2", "provenance": "OBSERVED", "eta_low_min": 15}
+    ]
+    recovered = verify_backup_restore_cycle(sample_records)
+    assert recovered is True
+    print("Result: PASS (Backup, destructive wipe, restore, and hash verification completed successfully)")
     
 def test_dry_run_exclusion():
-    print("\n--- Running DRY_RUN Exclusion Test ---")
-    print("Querying observations with provenance = 'OBSERVED' and DRY_RUN flag...")
-    print("Enforcing rule: DRY_RUN rows must be relabeled as FIXTURE.")
-    print("Rows updated: 0")
-    print("Result: PASS (DRY_RUN rows correctly excluded/relabeled)")
+    print("\n--- Executing DRY_RUN Exclusion Test ---")
+    df_clean = pd.DataFrame([{"id": "1", "study_phase": "EXPERIMENT_A"}])
+    res = build_experiment_a_dataset(df_clean)
+    assert len(res) == 1
+    
+    df_contaminated = pd.DataFrame([{"id": "1", "study_phase": "DRY_RUN"}, {"id": "2", "study_phase": "EXPERIMENT_A"}])
+    failed_closed = False
+    try:
+        build_experiment_a_dataset(df_contaminated)
+    except ValueError:
+        failed_closed = True
+    assert failed_closed is True
+    print("Result: PASS (Experiment A dataset builder failed closed against DRY_RUN rows)")
 
 if __name__ == "__main__":
-    print("=== System Tests Execution ===")
+    print("=== ZonePilot System Validation Suite ===")
     test_weather_leakage()
     test_scheduler_execution()
     test_backup_restore()
     test_dry_run_exclusion()
-    print("\nAll system tests executed successfully.")
+    print("\nAll system verification tests executed successfully.")
