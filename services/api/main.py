@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from services.api.routers import events, governance, observatory, health
+
+from services.api.routers import events, governance, health, observatory
 
 app = FastAPI(title="ZonePilot API", version="1.5.1")
 

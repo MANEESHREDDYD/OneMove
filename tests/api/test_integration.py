@@ -11,7 +11,7 @@ def test_api_health():
 def test_api_ready():
     response = client.get("/readyz")
     assert response.status_code == 200
-    assert response.json() == {"status": "ready"}
+    assert response.json() == {"status": "ready", "db_connected": True}
 
 def test_governance_consent_endpoint():
     response = client.post("/governance/consent?participant_id=part-123&agreed=true")

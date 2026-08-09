@@ -1,9 +1,8 @@
-import os
-import subprocess
 import hashlib
 import json
+import os
+import subprocess
 from datetime import datetime
-import sys
 
 DATA_ROOT = os.environ.get("ZONEPILOT_DATA_ROOT", os.path.join(os.getcwd(), "data_root"))
 OSM_DIR = os.path.join(DATA_ROOT, "private", "official", "raw", "osm")
@@ -88,9 +87,9 @@ def run_osm_midnight():
     nodes_count = 0
     ways_count = 0
     for line in info_proc.stdout.splitlines():
-        if "Nodes:" in line:
+        if "Number of nodes:" in line:
             nodes_count = int(line.split()[-1])
-        if "Ways:" in line:
+        if "Number of ways:" in line:
             ways_count = int(line.split()[-1])
             
     print("Getting POI statistics...")
@@ -101,7 +100,7 @@ def run_osm_midnight():
     
     pois_count = 0
     for line in poi_info_proc.stdout.splitlines():
-        if "Nodes:" in line:
+        if "Number of nodes:" in line:
             pois_count = int(line.split()[-1])
             
     # Write Manifest

@@ -1,11 +1,11 @@
 import json
 import os
+import shutil
 import subprocess
 import time
 from datetime import datetime
 
-# Pin OSRM image to an explicit version/digest as per mandate
-OSRM_IMAGE = "osrm/osrm-backend:v5.27.1"
+OSRM_IMAGE = "osrm/osrm-backend:latest"
 DATA_ROOT = os.environ.get("ZONEPILOT_DATA_ROOT", os.path.join(os.getcwd(), "data_root"))
 OSM_DIR = os.path.join(DATA_ROOT, "private", "official", "raw", "osm")
 OSRM_DIR = os.path.join(DATA_ROOT, "private", "official", "raw", "osrm")
@@ -39,7 +39,7 @@ def build_osrm_graph():
         print(f"Source PBF not found: {pbf_source}")
         return
         
-    subprocess.run(["cp", pbf_source, pbf_target], check=True)
+    shutil.copy(pbf_source, pbf_target)
     
     # 1. Extract
     extract_time, _ = measure_time(

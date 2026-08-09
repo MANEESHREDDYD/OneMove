@@ -1,5 +1,5 @@
+
 from fastapi import APIRouter, HTTPException, Request
-from typing import Dict, Any, List
 
 router = APIRouter(prefix="/api/v1", tags=["observatory"])
 
