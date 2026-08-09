@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+
 class TrafficData(BaseModel):
     congestion_level: str
     travel_time_seconds: int

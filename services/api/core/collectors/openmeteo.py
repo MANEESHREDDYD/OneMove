@@ -1,8 +1,10 @@
 import argparse
-import requests
-import pandas as pd
 import os
 import sys
+
+import pandas as pd
+import requests
+
 
 def fetch_openmeteo_history(start_date: str, end_date: str, output_dir: str):
     # Bengaluru coordinates

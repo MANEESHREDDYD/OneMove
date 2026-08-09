@@ -1,12 +1,15 @@
-import pytest
-import jwt
-import os
 import datetime
+import os
+
+import jwt
 import pandas as pd
+import pytest
 from core.auth import verify_token
-from services.etl.pipeline import build_experiment_a_dataset
-from routers.events import ProbeObservationCreate
 from pydantic import ValidationError
+from routers.events import ProbeObservationCreate
+
+from services.etl.pipeline import build_experiment_a_dataset
+
 
 def test_dry_run_contamination_fails_closed():
     # Verify DRY_RUN records are rejected by Experiment A dataset builder

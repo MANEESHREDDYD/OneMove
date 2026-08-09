@@ -1,3 +1,19 @@
 [tool.ruff]
-extend-exclude = ["notebooks", ".venv", "node_modules", "apps/observatory/node_modules"]
+extend-exclude = [
+    "notebooks",
+    ".venv",
+    "node_modules",
+    "apps/observatory/node_modules",
+    "java",
+    "c"
+]
 line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+ignore = ["E501", "B008", "B904", "B017", "B011"]
+
+[tool.ruff.lint.per-file-ignores]
+"services/api/routers/*.py" = ["B008"]
+"services/api/core/auth.py" = ["B008"]
+"services/api/main.py" = ["B008"]

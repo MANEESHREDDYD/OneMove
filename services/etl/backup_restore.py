@@ -1,9 +1,10 @@
-import os
-import json
 import hashlib
-import tempfile
+import json
+import os
 import shutil
-from typing import Dict, Any, List
+import tempfile
+from typing import Any, Dict, List
+
 
 def run_backup(data_records: List[Dict[str, Any]], backup_file_path: str) -> Dict[str, Any]:
     """

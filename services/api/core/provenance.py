@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class Provenance(str, Enum):
     OBSERVED = "OBSERVED"
     DERIVED = "DERIVED"

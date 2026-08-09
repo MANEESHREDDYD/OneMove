@@ -1,6 +1,6 @@
+import json
 import os
 import subprocess
-import json
 
 if "SUPABASE_ANON_KEY" not in os.environ or "SUPABASE_SERVICE_ROLE_KEY" not in os.environ:
     try:

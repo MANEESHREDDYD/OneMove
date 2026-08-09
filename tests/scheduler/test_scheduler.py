@@ -1,5 +1,7 @@
 import uuid
+
 from services.api.scheduler import job_midnight, job_midnight_five
+
 
 def test_midnight_job_execution_and_idempotency():
     date_str = f"2026-08-{uuid.uuid4().hex[:4]}"

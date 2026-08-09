@@ -1,11 +1,13 @@
 import argparse
-import sys
 import datetime
-import os
 import json
+import os
+import sys
 import tempfile
+from typing import Any, Dict
+
 import pytz
-from typing import Dict, Any
+
 
 def get_scheduler_root() -> str:
     data_root = os.environ.get("ZONEPILOT_DATA_ROOT")
@@ -49,7 +51,7 @@ def job_midnight(logical_date: str) -> Dict[str, Any]:
     registry[run_key] = {
         "job": "00:00_IST",
         "logical_date": logical_date,
-        "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "status": "RUNNING"
     }
     _save_run_registry(registry)
@@ -62,7 +64,7 @@ def job_midnight(logical_date: str) -> Dict[str, Any]:
         registry[run_key].update({
             "config_snapshot": config_snapshot,
             "status": "SUCCESS",
-            "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "completed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "idempotent_replay": False
         })
         _save_run_registry(registry)
@@ -93,7 +95,7 @@ def job_midnight_five(logical_date: str) -> Dict[str, Any]:
     registry[run_key] = {
         "job": "00:05_IST",
         "logical_date": logical_date,
-        "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "status": "RUNNING"
     }
     _save_run_registry(registry)
@@ -111,7 +113,7 @@ def job_midnight_five(logical_date: str) -> Dict[str, Any]:
             "dq_status": dq_status,
             "manifest_status": "FINAL",
             "status": "SUCCESS" if dq_status == "PASS" else "FAILED",
-            "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "completed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "idempotent_replay": False
         })
         _save_run_registry(registry)

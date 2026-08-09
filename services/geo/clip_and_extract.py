@@ -1,7 +1,9 @@
-import osmium
-import h3
 import json
 import sys
+
+import h3
+import osmium
+
 
 class BengaluruExtractor(osmium.SimpleHandler):
     def __init__(self):

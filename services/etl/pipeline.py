@@ -1,10 +1,12 @@
-import requests
+import datetime
 import json
 import os
-import pandas as pd
-import datetime
 import subprocess
-from typing import Dict, Any, Tuple
+from typing import Any, Dict, Tuple
+
+import pandas as pd
+import requests
+
 
 def get_supabase_config() -> Tuple[str, str]:
     api_url = os.environ.get("SUPABASE_URL", "http://127.0.0.1:54321")
@@ -45,7 +47,7 @@ def run_etl_pipeline() -> Dict[str, Any]:
     study_data = study_resp.json() if study_resp.status_code == 200 else []
     study_phase_map = {s["id"]: s.get("study_phase", "DRY_RUN") for s in study_data} if study_data else {}
     
-    snapshot_id = f"snap_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+    snapshot_id = f"snap_{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d_%H%M%S')}"
     raw_dir = os.path.join(dirs["raw"], snapshot_id)
     os.makedirs(raw_dir, exist_ok=True)
     
@@ -69,7 +71,7 @@ def run_etl_pipeline() -> Dict[str, Any]:
     
     raw_manifest = {
         "snapshot_id": snapshot_id,
-        "created_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "source_tables": ["probe_observations", "studies"],
         "row_count": len(df_raw),
         "source_hash": raw_hash,

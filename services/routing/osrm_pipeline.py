@@ -1,7 +1,8 @@
-import os
-import requests
 import math
-from typing import Tuple, Dict, Any
+import os
+from typing import Any, Dict, Tuple
+
+import requests
 
 # Canonical Bengaluru Candidate Study Zones
 BENGALURU_BOUNDS = {

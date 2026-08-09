@@ -1,6 +1,8 @@
+from typing import Optional
+
 import httpx
 from pydantic import BaseModel
-from typing import Optional
+
 
 class WeatherData(BaseModel):
     temperature_2m: float

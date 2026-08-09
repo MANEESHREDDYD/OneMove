@@ -2,6 +2,7 @@ import os
 import subprocess
 from typing import Optional
 
+
 def run_c_dispatch_engine(orders_path: str, partners_path: str) -> Optional[str]:
     """
     Wrapper to call the C dispatch engine binary.

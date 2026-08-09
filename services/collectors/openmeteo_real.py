@@ -1,12 +1,14 @@
-import requests
-import pandas as pd
+import datetime
 import hashlib
-import time
 import json
 import os
-import datetime
 import tempfile
-from typing import Optional, Dict, Any
+import time
+from typing import Any, Dict, Optional
+
+import pandas as pd
+import requests
+
 
 def get_target_dir(subpath: str) -> str:
     data_root = os.environ.get("ZONEPILOT_DATA_ROOT")
@@ -101,7 +103,7 @@ def run_openmeteo_collection(start_date: str = "2025-08-08", end_date: str = "20
     with open(out_path, "rb") as f:
         file_hash = hashlib.sha256(f.read()).hexdigest()
         
-    run_id = f"run_om_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+    run_id = f"run_om_{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d_%H%M%S')}"
     manifest = {
         "run_id": run_id,
         "requested_range": f"{start_date} -> {end_date}",
@@ -112,7 +114,7 @@ def run_openmeteo_collection(start_date: str = "2025-08-08", end_date: str = "20
         "rows_with_nulls": rows_with_nulls,
         "parquet_path": out_path,
         "parquet_sha256": file_hash,
-        "created_at": datetime.datetime.utcnow().isoformat() + "Z"
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
     
     manifest_path = os.path.join(out_dir, f"{run_id}_manifest.json")

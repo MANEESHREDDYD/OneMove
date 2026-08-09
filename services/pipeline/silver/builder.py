@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 def process_silver_layer(bronze_parquet: str, output_parquet: str):
     print(f"Canonicalizing Bronze data from {bronze_parquet}...")
     df = pd.read_parquet(bronze_parquet)

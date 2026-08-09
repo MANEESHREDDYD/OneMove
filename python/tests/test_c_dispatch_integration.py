@@ -1,6 +1,8 @@
 import os
+
 import pytest
 from onemove_intelligence.integrations.c_dispatch import run_c_dispatch_engine
+
 
 def test_c_dispatch_optional_integration():
     """

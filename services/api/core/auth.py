@@ -1,8 +1,10 @@
-from fastapi import HTTPException, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
-from supabase import create_client, Client
+
 import jwt
+from fastapi import HTTPException, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from supabase import Client, create_client
 
 security = HTTPBearer()
 

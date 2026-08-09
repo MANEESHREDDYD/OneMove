@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 def build_gold_tables(silver_parquet: str, output_dir: str):
     print(f"Building Gold tables from {silver_parquet}...")
     df = pd.read_parquet(silver_parquet)

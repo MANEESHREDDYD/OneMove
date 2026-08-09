@@ -1,7 +1,9 @@
-import pytest
 import pandas as pd
+import pytest
+
 from services.collectors.openmeteo_real import select_point_in_time_forecast
 from services.etl.pipeline import build_experiment_a_dataset
+
 
 def test_point_in_time_weather_leakage_gate():
     prediction_time = pd.Timestamp("2026-08-08 18:00:00+05:30")

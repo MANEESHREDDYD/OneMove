@@ -1,9 +1,10 @@
-import pytest
+import datetime
 import os
+
 import jwt
+import pytest
 from core.auth import verify_token
 from fastapi import HTTPException
-import datetime
 
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "REDACTED_SYNTHETIC_TEST_SECRET")
 os.environ["SUPABASE_JWT_SECRET"] = SUPABASE_JWT_SECRET

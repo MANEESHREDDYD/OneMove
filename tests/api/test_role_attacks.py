@@ -1,6 +1,7 @@
+import os
+
 import pytest
 import requests
-import os
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://127.0.0.1:54321")
 ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "mock_anon_key")

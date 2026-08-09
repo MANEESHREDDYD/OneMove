@@ -1,12 +1,14 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
-from pydantic import BaseModel, ConfigDict
-from typing import Optional, Any
-from datetime import datetime
-from core.auth import get_supabase
-from supabase import Client, create_client
-import os
 import hashlib
 import json
+import os
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+from core.auth import get_supabase
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict
+
+from supabase import Client, create_client
 
 router = APIRouter()
 
@@ -130,7 +132,7 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
     
     # Server controlled fields
     provenance = "OBSERVED"
-    received_at_server = datetime.utcnow().isoformat()
+    received_at_server = datetime.now(timezone.utc).isoformat()
     
     # Timing derivation
     timing_valid = False
