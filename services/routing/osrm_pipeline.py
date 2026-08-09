@@ -1,119 +1,79 @@
-import math
 import os
-from typing import Any, Dict, Tuple
+import subprocess
+import time
+import json
+from datetime import datetime
 
-import requests
+# Pin OSRM image to an explicit version/digest as per mandate
+OSRM_IMAGE = "osrm/osrm-backend:v5.27.1"
+DATA_ROOT = os.environ.get("ZONEPILOT_DATA_ROOT", os.path.join(os.getcwd(), "data_root"))
+OSM_DIR = os.path.join(DATA_ROOT, "private", "official", "raw", "osm")
+OSRM_DIR = os.path.join(DATA_ROOT, "private", "official", "raw", "osrm")
 
-# Canonical Bengaluru Candidate Study Zones
-BENGALURU_BOUNDS = {
-    "min_lat": 12.9000,
-    "max_lat": 13.0500,
-    "min_lon": 77.5500,
-    "max_lon": 77.7000
-}
+def ensure_dir(path):
+    os.makedirs(path, exist_ok=True)
 
-# Real Bengaluru sample coordinates (Indiranagar -> Koramangala)
-BENGALURU_TEST_POINTS = {
-    "indiranagar": (12.9784, 77.6408),
-    "koramangala": (12.9352, 77.6245),
-    "mg_road": (12.9716, 77.6033)
-}
+def measure_time(step_name, func, *args, **kwargs):
+    """Utility to measure and print execution time of a step."""
+    start = time.time()
+    print(f"[{datetime.now().isoformat()}] Starting: {step_name}")
+    result = func(*args, **kwargs)
+    duration = time.time() - start
+    print(f"[{datetime.now().isoformat()}] Finished: {step_name} in {duration:.2f} seconds")
+    return duration, result
 
-def haversine_distance(coord1: Tuple[float, float], coord2: Tuple[float, float]) -> float:
-    """Calculates haversine distance in meters between two (lat, lon) points."""
-    R = 6371000.0  # radius of Earth in meters
-    lat1, lon1 = math.radians(coord1[0]), math.radians(coord1[1])
-    lat2, lon2 = math.radians(coord2[0]), math.radians(coord2[1])
+def run_docker_osrm(command, *args):
+    """Run an OSRM command via Docker, mounting the OSRM_DIR."""
+    subprocess.run([
+        "docker", "run", "-t", "-v", f"{OSRM_DIR}:/data", OSRM_IMAGE, command
+    ] + list(args), check=True)
+
+def build_osrm_graph():
+    ensure_dir(OSRM_DIR)
     
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
+    # Copy pilot_roads.osm.pbf to OSRM dir for processing
+    pbf_source = os.path.join(OSM_DIR, "pilot_roads.osm.pbf")
+    pbf_target = os.path.join(OSRM_DIR, "pilot_roads.osm.pbf")
     
-    a = math.sin(dlat / 2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
-
-def fetch_bengaluru_osm_subset(out_dir: str = "data/geo") -> str:
-    """
-    Downloads a real bounded Bengaluru OSM subset XML via Overpass API for candidate study zones.
-    Verifies HTTP 200, valid bounding box, and non-HTML format.
-    """
-    os.makedirs(out_dir, exist_ok=True)
-    osm_path = os.path.join(out_dir, "bengaluru_subset.osm")
-    
-    if os.path.exists(osm_path) and os.path.getsize(osm_path) > 1000:
-        return osm_path
+    if not os.path.exists(pbf_source):
+        print(f"Source PBF not found: {pbf_source}")
+        return
         
-    bbox_str = f"{BENGALURU_BOUNDS['min_lat']},{BENGALURU_BOUNDS['min_lon']},{BENGALURU_BOUNDS['max_lat']},{BENGALURU_BOUNDS['max_lon']}"
-    overpass_query = f"""
-    [out:xml][timeout:30];
-    (
-      node({bbox_str})[highway];
-      way({bbox_str})[highway];
-    );
-    out body;
-    >;
-    out skel qt;
-    """
+    subprocess.run(["cp", pbf_source, pbf_target], check=True)
     
-    url = "https://overpass-api.de/api/interpreter"
-    try:
-        resp = requests.post(url, data={"data": overpass_query}, timeout=15)
-        if resp.status_code == 200 and not resp.text.startswith("<!DOCTYPE html>"):
-            with open(osm_path, "w", encoding="utf-8") as f:
-                f.write(resp.text)
-            print(f"Successfully fetched real Bengaluru OSM subset ({os.path.getsize(osm_path)} bytes)")
-            return osm_path
-    except Exception as e:
-        print(f"Overpass download fallback: {e}")
-        
-    return osm_path
-
-def run_osrm_pipeline() -> Dict[str, Any]:
-    print("=== Real Bengaluru OSM / Routing Evidence ===")
+    # 1. Extract
+    extract_time, _ = measure_time(
+        "OSRM Extract", 
+        run_docker_osrm, "osrm-extract", "-p", "/opt/car.lua", "/data/pilot_roads.osm.pbf"
+    )
     
-    p1_name, (lat1, lon1) = "Indiranagar", BENGALURU_TEST_POINTS["indiranagar"]
-    p2_name, (lat2, lon2) = "Koramangala", BENGALURU_TEST_POINTS["koramangala"]
+    # 2. Partition
+    partition_time, _ = measure_time(
+        "OSRM Partition", 
+        run_docker_osrm, "osrm-partition", "/data/pilot_roads.osrm"
+    )
     
-    print(f"Routing origin: {p1_name} ({lat1}, {lon1})")
-    print(f"Routing destination: {p2_name} ({lat2}, {lon2})")
+    # 3. Customize
+    customize_time, _ = measure_time(
+        "OSRM Customize", 
+        run_docker_osrm, "osrm-customize", "/data/pilot_roads.osrm"
+    )
     
-    for name, (lat, lon) in [("Origin", (lat1, lon1)), ("Destination", (lat2, lon2))]:
-        assert BENGALURU_BOUNDS["min_lat"] <= lat <= BENGALURU_BOUNDS["max_lat"], f"{name} lat outside Bengaluru"
-        assert BENGALURU_BOUNDS["min_lon"] <= lon <= BENGALURU_BOUNDS["max_lon"], f"{name} lon outside Bengaluru"
-        
-    haversine_meters = haversine_distance((lat1, lon1), (lat2, lon2))
-    estimated_seconds = (haversine_meters / 1000.0) / 25.0 * 3600.0  # 25 km/h urban speed
-    
-    result = {
-        "geography": "REAL_BENGALURU_SUBSET",
-        "bounding_box": BENGALURU_BOUNDS,
-        "origin": {"name": p1_name, "lat": lat1, "lon": lon1},
-        "destination": {"name": p2_name, "lat": lat2, "lon": lon2},
-        "haversine_distance_meters": round(haversine_meters, 2),
-        "estimated_duration_seconds": round(estimated_seconds, 2),
-        "proxy_geography_used": False,
-        "osrm_status": "BLOCKED_BY_ENVIRONMENT"
+    # Save Benchmark
+    benchmark = {
+        "timestamp": datetime.now().isoformat(),
+        "image": OSRM_IMAGE,
+        "extract_time_seconds": extract_time,
+        "partition_time_seconds": partition_time,
+        "customize_time_seconds": customize_time,
+        "total_time_seconds": extract_time + partition_time + customize_time,
+        "graph_size_bytes": os.path.getsize(os.path.join(OSRM_DIR, "pilot_roads.osrm"))
     }
     
-    # Check if local OSRM HTTP container is live
-    try:
-        route_url = f"http://localhost:5000/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=false"
-        resp = requests.get(route_url, timeout=2)
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get("code") == "Ok":
-                result["osrm_distance_meters"] = data["routes"][0]["distance"]
-                result["osrm_duration_seconds"] = data["routes"][0]["duration"]
-                result["osrm_status"] = "PASS"
-    except Exception:
-        result["osrm_status"] = "BLOCKED_BY_ENVIRONMENT"
+    with open(os.path.join(OSRM_DIR, "benchmark.json"), "w") as f:
+        json.dump(benchmark, f, indent=2)
         
-    print(f"Distance: {result['haversine_distance_meters']} meters")
-    print(f"Estimated Duration: {result['estimated_duration_seconds']} seconds")
-    print(f"Proxy geography used: {result['proxy_geography_used']}")
-    print(f"OSRM Pipeline Status: {result['osrm_status']}")
-    
-    return result
+    print(f"OSRM Benchmark Complete: {benchmark}")
 
 if __name__ == "__main__":
-    run_osrm_pipeline()
+    build_osrm_graph()

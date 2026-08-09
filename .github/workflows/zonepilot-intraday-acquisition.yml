@@ -2,49 +2,72 @@ name: ZonePilot Intraday Acquisition
 
 on:
   schedule:
-    - cron: '*/15 * * * *' # Every 15 minutes
+    - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      code_sha_override:
+        description: 'Override ZONEPILOT_CODE_SHA for testing'
+        required: false
+        type: string
 
-permissions:
-  contents: write # Needed if we decide to commit interval fragments to registry, else read.
+concurrency:
+  group: zonepilot-intraday
+  cancel-in-progress: true
 
 jobs:
-  intraday-snapshot:
+  run-intraday-acquisition:
     runs-on: ubuntu-latest
-    
-    concurrency:
-      group: zonepilot-intraday
-      cancel-in-progress: false
-
     steps:
-      - name: Checkout repository
+      - name: Checkout private execution repo
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Resolve SHA to pin
+        id: resolve-sha
+        run: |
+          if [ -n "${{ inputs.code_sha_override }}" ]; then
+            echo "PINNED_SHA=${{ inputs.code_sha_override }}" >> $GITHUB_ENV
+          else
+            echo "PINNED_SHA=${{ vars.ZONEPILOT_CODE_SHA }}" >> $GITHUB_ENV
+          fi
+          echo "Expected SHA: $PINNED_SHA"
+
+      - name: Checkout public ZonePilot code
+        uses: actions/checkout@v4
+        with:
+          repository: MANEESHREDDYD/OneMove
+          ref: ${{ env.PINNED_SHA }}
+          path: zonepilot-code
+          persist-credentials: false
+
+      - name: Validate correct code SHA
+        working-directory: zonepilot-code
+        run: |
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          if [ "$ACTUAL_SHA" != "${{ env.PINNED_SHA }}" ]; then
+            echo "Error: SHA mismatch"
+            exit 1
+          fi
+
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          
+          python-version: '3.12'
+
       - name: Install dependencies
-        run: |
-          pip install httpx pyyaml pytz
+        working-directory: zonepilot-code
+        run: pip install -r requirements.txt
 
-      - name: Run Intraday Collector
+      - name: Execute Intraday Collectors
+        working-directory: zonepilot-code
         env:
-          ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/data_root
-          PYTHONPATH: ${{ github.workspace }}
+          ZONEPILOT_DB_URL: ${{ secrets.ZONEPILOT_DB_URL }}
           TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
-        run: |
-          python services/collectors/scheduler_intraday.py
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: python -m services.collectors.scheduler_intraday
 
-      - name: Bundle Intraday Artifacts
-        run: |
-          cd ${{ github.workspace }}/data_root/private/official
-          tar -cvf intraday_interval.tar raw/
-        
-      - name: Upload Research Data Artifact
+      - name: Upload Intraday Interval Artifacts (2-day retention)
         uses: actions/upload-artifact@v4
         with:
-          name: zp-intraday-bundle-${{ github.run_id }}
-          path: ${{ github.workspace }}/data_root/private/official/intraday_interval.tar
-          retention-days: 365
+          name: zp-interval-${{ github.run_id }}
+          path: zonepilot-code/data_root/private/official/raw/
+          retention-days: 2

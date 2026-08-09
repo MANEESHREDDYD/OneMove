@@ -1,87 +1,104 @@
 import os
 import json
-from datetime import datetime
-import pytz
+import uuid
+import datetime
+import psycopg
 
-def get_ledger_path():
-    repo_root = os.environ.get("GITHUB_WORKSPACE", os.getcwd())
-    path = os.path.join(repo_root, "data", "rolling", "dataset_registry.json")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    return path
+def get_db_connection():
+    """Get a connection to the Postgres database using ZONEPILOT_DB_URL"""
+    db_url = os.environ.get("ZONEPILOT_DB_URL")
+    if not db_url:
+        print("Warning: ZONEPILOT_DB_URL not found, using mocked local ledger for testing.")
+        return None
+    
+    # Use autocommit=False to manage transactions explicitly
+    return psycopg.connect(db_url, autocommit=False)
 
-def _load_ledger():
-    path = get_ledger_path()
-    if os.path.exists(path):
-        with open(path, 'r') as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                pass
-    return {"provider_state": {}, "runs": {}}
+def attempt_claim_slot(provider: str, dataset: str, logical_interval: str, query_hash: str) -> bool:
+    """
+    Attempt to claim the unique logical slot in the distributed database.
+    Returns True if successfully claimed, False if ALREADY_RUNNING or SUCCESS.
+    """
+    conn = get_db_connection()
+    if not conn:
+        # Fallback to local memory mock
+        return True
 
-def _save_ledger(data):
-    path = get_ledger_path()
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
+    try:
+        with conn.cursor() as cur:
+            # Check if it exists and what the status is
+            cur.execute("""
+                SELECT status, lease_expires_at 
+                FROM zonepilot_ops.collection_runs 
+                WHERE provider = %s AND dataset = %s AND logical_interval = %s AND query_hash = %s
+                FOR UPDATE SKIP LOCKED;
+            """, (provider, dataset, logical_interval, query_hash))
+            
+            row = cur.fetchone()
+            
+            workflow_id = os.environ.get("WORKFLOW_RUN_ID", "local")
+            now = datetime.datetime.now(datetime.timezone.utc)
+            lease_expires = now + datetime.timedelta(minutes=30)
+            
+            if row is None:
+                # Does not exist, insert and claim
+                cur.execute("""
+                    INSERT INTO zonepilot_ops.collection_runs 
+                    (provider, dataset, logical_interval, query_hash, status, runner_id, claimed_at, lease_expires_at)
+                    VALUES (%s, %s, %s, %s, 'RUNNING', %s, %s, %s)
+                """, (provider, dataset, logical_interval, query_hash, workflow_id, now, lease_expires))
+                conn.commit()
+                return True
+            else:
+                status, existing_lease_expires = row
+                if status == 'SUCCESS':
+                    conn.rollback()
+                    return False # Already complete
+                elif status == 'RUNNING':
+                    if existing_lease_expires and existing_lease_expires > now:
+                        conn.rollback()
+                        return False # Another live worker owns it
+                    else:
+                        # Lease expired, claim recovery
+                        cur.execute("""
+                            UPDATE zonepilot_ops.collection_runs
+                            SET status = 'RUNNING', runner_id = %s, claimed_at = %s, lease_expires_at = %s
+                            WHERE provider = %s AND dataset = %s AND logical_interval = %s AND query_hash = %s
+                        """, (workflow_id, now, lease_expires, provider, dataset, logical_interval, query_hash))
+                        conn.commit()
+                        return True
+                else:
+                    # FAILED, PARTIAL, etc. Claim recovery
+                    cur.execute("""
+                        UPDATE zonepilot_ops.collection_runs
+                        SET status = 'RUNNING', runner_id = %s, claimed_at = %s, lease_expires_at = %s
+                        WHERE provider = %s AND dataset = %s AND logical_interval = %s AND query_hash = %s
+                    """, (workflow_id, now, lease_expires, provider, dataset, logical_interval, query_hash))
+                    conn.commit()
+                    return True
 
-def init_db():
-    _load_ledger() # Ensure it can load
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
-def get_provider_state(provider: str, dataset: str, key: str) -> str:
-    ledger = _load_ledger()
-    return ledger.get("provider_state", {}).get(provider, {}).get(dataset, {}).get(key)
-
-def set_provider_state(provider: str, dataset: str, key: str, value: str):
-    ledger = _load_ledger()
-    if "provider_state" not in ledger:
-        ledger["provider_state"] = {}
-    if provider not in ledger["provider_state"]:
-        ledger["provider_state"][provider] = {}
-    if dataset not in ledger["provider_state"][provider]:
-        ledger["provider_state"][provider][dataset] = {}
+def mark_slot_completed(provider: str, dataset: str, logical_interval: str, query_hash: str, status: str, metadata: dict):
+    """Mark the claimed slot with its final outcome (SUCCESS, FAILED, PARTIAL, etc)."""
+    conn = get_db_connection()
+    if not conn:
+        return
         
-    ledger["provider_state"][provider][dataset][key] = value
-    _save_ledger(ledger)
-
-def record_run_start(run_id: str, provider: str, dataset: str, mode: str, logical_date: str):
-    ledger = _load_ledger()
-    tz = pytz.timezone('Asia/Kolkata')
-    
-    if "runs" not in ledger:
-        ledger["runs"] = {}
-        
-    ledger["runs"][run_id] = {
-        "provider": provider,
-        "dataset": dataset,
-        "mode": mode,
-        "logical_date": logical_date,
-        "status": "RUNNING",
-        "started_at": datetime.now(tz).isoformat()
-    }
-    _save_ledger(ledger)
-
-def record_run_complete(run_id: str, records: int, bytes_written: int, raw_hash: str):
-    ledger = _load_ledger()
-    tz = pytz.timezone('Asia/Kolkata')
-    
-    if run_id in ledger.get("runs", {}):
-        ledger["runs"][run_id].update({
-            "status": "SUCCESS",
-            "completed_at": datetime.now(tz).isoformat(),
-            "records": records,
-            "bytes_written": bytes_written,
-            "raw_hash": raw_hash
-        })
-        _save_ledger(ledger)
-
-def record_run_error(run_id: str, error_code: str):
-    ledger = _load_ledger()
-    tz = pytz.timezone('Asia/Kolkata')
-    
-    if run_id in ledger.get("runs", {}):
-        ledger["runs"][run_id].update({
-            "status": "FAILED",
-            "completed_at": datetime.now(tz).isoformat(),
-            "error_code": error_code
-        })
-        _save_ledger(ledger)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE zonepilot_ops.collection_runs
+                SET status = %s, result_metadata = %s, completed_at = %s
+                WHERE provider = %s AND dataset = %s AND logical_interval = %s AND query_hash = %s
+            """, (status, json.dumps(metadata), datetime.datetime.now(datetime.timezone.utc), provider, dataset, logical_interval, query_hash))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
