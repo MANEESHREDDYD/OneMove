@@ -1,11 +1,11 @@
 import os
-import jwt
 import time
-import fastapi
-from fastapi import Request
+
+import jwt
 from fastapi.testclient import TestClient
-from services.api.main import app
+
 from services.api.core.auth import get_current_user
+from services.api.main import app
 
 client = TestClient(app)
 

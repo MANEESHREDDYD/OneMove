@@ -1,17 +1,30 @@
 import os
+
 import jwt
-from fastapi import HTTPException, Security, Request
+from fastapi import HTTPException, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 from supabase import Client, create_client
 
 security = HTTPBearer(auto_error=False)
 
 def verify_token(token: str) -> dict:
-    jwt_secret = os.environ.get("SUPABASE_JWT_SECRET", "REDACTED_SYNTHETIC_TEST_SECRET")
+    # Secret handling: No fallback in production
+    env = os.environ.get("ZONEPILOT_ENV", "production")
+    if env == "test":
+        jwt_secret = os.environ.get("SUPABASE_JWT_SECRET", "REDACTED_SYNTHETIC_TEST_SECRET")
+    else:
+        jwt_secret = os.environ.get("SUPABASE_JWT_SECRET")
+
     jwt_public_key = os.environ.get("SUPABASE_JWT_PUBLIC_KEY")
     expected_issuer = os.environ.get("SUPABASE_JWT_ISSUER")
     expected_audience = os.environ.get("SUPABASE_JWT_AUDIENCE", "authenticated")
     algorithm = os.environ.get("SUPABASE_JWT_ALGORITHM", "HS256")
+    
+    # Enforce Algorithm Policy
+    allowed_algorithms = {"HS256", "RS256", "ES256"}
+    if algorithm not in allowed_algorithms:
+        raise HTTPException(status_code=500, detail=f"Unsupported JWT algorithm configured: {algorithm}")
 
     verification_key = jwt_public_key if algorithm == "RS256" and jwt_public_key else jwt_secret
 
