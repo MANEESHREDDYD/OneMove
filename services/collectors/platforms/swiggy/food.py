@@ -1,11 +1,20 @@
 import uuid
 from datetime import datetime, timedelta
-import pytz
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
-from services.collectors.db import init_db, record_run_start, record_run_complete, record_run_error, get_provider_state, set_provider_state
-from services.collectors.storage import ensure_directories, save_raw_data, save_bronze_data, save_silver_data
+import pytz
+
+from services.collectors.db import (
+    get_provider_state,
+    init_db,
+    record_run_complete,
+    record_run_error,
+    record_run_start,
+    set_provider_state,
+)
 from services.collectors.platforms.swiggy.mcp_client import SwiggyAuthenticator, SwiggyMCPClient
+from services.collectors.storage import ensure_directories, save_bronze_data, save_raw_data, save_silver_data
+
 
 def process_swiggy_bronze(raw_data: Dict[str, Any], retrieved_at: str, run_id: str) -> List[Dict[str, Any]]:
     orders = raw_data.get('orders', [])

@@ -1,10 +1,12 @@
-import os
 import json
+import os
 from datetime import datetime
+
 import pytz
 
-from services.collectors.storage import get_data_root, get_partition_path
 from services.collectors.db import get_db_connection
+from services.collectors.storage import get_data_root
+
 
 def generate_daily_manifest(logical_date: str):
     """

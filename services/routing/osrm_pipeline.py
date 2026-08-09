@@ -1,7 +1,7 @@
+import json
 import os
 import subprocess
 import time
-import json
 from datetime import datetime
 
 # Pin OSRM image to an explicit version/digest as per mandate

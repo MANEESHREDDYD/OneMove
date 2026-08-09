@@ -1,13 +1,20 @@
 import os
-import httpx
-import yaml
-from typing import Dict, Any, List
-from datetime import datetime
 import uuid
-import pytz
+from datetime import datetime
+from typing import Any, Dict, List
 
-from services.collectors.db import init_db, record_run_start, record_run_complete, record_run_error, get_provider_state, set_provider_state
-from services.collectors.storage import ensure_directories, save_raw_data, save_bronze_data, save_silver_data
+import httpx
+import pytz
+import yaml
+
+from services.collectors.db import (
+    init_db,
+    record_run_complete,
+    record_run_error,
+    record_run_start,
+)
+from services.collectors.storage import ensure_directories, save_bronze_data, save_raw_data, save_silver_data
+
 
 class TomTomClient:
     def __init__(self, api_key: str = None):
@@ -118,7 +125,7 @@ def run_tomtom_intraday():
                 waypoints.append(str(wp).replace(' ', ''))
                 
             raw_data = client.fetch_live_traffic_for_route(waypoints)
-            raw_hash = save_raw_data(provider, dataset, now, run_id, raw_data, f"raw_route_{route_id}.json")
+            save_raw_data(provider, dataset, now, run_id, raw_data, f"raw_route_{route_id}.json")
             
             retrieved_at = now.isoformat()
             bronze_data = process_tomtom_bronze(raw_data, retrieved_at, run_id, route_id)

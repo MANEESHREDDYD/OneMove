@@ -1,13 +1,14 @@
-import os
 from datetime import datetime
+
 import pytz
 
-from services.collectors.context.openmeteo import run_openmeteo_collection
 from services.collectors.context.ondc import run_ondc_collection
+from services.collectors.context.openmeteo import run_openmeteo_collection
+from services.collectors.manifests import generate_daily_manifest
 from services.collectors.platforms.swiggy.food import run_swiggy_food_collection
 from services.collectors.platforms.zomato.pos_client import run_zomato_pos_collection
 from services.collectors.traffic.tomtom.client import run_tomtom_traffic_collection
-from services.collectors.manifests import generate_daily_manifest
+
 
 def run_all_collectors():
     """Execute all active, keyless, and keyed (if ready) collectors."""

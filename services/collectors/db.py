@@ -1,8 +1,9 @@
-import os
-import json
-import uuid
 import datetime
+import json
+import os
+
 import psycopg
+
 
 def get_db_connection():
     """Get a connection to the Postgres database using ZONEPILOT_DB_URL"""

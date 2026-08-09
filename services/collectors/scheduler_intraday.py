@@ -1,8 +1,8 @@
-import os
 import sys
 
 from services.collectors.context.openmeteo import run_openmeteo_intraday
 from services.collectors.traffic.tomtom.client import run_tomtom_intraday
+
 
 def run_intraday_collectors():
     """Execute intraday snapshots (live traffic, prospective weather forecasts)."""

@@ -1,12 +1,19 @@
-import httpx
-import json
 import uuid
 from datetime import datetime, timedelta
-import pytz
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
-from services.collectors.db import init_db, record_run_start, record_run_complete, record_run_error, get_provider_state, set_provider_state
-from services.collectors.storage import ensure_directories, save_raw_data, save_bronze_data, save_silver_data
+import httpx
+import pytz
+
+from services.collectors.db import (
+    get_provider_state,
+    init_db,
+    record_run_complete,
+    record_run_error,
+    record_run_start,
+    set_provider_state,
+)
+from services.collectors.storage import ensure_directories, save_bronze_data, save_raw_data, save_silver_data
 
 TIMEZONE = "Asia/Kolkata"
 
@@ -138,7 +145,7 @@ def run_openmeteo_midnight():
         
         for pt in SAMPLING_POINTS:
             raw_data = fetch_openmeteo_historical(pt['lat'], pt['lon'], start_date, end_date)
-            raw_hash = save_raw_data(provider, dataset, now, run_id, raw_data, f"raw_historical_{pt['point_id']}.json")
+            save_raw_data(provider, dataset, now, run_id, raw_data, f"raw_historical_{pt['point_id']}.json")
             
             retrieved_at = now.isoformat()
             bronze_data = process_bronze_weather(raw_data, retrieved_at, run_id, pt['point_id'], "OFFICIAL_ARCHIVE")
@@ -175,7 +182,7 @@ def run_openmeteo_intraday():
         
         for pt in SAMPLING_POINTS:
             raw_data = fetch_openmeteo_forecast(pt['lat'], pt['lon'])
-            raw_hash = save_raw_data(provider, dataset, now, run_id, raw_data, f"raw_forecast_{pt['point_id']}.json")
+            save_raw_data(provider, dataset, now, run_id, raw_data, f"raw_forecast_{pt['point_id']}.json")
             
             retrieved_at = now.isoformat()
             bronze_data = process_bronze_weather(raw_data, retrieved_at, run_id, pt['point_id'], "PROVIDER_ESTIMATED")

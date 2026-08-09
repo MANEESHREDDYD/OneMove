@@ -1,11 +1,18 @@
 import os
-from typing import Dict, Any, List
-from datetime import datetime
 import uuid
+from datetime import datetime
+from typing import Any, Dict, List
+
 import pytz
 
-from services.collectors.db import init_db, record_run_start, record_run_complete, record_run_error, get_provider_state, set_provider_state
-from services.collectors.storage import ensure_directories, save_raw_data, save_bronze_data, save_silver_data
+from services.collectors.db import (
+    init_db,
+    record_run_complete,
+    record_run_error,
+    record_run_start,
+)
+from services.collectors.storage import ensure_directories, save_bronze_data, save_raw_data, save_silver_data
+
 
 class ZomatoPOSClient:
     def __init__(self, partner_key: str = None):
