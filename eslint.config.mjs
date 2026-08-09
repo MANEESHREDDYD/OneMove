@@ -22,7 +22,9 @@ const eslintConfig = defineConfig([
     "**/test-results/**",
     "**/coverage/**",
     "**/*.ps1",
-    "**/node_modules/**"
+    "**/node_modules/**",
+    "**/supabase/.temp/**",
+    "**/.supabase/**"
   ]),
   {
     files: [
