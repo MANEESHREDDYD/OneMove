@@ -106,6 +106,7 @@ jobs:
 
       - name: Run Playwright E2E Integration Suite
         run: |
+          pkill -f uvicorn || true
           PYTHONPATH=services/api python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
           npm start -- -p 3000 &
           
