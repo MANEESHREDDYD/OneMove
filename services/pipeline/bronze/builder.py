@@ -1,5 +1,4 @@
 import pandas as pd
-import json
 
 def process_bronze_layer(raw_events_path: str, output_parquet: str):
     print(f"Extracting raw JSON from {raw_events_path}...")

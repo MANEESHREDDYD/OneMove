@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Any
 from datetime import datetime
 from core.auth import get_supabase
@@ -64,8 +64,6 @@ def _get_service_client() -> Client:
 
 @router.post("/v1/probes")
 async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Client = Depends(get_supabase)):
-    from core.auth import get_participant_id
-    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
     auth_header = req.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth token")
@@ -146,7 +144,7 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
             timing_deviation_seconds = int((obs_dt - sched_dt).total_seconds())
             # For example, +/- 5 minutes is valid
             timing_valid = abs(timing_deviation_seconds) <= 300
-        except:
+        except Exception:
             pass
     
     insert_data = {

@@ -205,7 +205,8 @@ def test_delete_rejection(setup_users):
     submit_probe(setup_users["user1"]["token"], payload)
     
     headers = {"apikey": ANON_KEY, "Authorization": f"Bearer {setup_users['user1']['token']}"}
-    res = requests.delete(f"{SUPABASE_URL}/rest/v1/probe_observations?client_event_id=eq.{client_event_id}", headers=headers)
+    res_del = requests.delete(f"{SUPABASE_URL}/rest/v1/probe_observations?client_event_id=eq.{client_event_id}", headers=headers)
+    assert res_del.status_code in [200, 204, 401, 403]
     
     res_get = requests.get(f"{SUPABASE_URL}/rest/v1/probe_observations?client_event_id=eq.{client_event_id}", headers=headers)
     assert len(res_get.json()) == 1
@@ -223,8 +224,7 @@ def test_wrong_assignment_rejected(setup_users):
     # The API will reject because assignment owner check fails
     assert res.status_code in [403, 404]
     
-def test_wrong_study_rejected(setup_users):
-    # Setup a new study and assignment but different
+def test_browser_submitted_study_id_rejected_by_pydantic_fail_closed(setup_users):
     service_headers = {"apikey": LOCAL_SERVICE_KEY, "Authorization": f"Bearer {LOCAL_SERVICE_KEY}", "Content-Type": "application/json", "Prefer": "return=representation"}
     study_res = requests.post(f"{SUPABASE_URL}/rest/v1/studies", headers=service_headers, json={
         "city": "Bengaluru",
@@ -242,24 +242,55 @@ def test_wrong_study_rejected(setup_users):
     })
     assign_diff = a_res.json()[0]["id"]
     
-    # If a user sends study_id to the endpoint, pydantic strictly forbids it.
+    # Client sends study_id to endpoint -> fail-closed extra field rejection
     client_event_id = str(uuid.uuid4())
     payload = {
-        "study_id": setup_users["study_id"], # FORBIDDEN BY PYDANTIC
+        "study_id": setup_users["study_id"],
         "assignment_id": assign_diff,
         "client_event_id": client_event_id,
         "observed_at_device": datetime.datetime.utcnow().isoformat() + "Z",
         "availability_state": "IN_STOCK"
     }
     res = submit_probe(setup_users["user1"]["token"], payload)
-    assert res.status_code == 422 # Unprocessable Entity due to extra field
+    assert res.status_code == 422
+
+def test_cross_study_assignment_submission_boundary(setup_users):
+    # Attempting to use an assignment from an inactive/closed study
+    service_headers = {"apikey": LOCAL_SERVICE_KEY, "Authorization": f"Bearer {LOCAL_SERVICE_KEY}", "Content-Type": "application/json", "Prefer": "return=representation"}
+    study_res = requests.post(f"{SUPABASE_URL}/rest/v1/studies", headers=service_headers, json={
+        "city": "Bengaluru",
+        "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "protocol_version": "1.0",
+        "status": "COMPLETED"
+    })
+    closed_study_id = study_res.json()[0]["id"]
     
+    inactive_assign = requests.post(f"{SUPABASE_URL}/rest/v1/assignments", headers=service_headers, json={
+        "study_id": closed_study_id,
+        "participant_id": setup_users["user1"]["id"],
+        "zone_cluster": "Koramangala",
+        "platform": "ZEPTO",
+        "intent": "QC",
+        "protocol": "ANCHOR",
+        "status": "INACTIVE"
+    }).json()[0]["id"]
+    
+    payload = {
+        "assignment_id": inactive_assign,
+        "client_event_id": str(uuid.uuid4()),
+        "observed_at_device": datetime.datetime.utcnow().isoformat() + "Z",
+        "availability_state": "IN_STOCK"
+    }
+    res = submit_probe(setup_users["user1"]["token"], payload)
+    assert res.status_code == 403
+    assert "Assignment is not ACTIVE" in res.text
+
 def test_metadata_owner_escalation_rejected(setup_users):
-    # Using REST API to try to read probes without OWNER role
+    # User 1 (ordinary participant) attempts to read all study observations via PostgREST
     headers = {"apikey": ANON_KEY, "Authorization": f"Bearer {setup_users['user1']['token']}"}
-    res = requests.get(f"{SUPABASE_URL}/rest/v1/probe_observations", headers=headers)
+    res = requests.get(f"{SUPABASE_URL}/rest/v1/probe_observations?study_id=eq.{setup_users['study_id']}", headers=headers)
     assert res.status_code == 200
-    # User 1 can only see their own probes, not all of them
+    # User 1 cannot see User 2's or User 3's probes
     for r in res.json():
         assert r["participant_id"] == setup_users["user1"]["id"]
 

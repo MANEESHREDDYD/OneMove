@@ -1,23 +1,55 @@
-cd C:\Users\md200\OneDrive\Desktop\OneMove\services\api
-Stop-Process -Name "python" -ErrorAction SilentlyContinue
-Stop-Process -Name "node" -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
+$ErrorActionPreference = "Continue"
 
-$statusJson = npx supabase status -o json | Out-String | ConvertFrom-Json
-$env:SUPABASE_URL = $statusJson.API_URL
-$env:SUPABASE_ANON_KEY = $statusJson.ANON_KEY
-$env:SUPABASE_SERVICE_ROLE_KEY = $statusJson.SERVICE_ROLE_KEY
-if (-not $env:SUPABASE_ANON_KEY) {
-    Write-Error "Failed to retrieve Supabase keys. Make sure Supabase is running."
-    exit 1
+$repoRoot = $PSScriptRoot
+Set-Location $repoRoot
+
+Write-Host "=== ZonePilot Portable E2E Test Runner ==="
+
+# 1. Obtain Supabase credentials dynamically if available, or fallback to .env.local
+if (Test-Path ".env.local") {
+    Get-Content ".env.local" | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#")) {
+            $parts = $line.Split('=', 2)
+            if ($parts.Length -eq 2) {
+                $key = $parts[0].Trim()
+                $val = $parts[1].Trim().Trim('"')
+                if ($key -eq "NEXT_PUBLIC_SUPABASE_URL") { $env:SUPABASE_URL = $val }
+                if ($key -eq "NEXT_PUBLIC_SUPABASE_ANON_KEY") { $env:SUPABASE_ANON_KEY = $val }
+                if ($key -eq "SUPABASE_SERVICE_ROLE_KEY") { $env:SUPABASE_SERVICE_ROLE_KEY = $val }
+            }
+        }
+    }
 }
 
-Start-Process -FilePath "C:\Users\md200\AppData\Local\Programs\Python\Python311\python.exe" -ArgumentList "-m uvicorn main:app --host 127.0.0.1 --port 8000" -RedirectStandardOutput "uvicorn.log" -RedirectStandardError "uvicorn_err.log" -WindowStyle Hidden
+# Try Supabase CLI dynamically if running
+try {
+    $statusOutput = npx supabase status -o json 2>$null | Out-String
+    if ($statusOutput -and $statusOutput.StartsWith("{")) {
+        $statusJson = $statusOutput | ConvertFrom-Json
+        if ($statusJson.API_URL) { $env:SUPABASE_URL = $statusJson.API_URL }
+        if ($statusJson.ANON_KEY) { $env:SUPABASE_ANON_KEY = $statusJson.ANON_KEY }
+        if ($statusJson.SERVICE_ROLE_KEY) { $env:SUPABASE_SERVICE_ROLE_KEY = $statusJson.SERVICE_ROLE_KEY }
+    }
+} catch {
+    Write-Host "Local Supabase CLI not active, using default environment configuration."
+}
+
+# 2. Launch FastAPI backend locally on port 8000
+$env:PYTHONPATH = "$repoRoot/services/api"
+$backendProc = Start-Process -FilePath "python" -ArgumentList "-m uvicorn main:app --host 127.0.0.1 --port 8000" -WorkingDirectory "$repoRoot/services/api" -PassThru -WindowStyle Hidden
+
 Start-Sleep -Seconds 3
 
-cd C:\Users\md200\OneDrive\Desktop\OneMove\apps\observatory
-npx playwright test tests/e2e/offline.spec.ts --project=chromium
-
-# Cleanup
-Stop-Process -Name "python" -ErrorAction SilentlyContinue
-Stop-Process -Name "node" -ErrorAction SilentlyContinue
+try {
+    Write-Host "Running Marketplace Probe E2E test..."
+    npx playwright test apps/observatory/tests/e2e/marketplace_probe_offline.spec.ts --project=chromium
+    
+    Write-Host "Running Volunteer Order E2E test..."
+    npx playwright test apps/observatory/tests/e2e/volunteer_order_offline.spec.ts --project=chromium
+} finally {
+    # Clean termination of specific process started
+    if ($backendProc -and -not $backendProc.HasExited) {
+        Stop-Process -Id $backendProc.Id -Force -ErrorAction SilentlyContinue
+    }
+}

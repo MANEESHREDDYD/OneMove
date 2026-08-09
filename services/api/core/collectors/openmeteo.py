@@ -1,7 +1,6 @@
 import argparse
 import requests
 import pandas as pd
-import datetime
 import os
 import sys
 

@@ -97,3 +97,21 @@ def test_verify_token_without_subject():
         verify_token(token)
     assert exc.value.status_code == 401
     assert "missing sub" in exc.value.detail.lower()
+
+def test_verify_token_wrong_issuer_rejected():
+    os.environ["SUPABASE_JWT_ISSUER"] = "https://trusted-supabase.com/auth/v1"
+    try:
+        payload = {
+            "sub": "user-123",
+            "aud": "authenticated",
+            "iss": "https://malicious-issuer.com",
+            "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+        }
+        token = jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm="HS256")
+        with pytest.raises(HTTPException) as exc:
+            verify_token(token)
+        assert exc.value.status_code == 401
+        assert "issuer" in exc.value.detail.lower()
+    finally:
+        os.environ.pop("SUPABASE_JWT_ISSUER", None)
+

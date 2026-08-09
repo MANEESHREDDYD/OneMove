@@ -1,4 +1,3 @@
-import pytest
 import uuid
 from services.api.scheduler import job_midnight, job_midnight_five
 

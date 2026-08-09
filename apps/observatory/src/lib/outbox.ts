@@ -1,10 +1,10 @@
-import { get, set, update } from "idb-keyval";
+import { get, update } from "idb-keyval";
 
 export type OutboxStatus = "PENDING_LOCAL" | "SYNCING" | "ACKNOWLEDGED" | "RETRYABLE_ERROR" | "PERMANENT_REJECT";
 
 export interface OutboxEvent {
   client_event_id: string;
-  payload: any;
+  payload: Record<string, unknown>;
   status: OutboxStatus;
   created_at: string;
   retry_count: number;
@@ -13,7 +13,7 @@ export interface OutboxEvent {
 
 const OUTBOX_KEY = "zonepilot_outbox";
 
-export async function saveToOutbox(payload: any): Promise<OutboxEvent> {
+export async function saveToOutbox(payload: Record<string, unknown>): Promise<OutboxEvent> {
   const event: OutboxEvent = {
     client_event_id: crypto.randomUUID(),
     payload,
@@ -84,8 +84,9 @@ export async function syncOutbox() {
       } else {
         await markEventStatus(event.client_event_id, "RETRYABLE_ERROR", await res.text());
       }
-    } catch (err: any) {
-      await markEventStatus(event.client_event_id, "RETRYABLE_ERROR", err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      await markEventStatus(event.client_event_id, "RETRYABLE_ERROR", message);
     }
   }
 

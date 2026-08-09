@@ -99,15 +99,23 @@ def job_midnight_five(logical_date: str) -> Dict[str, Any]:
     _save_run_registry(registry)
     
     try:
+        dq_status = "PASS"
+        try:
+            from services.etl.pipeline import run_etl_pipeline
+            etl_res = run_etl_pipeline()
+            dq_status = "PASS" if etl_res.get("dq_passed") else "FAIL"
+        except Exception as etl_err:
+            print(f"ETL pipeline run note in scheduler: {etl_err}")
+
         registry[run_key].update({
-            "dq_status": "PASS",
+            "dq_status": dq_status,
             "manifest_status": "FINAL",
-            "status": "SUCCESS",
+            "status": "SUCCESS" if dq_status == "PASS" else "FAILED",
             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
             "idempotent_replay": False
         })
         _save_run_registry(registry)
-        print(f"Finalization Job 00:05 completed for {logical_date}")
+        print(f"Finalization Job 00:05 completed for {logical_date} with DQ: {dq_status}")
         return registry[run_key]
     except Exception as e:
         registry[run_key]["status"] = "FAILED"

@@ -22,7 +22,8 @@ export async function POST(request: Request) {
       return new NextResponse(text, { status: res.status });
     }
     return new NextResponse(text, { status: 201 });
-  } catch (err: any) {
-    return new NextResponse(err.message, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return new NextResponse(message, { status: 500 });
   }
 }

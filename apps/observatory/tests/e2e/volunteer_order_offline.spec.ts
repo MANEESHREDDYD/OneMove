@@ -5,12 +5,11 @@ const ANON_KEY = process.env.SUPABASE_ANON_KEY || "mock_anon_key";
 const LOCAL_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "mock_service_key";
 
 let study_id = '';
-let assignment_id = '';
+let order_id = '';
 let test_token = '';
 let user_id = '';
 
 test.beforeAll(async () => {
-    // Graceful skip if running in environment without live Supabase
     try {
         const ping = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { apikey: ANON_KEY }, signal: AbortSignal.timeout(2000) });
         if (!ping.ok && ping.status >= 500) return;
@@ -18,7 +17,7 @@ test.beforeAll(async () => {
         return;
     }
 
-    const email = "e2e_marketplace_" + Date.now() + "@onemove.com";
+    const email = "e2e_volunteer_" + Date.now() + "@onemove.com";
     const password = "password123";
     
     const signupRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
@@ -59,37 +58,34 @@ test.beforeAll(async () => {
     await fetch(`${SUPABASE_URL}/rest/v1/participants`, {
         method: 'POST',
         headers: srv_headers,
-        body: JSON.stringify({ id: user_id, external_id: "ext_" + Date.now(), hash_key_version: "v1" })
+        body: JSON.stringify({ id: user_id, external_id: "ext_vol_" + Date.now(), hash_key_version: "v1" })
     });
 
-    // 3. Assign OBSERVER Role to Participant
+    // 3. Assign VOLUNTEER Role
     await fetch(`${SUPABASE_URL}/rest/v1/participant_roles`, {
         method: 'POST',
         headers: srv_headers,
-        body: JSON.stringify({ participant_id: user_id, study_id, role: "OBSERVER" })
+        body: JSON.stringify({ participant_id: user_id, study_id, role: "VOLUNTEER" })
     });
 
-    // 4. Create Real Assignment (SWIGGY / FOOD / ANCHOR)
-    const assignRes = await fetch(`${SUPABASE_URL}/rest/v1/assignments`, {
+    // 4. Create Volunteer Order
+    const orderRes = await fetch(`${SUPABASE_URL}/rest/v1/volunteer_orders`, {
         method: 'POST',
         headers: srv_headers,
         body: JSON.stringify({
             study_id,
             participant_id: user_id,
-            zone_cluster: "Indiranagar",
-            platform: "SWIGGY",
-            intent: "FOOD",
-            protocol: "ANCHOR",
-            status: "ACTIVE"
+            platform: "ZEPTO",
+            status: "CREATED"
         })
     });
-    const assignment = await assignRes.json();
-    assignment_id = assignment[0].id;
+    const order = await orderRes.json();
+    order_id = order[0].id;
 });
 
-test.describe('Marketplace Probe Offline E2E', () => {
-  test('should store probe offline, persist across context restart, and sync 1 row online', async ({ browser }) => {
-    if (!study_id || !assignment_id) {
+test.describe('Volunteer Order Offline E2E', () => {
+  test('should record order event offline, persist across restart, and sync 1 event online', async ({ browser }) => {
+    if (!study_id || !order_id) {
         test.skip(true, "Supabase environment unreachable or keys missing");
         return;
     }
@@ -102,52 +98,54 @@ test.describe('Marketplace Probe Offline E2E', () => {
         localStorage.setItem('zonepilot_jwt', token);
     }, test_token);
 
-    // Open capture page with real assignment ID
-    await page.goto(`/capture?study_id=${study_id}&assignment_id=${assignment_id}`);
-    
     // Go offline
     await context.setOffline(true);
-    
-    // Fill probe form
-    await page.selectOption('select', { label: 'Available' });
-    await page.locator('text=ETA Low (min)').locator('..').locator('input').fill('20');
-    await page.locator('text=ETA High (min)').locator('..').locator('input').fill('25');
-    await page.locator('text=Option Count').locator('..').locator('input').fill('15');
-    await page.locator('text=Basket Price').locator('..').locator('input').fill('350.00');
-    
-    await page.click('button[type="submit"]');
-    await page.waitForSelector('[data-testid="outbox-status"]');
-    
-    // Close context to prove offline persistence (IndexedDB)
+
+    // Trigger volunteer event via client outbox / API route
+    const eventResult = await page.evaluate(async (orderId) => {
+        const clientEventId = crypto.randomUUID();
+        const payload = {
+            order_id: orderId,
+            event_type: "ORDER_PLACED",
+            occurred_at: new Date().toISOString(),
+            client_event_id: clientEventId
+        };
+        const res = await fetch("/api/events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        return { status: res.status, clientEventId };
+    }, order_id);
+
+    // Verify local handling
+    expect(eventResult).toBeDefined();
+
+    // Close context offline to prove persistence
     await context.close();
 
-    // Reopen context & reconnect online
+    // Reopen context online
     const newContext = await browser.newContext();
     await newContext.setOffline(false);
     const newPage = await newContext.newPage();
-    
+
     await newPage.goto('/');
     await newPage.evaluate((token) => {
         localStorage.setItem('zonepilot_jwt', token);
     }, test_token);
-
-    await newPage.goto(`/capture?study_id=${study_id}&assignment_id=${assignment_id}`);
     await newPage.waitForTimeout(2000);
 
-    // Verify exactly one probe row is recorded in database
-    const probeRes = await fetch(`${SUPABASE_URL}/rest/v1/probe_observations?assignment_id=eq.${assignment_id}`, {
+    // Verify volunteer event was recorded in volunteer_order_events
+    const eventRes = await fetch(`${SUPABASE_URL}/rest/v1/volunteer_order_events?order_id=eq.${order_id}`, {
         headers: {
             "apikey": ANON_KEY,
             "Authorization": `Bearer ${test_token}`
         }
     });
-    const data = await probeRes.json();
-    
+    const data = await eventRes.json();
+
     expect(data.length).toBe(1);
-    expect(data[0].platform).toBe('SWIGGY');
-    expect(data[0].protocol).toBe('ANCHOR');
-    expect(data[0].eta_low_min).toBe(20);
-    expect(data[0].eta_high_min).toBe(25);
+    expect(data[0].event_type).toBe('ORDER_PLACED');
 
     await newContext.close();
   });

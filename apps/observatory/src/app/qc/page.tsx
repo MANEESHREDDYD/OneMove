@@ -1,4 +1,22 @@
+import React from "react";
 import { Activity, AlertTriangle, CheckCircle, Clock, Copy, ListX } from "lucide-react";
+
+interface StatCardProps {
+  title: string;
+  value: number;
+  icon: React.ComponentType<{ className?: string }>;
+  colorClass: string;
+}
+
+function StatCard({ title, value, icon: Icon, colorClass }: StatCardProps) {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col items-center justify-center text-center">
+      <Icon className={`w-8 h-8 mb-2 ${colorClass}`} />
+      <div className="text-2xl font-bold text-gray-800">{value}</div>
+      <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mt-1">{title}</div>
+    </div>
+  );
+}
 
 export default function OwnerQCScreen() {
   const stats = {
@@ -22,14 +40,6 @@ export default function OwnerQCScreen() {
     { provider: "Open-Meteo", status: "HEALTHY", lastRun: "2 mins ago" },
     { provider: "TomTom (Disabled)", status: "OFFLINE", lastRun: "N/A" }
   ];
-
-  const StatCard = ({ title, value, icon: Icon, colorClass }: any) => (
-    <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col items-center justify-center text-center">
-      <Icon className={`w-8 h-8 mb-2 ${colorClass}`} />
-      <div className="text-2xl font-bold text-gray-800">{value}</div>
-      <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mt-1">{title}</div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">

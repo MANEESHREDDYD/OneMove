@@ -1,4 +1,3 @@
-import datetime
 import pandas as pd
 from services.collectors.openmeteo_real import select_point_in_time_forecast
 from services.api.scheduler import job_midnight, job_midnight_five

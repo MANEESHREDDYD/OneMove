@@ -2,158 +2,167 @@ import requests
 import json
 import os
 import pandas as pd
-import uuid
 import datetime
 import subprocess
+from typing import Dict, Any, Tuple
 
-def get_supabase_config():
+def get_supabase_config() -> Tuple[str, str]:
     api_url = os.environ.get("SUPABASE_URL", "http://127.0.0.1:54321")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not key:
         raise ValueError("SUPABASE_SERVICE_ROLE_KEY environment variable missing")
     return api_url, key
 
-def get_data_root():
+def get_data_dirs() -> Dict[str, str]:
     data_root = os.environ.get("ZONEPILOT_DATA_ROOT")
     if not data_root:
         raise ValueError("ZONEPILOT_DATA_ROOT environment variable missing. Real research processing must not use repository data/.")
-    private_raw = os.path.join(data_root, "private", "raw")
-    os.makedirs(private_raw, exist_ok=True)
-    return private_raw
+    
+    dirs = {
+        "raw": os.path.join(data_root, "private", "raw"),
+        "bronze": os.path.join(data_root, "private", "bronze"),
+        "silver": os.path.join(data_root, "private", "silver")
+    }
+    for p in dirs.values():
+        os.makedirs(p, exist_ok=True)
+    return dirs
 
-def run_etl_pipeline():
+def run_etl_pipeline() -> Dict[str, Any]:
     print("=== ZonePilot ETL Pipeline Execution ===")
     
     url, key = get_supabase_config()
-    private_raw = get_data_root()
-    print(f"Data Root Raw Path: {private_raw}")
+    dirs = get_data_dirs()
+    print(f"Data Roots -> Raw: {dirs['raw']}, Bronze: {dirs['bronze']}, Silver: {dirs['silver']}")
     
-    # 1. Snapshot
-    print("\n--- Phase 1: Snapshot ---")
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
-    resp = requests.get(f"{url}/rest/v1/probe_observations?select=*", headers=headers)
-    data = resp.json() if resp.status_code == 200 else []
+    
+    # 1. Snapshot Raw Layer
+    print("\n--- Phase 1: Snapshot (Raw) ---")
+    probe_resp = requests.get(f"{url}/rest/v1/probe_observations?select=*", headers=headers)
+    probe_data = probe_resp.json() if probe_resp.status_code == 200 else []
+    
+    study_resp = requests.get(f"{url}/rest/v1/studies?select=id,study_phase", headers=headers)
+    study_data = study_resp.json() if study_resp.status_code == 200 else []
+    study_phase_map = {s["id"]: s.get("study_phase", "DRY_RUN") for s in study_data} if study_data else {}
     
     snapshot_id = f"snap_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
-    snapshot_dir = os.path.join(private_raw, snapshot_id)
-    os.makedirs(snapshot_dir, exist_ok=True)
+    raw_dir = os.path.join(dirs["raw"], snapshot_id)
+    os.makedirs(raw_dir, exist_ok=True)
     
-    df = pd.DataFrame(data) if data else pd.DataFrame(columns=["id", "participant_id", "provenance", "eta_low_min", "eta_high_min", "zone_cluster", "protocol", "study_phase", "observed_at_device"])
-    df_hash = str(pd.util.hash_pandas_object(df).sum()) if not df.empty else "0"
+    df_raw = pd.DataFrame(probe_data) if probe_data else pd.DataFrame(columns=[
+        "id", "study_id", "assignment_id", "participant_id", "client_event_id", 
+        "provenance", "eta_low_min", "eta_high_min", "option_count", "availability_state", 
+        "zone_cluster", "platform", "protocol", "observed_at_device"
+    ])
+    
+    # Resolve authoritative study_phase onto observation dataframe
+    if not df_raw.empty and "study_id" in df_raw:
+        df_raw["study_phase"] = df_raw["study_id"].map(study_phase_map).fillna("DRY_RUN")
+    else:
+        df_raw["study_phase"] = "DRY_RUN"
+        
     git_sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    raw_hash = str(pd.util.hash_pandas_object(df_raw).sum()) if not df_raw.empty else "0"
     
-    raw_file = os.path.join(snapshot_dir, "probe_observations.parquet")
-    df.to_parquet(raw_file, index=False)
+    raw_parquet = os.path.join(raw_dir, "probe_observations.parquet")
+    df_raw.to_parquet(raw_parquet, index=False)
     
-    manifest = {
+    raw_manifest = {
         "snapshot_id": snapshot_id,
         "created_at": datetime.datetime.utcnow().isoformat() + "Z",
-        "source_tables": ["probe_observations"],
-        "row_counts": {"probe_observations": len(df)},
-        "schema_version": "1.5.1",
-        "source_hash": df_hash,
+        "source_tables": ["probe_observations", "studies"],
+        "row_count": len(df_raw),
+        "source_hash": raw_hash,
         "git_sha": git_sha
     }
-    manifest_path = os.path.join(snapshot_dir, "manifest.json")
-    with open(manifest_path, "w") as f:
-        json.dump(manifest, f, indent=2)
+    with open(os.path.join(raw_dir, "manifest.json"), "w") as f:
+        json.dump(raw_manifest, f, indent=2)
         
-    print(f"Snapshot ID: {snapshot_id}")
-    print(f"Rows: probe_observations={len(df)}")
-    print(f"Hash: {df_hash}")
-    print(f"Git SHA: {git_sha}")
-    print(f"Manifest written to: {manifest_path}")
+    print(f"Raw Snapshot ID: {snapshot_id}, Rows: {len(df_raw)}, Hash: {raw_hash}")
     
-    # 2. Bronze
-    print("\n--- Phase 2: Bronze ---")
-    input_bronze = len(df)
-    valid = 0
-    flagged = 0
-    rejected = 0
-    deduplicated = 0
+    # 2. Bronze Layer (Parsing, Type Normalization, Deduplication)
+    print("\n--- Phase 2: Bronze Layer ---")
+    bronze_dir = os.path.join(dirs["bronze"], snapshot_id)
+    os.makedirs(bronze_dir, exist_ok=True)
     
-    if not df.empty:
+    input_bronze = len(df_raw)
+    valid_mask = pd.Series(True, index=df_raw.index) if not df_raw.empty else pd.Series(dtype=bool)
+    
+    if not df_raw.empty:
         # Check constraints (non-null mandatory fields, valid provenance)
-        df['is_valid'] = df['eta_low_min'].notnull() & df['provenance'].isin(['OBSERVED', 'FIXTURE', 'SIMULATED', 'DERIVED'])
-        valid = int(df['is_valid'].sum())
-        rejected = len(df) - valid
-        # Deduplication on client_event_id if column exists
-        if 'client_event_id' in df:
-            deduplicated = len(df) - len(df.drop_duplicates(subset=['client_event_id']))
-    
-    print(f"Input: {input_bronze}")
-    print(f"Valid: {valid}")
-    print(f"Flagged: {flagged}")
-    print(f"Rejected: {rejected}")
-    print(f"Deduplicated: {deduplicated}")
-    
-    # 3. Silver
-    print("\n--- Phase 3: Silver ---")
-    input_silver = valid
-    weather_matches = 0
-    misses = 0
-    missingness = "0.0%"
-    
-    if not df.empty:
-        df_silver = df[df['is_valid']].copy()
-        output_silver = len(df_silver)
-        # Real weather join evaluation
-        if 'weather_temperature' in df_silver:
-            weather_matches = int(df_silver['weather_temperature'].notnull().sum())
-            misses = output_silver - weather_matches
-            missingness = f"{round((misses / output_silver) * 100, 2)}%" if output_silver > 0 else "0.0%"
-        else:
-            misses = output_silver
-            missingness = "100.0%" if output_silver > 0 else "0.0%"
-    else:
-        output_silver = 0
+        valid_mask = df_raw['eta_low_min'].notnull() & df_raw['provenance'].isin(['OBSERVED', 'FIXTURE', 'SIMULATED', 'DERIVED'])
+        df_bronze = df_raw[valid_mask].copy()
         
-    print(f"Input: {input_silver}")
-    print(f"Output: {output_silver}")
-    print(f"Weather matches: {weather_matches}")
-    print(f"Misses: {misses}")
-    print(f"Missingness: {missingness}")
+        # Deduplication on client_event_id
+        if 'client_event_id' in df_bronze:
+            df_bronze = df_bronze.drop_duplicates(subset=['client_event_id'])
+    else:
+        df_bronze = df_raw.copy()
+        
+    bronze_parquet = os.path.join(bronze_dir, "probe_observations.parquet")
+    df_bronze.to_parquet(bronze_parquet, index=False)
     
-    # 4. DQ (Data Quality)
-    print("\n--- Phase 4: DQ (Data Quality) ---")
+    valid_count = len(df_bronze)
+    rejected_count = input_bronze - valid_count
+    
+    print(f"Bronze Input: {input_bronze}, Valid: {valid_count}, Rejected: {rejected_count}")
+    
+    # 3. Silver Layer (Feature Normalization & Weather Join)
+    print("\n--- Phase 3: Silver Layer ---")
+    silver_dir = os.path.join(dirs["silver"], snapshot_id)
+    os.makedirs(silver_dir, exist_ok=True)
+    
+    df_silver = df_bronze.copy()
+    weather_matches = 0
+    weather_misses = len(df_silver)
+    missingness_pct = "100.0%" if len(df_silver) > 0 else "0.0%"
+    
+    if not df_silver.empty and 'weather_temperature' in df_silver:
+        weather_matches = int(df_silver['weather_temperature'].notnull().sum())
+        weather_misses = len(df_silver) - weather_matches
+        missingness_pct = f"{round((weather_misses / len(df_silver)) * 100, 2)}%"
+        
+    silver_parquet = os.path.join(silver_dir, "probe_observations.parquet")
+    df_silver.to_parquet(silver_parquet, index=False)
+    
+    print(f"Silver Output: {len(df_silver)}, Weather Matches: {weather_matches}, Misses: {weather_misses}, Missingness: {missingness_pct}")
+    
+    # 4. DQ Data Quality Gate
+    print("\n--- Phase 4: Data Quality (DQ) Rule Suite ---")
     rules = []
     
     # Rule 1: No duplicate client_event_id
-    if not df.empty and 'client_event_id' in df:
-        r1_pass = not df.duplicated(subset=['client_event_id']).any()
-    else:
-        r1_pass = True
-    rules.append({"rule": "DQ-001: No duplicate client_event_id", "result": "PASS" if r1_pass else "FAIL"})
+    r1 = not df_raw.duplicated(subset=['client_event_id']).any() if ('client_event_id' in df_raw and not df_raw.empty) else True
+    rules.append({"id": "DQ-001", "name": "No duplicate client_event_id", "status": "PASS" if r1 else "FAIL"})
     
     # Rule 2: ETA high >= ETA low
-    if not df.empty and 'eta_high_min' in df and 'eta_low_min' in df:
-        valid_eta_rows = df['eta_high_min'].notnull() & df['eta_low_min'].notnull()
-        if valid_eta_rows.any():
-            r2_pass = bool((df.loc[valid_eta_rows, 'eta_high_min'] >= df.loc[valid_eta_rows, 'eta_low_min']).all())
-        else:
-            r2_pass = True
+    if not df_raw.empty and 'eta_high_min' in df_raw and 'eta_low_min' in df_raw:
+        valid_eta = df_raw['eta_high_min'].notnull() & df_raw['eta_low_min'].notnull()
+        r2 = bool((df_raw.loc[valid_eta, 'eta_high_min'] >= df_raw.loc[valid_eta, 'eta_low_min']).all()) if valid_eta.any() else True
     else:
-        r2_pass = True
-    rules.append({"rule": "DQ-002: ETA high >= ETA low", "result": "PASS" if r2_pass else "FAIL"})
+        r2 = True
+    rules.append({"id": "DQ-002", "name": "ETA high >= ETA low", "status": "PASS" if r2 else "FAIL"})
     
-    # Rule 3: Known zone_cluster non-empty
-    if not df.empty and 'zone_cluster' in df:
-        r3_pass = bool(df['zone_cluster'].notnull().all())
-    else:
-        r3_pass = True
-    rules.append({"rule": "DQ-003: Known zone_cluster formats", "result": "PASS" if r3_pass else "FAIL"})
+    # Rule 3: Non-negative ETA low
+    r3 = bool((df_raw['eta_low_min'] >= 0).all()) if (not df_raw.empty and 'eta_low_min' in df_raw and df_raw['eta_low_min'].notnull().any()) else True
+    rules.append({"id": "DQ-003", "name": "Non-negative ETA low", "status": "PASS" if r3 else "FAIL"})
     
-    # Rule 4: Valid protocol (ANCHOR/BURST)
-    if not df.empty and 'protocol' in df:
-        r4_pass = bool(df['protocol'].isin(['ANCHOR', 'BURST']).all())
-    else:
-        r4_pass = True
-    rules.append({"rule": "DQ-004: Valid protocol (ANCHOR/BURST)", "result": "PASS" if r4_pass else "FAIL"})
+    # Rule 4: Non-negative Option Count
+    r4 = bool((df_raw['option_count'] >= 0).all()) if (not df_raw.empty and 'option_count' in df_raw and df_raw['option_count'].notnull().any()) else True
+    rules.append({"id": "DQ-004", "name": "Non-negative Option Count", "status": "PASS" if r4 else "FAIL"})
+    
+    # Rule 5: Valid Protocol (ANCHOR/BURST)
+    r5 = bool(df_raw['protocol'].isin(['ANCHOR', 'BURST']).all()) if (not df_raw.empty and 'protocol' in df_raw) else True
+    rules.append({"id": "DQ-005", "name": "Valid Protocol (ANCHOR/BURST)", "status": "PASS" if r5 else "FAIL"})
+
+    # Rule 6: Known Zone Cluster
+    r6 = bool(df_raw['zone_cluster'].notnull().all()) if (not df_raw.empty and 'zone_cluster' in df_raw) else True
+    rules.append({"id": "DQ-006", "name": "Known Zone Cluster", "status": "PASS" if r6 else "FAIL"})
     
     dq_passed = True
     for r in rules:
-        print(f"Rule {r['rule']}: {r['result']}")
-        if r['result'] == "FAIL":
+        print(f"Rule {r['id']} ({r['name']}): {r['status']}")
+        if r['status'] == "FAIL":
             dq_passed = False
 
     if not dq_passed:
@@ -161,7 +170,13 @@ def run_etl_pipeline():
     else:
         print("\n✅ ETL Pipeline execution completed successfully.")
         
-    return {"snapshot_id": snapshot_id, "dq_passed": dq_passed, "rows": len(df)}
+    return {
+        "snapshot_id": snapshot_id,
+        "dq_passed": dq_passed,
+        "raw_rows": len(df_raw),
+        "silver_rows": len(df_silver),
+        "rules": rules
+    }
 
 def build_experiment_a_dataset(df: pd.DataFrame) -> pd.DataFrame:
     """

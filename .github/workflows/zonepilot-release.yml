@@ -1,0 +1,81 @@
+name: ZonePilot Release Validation
+
+on:
+  push:
+    branches: [ "main", "ws/**" ]
+  pull_request:
+    branches: [ "main", "ws/**" ]
+
+jobs:
+  release-hardening:
+    name: ZonePilot Full Release Gate Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest pandas httpx fastapi pydantic pyjwt supabase pytz requests pyarrow
+          pip install -e ./python
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Setup Supabase CLI & Local Environment
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Local Supabase Stack
+        run: |
+          supabase start
+          supabase db reset
+
+      - name: Run Python Ruff Lint & Pytest Suite
+        env:
+          ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/data_root
+          SUPABASE_URL: http://127.0.0.1:54321
+          SUPABASE_ANON_KEY: REDACTED_CREDENTIAL_TOKEN
+          SUPABASE_SERVICE_ROLE_KEY: REDACTED_CREDENTIAL_TOKEN
+          SUPABASE_JWT_SECRET: REDACTED_SYNTHETIC_TEST_SECRET
+        run: |
+          ruff check .
+          pytest -v
+
+      - name: Run Node Frontend Checks
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run build
+
+      - name: Run Vitest Unit & Security Suite
+        run: npm test
+
+      - name: Run Playwright E2E Integration Suite
+        env:
+          SUPABASE_URL: http://127.0.0.1:54321
+          SUPABASE_ANON_KEY: REDACTED_CREDENTIAL_TOKEN
+          SUPABASE_SERVICE_ROLE_KEY: REDACTED_CREDENTIAL_TOKEN
+          SUPABASE_JWT_SECRET: REDACTED_SYNTHETIC_TEST_SECRET
+        run: |
+          python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
+          sleep 3
+          npx playwright test apps/observatory/tests/e2e/marketplace_probe_offline.spec.ts --project=chromium
+          npx playwright test apps/observatory/tests/e2e/volunteer_order_offline.spec.ts --project=chromium

@@ -48,6 +48,7 @@ def verify_backup_restore_cycle(sample_records: List[Dict[str, Any]]) -> bool:
         
         # 1. Backup
         backup_meta = run_backup(sample_records, backup_file)
+        assert backup_meta["record_count"] == orig_count
         
         # 2. Destructive mutation of local state
         working_state = []

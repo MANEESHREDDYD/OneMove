@@ -8,6 +8,7 @@ jobs:
     - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-    - run: cd python && pip install -e .[dev]
-    - run: cd python && ruff check .
-    - run: cd python && pytest
+    - run: pip install ruff pytest pandas httpx fastapi pydantic pyjwt supabase pytz requests
+    - run: pip install -e ./python
+    - run: ruff check .
+    - run: pytest

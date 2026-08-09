@@ -4,6 +4,7 @@ import hashlib
 import time
 import json
 import os
+import datetime
 import tempfile
 from typing import Optional, Dict, Any
 
@@ -79,12 +80,19 @@ def run_openmeteo_collection(start_date: str = "2025-08-08", end_date: str = "20
     df = pd.DataFrame(hourly)
     df["time"] = pd.to_datetime(df["time"])
     
-    # Expected hourly timestamp range validation
+    # Expected hourly timestamp range validation (Asia/Kolkata timezone)
     expected_times = pd.date_range(start=f"{start_date} 00:00", end=f"{end_date} 23:00", freq="1h", tz="Asia/Kolkata")
     
+    # Normalize returned timestamps to Asia/Kolkata timezone
+    if df["time"].dt.tz is None:
+        actual_times = df["time"].dt.tz_localize("Asia/Kolkata")
+    else:
+        actual_times = df["time"].dt.tz_convert("Asia/Kolkata")
+        
     returned_rows = len(df)
-    missing_hours = int(df.isnull().any(axis=1).sum())
-    duplicates = int(df.duplicated(subset=["time"]).sum())
+    missing_timestamps = len(set(expected_times) - set(actual_times))
+    duplicate_timestamps = int(actual_times.duplicated().sum())
+    rows_with_nulls = int(df.isnull().any(axis=1).sum())
     
     out_dir = get_target_dir("observed")
     out_path = os.path.join(out_dir, f"{start_date}_{end_date}.parquet")
@@ -99,8 +107,9 @@ def run_openmeteo_collection(start_date: str = "2025-08-08", end_date: str = "20
         "requested_range": f"{start_date} -> {end_date}",
         "returned_rows": returned_rows,
         "expected_rows": len(expected_times),
-        "missing_hours": missing_hours,
-        "duplicates": duplicates,
+        "missing_timestamps": missing_timestamps,
+        "duplicate_timestamps": duplicate_timestamps,
+        "rows_with_nulls": rows_with_nulls,
         "parquet_path": out_path,
         "parquet_sha256": file_hash,
         "created_at": datetime.datetime.utcnow().isoformat() + "Z"
@@ -113,8 +122,9 @@ def run_openmeteo_collection(start_date: str = "2025-08-08", end_date: str = "20
     print(f"Returned range: {df['time'].min()} -> {df['time'].max()}")
     print(f"Hourly rows: {returned_rows}")
     print(f"Expected rows: {len(expected_times)}")
-    print(f"Missing hours: {missing_hours}")
-    print(f"Duplicates: {duplicates}")
+    print(f"Missing timestamps: {missing_timestamps}")
+    print(f"Duplicate timestamps: {duplicate_timestamps}")
+    print(f"Rows with nulls: {rows_with_nulls}")
     print(f"Run ID: {run_id}")
     print(f"Manifest SHA256: {file_hash}")
     print(f"Execution time: {time.time() - start_time:.2f}s")
