@@ -34,6 +34,19 @@ const eslintConfig = defineConfig([
       "**/legacy_demo/**/*",
       "**/*.config.*"
     ],
+    ignores: [
+      "**/node_modules/**",
+      "**/.next/**",
+      "**/out/**",
+      "**/build/**",
+      "**/.turbo/**",
+      "**/playwright-report/**",
+      "**/test-results/**",
+      "**/coverage/**",
+      "**/.supabase/**",
+      "**/.cache/**",
+      "**/data_root/**"
+    ],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
       "@typescript-eslint/no-explicit-any": "off",
