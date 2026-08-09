@@ -5,11 +5,17 @@ from typing import Any, Dict, List
 
 
 def check_no_staging_contamination(records: List[Dict[str, Any]]) -> bool:
-    """Ensure no faker/demo/test data is present."""
+    """Ensure no faker/demo/test data is present using metadata first."""
     forbidden_terms = ['faker', 'demo', 'test', 'synthetic', 'mock']
+    forbidden_classes = ["TEST_ONLY", "STAGING_DO_NOT_USE", "DEMO_SYNTHETIC"]
     
     for record in records:
+        ev_class = record.get("evidence_class")
+        if ev_class in forbidden_classes:
+            return False
+            
         text = json.dumps(record).lower()
+        # secondary check
         for term in forbidden_terms:
             if term in text:
                 return False
@@ -55,7 +61,7 @@ def check_temporal_semantics(records: List[Dict[str, Any]], decision_time_ts: fl
     """
     for record in records:
         info_at = to_ts(record.get('information_available_at')) or to_ts(record.get('retrieved_at'))
-        if info_at and info_at > decision_time_ts + 300: # allow 5 min skew
+        if info_at and info_at > decision_time_ts:
             return False
             
         # We explicitly allow valid_at > decision_time_ts
