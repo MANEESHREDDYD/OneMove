@@ -1,8 +1,11 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, chromium } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "http://127.0.0.1:54321";
 const ANON_KEY = process.env.SUPABASE_ANON_KEY || "mock_anon_key";
 const LOCAL_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "mock_service_key";
+const FAIL_ON_MISSING = process.env.FAIL_ON_MISSING_SUPABASE === "true";
 
 let study_id = '';
 let assignment_id = '';
@@ -10,16 +13,19 @@ let test_token = '';
 let user_id = '';
 
 test.beforeAll(async () => {
-    // Graceful skip if running in environment without live Supabase
     try {
         const ping = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { apikey: ANON_KEY }, signal: AbortSignal.timeout(2000) });
-        if (!ping.ok && ping.status >= 500) return;
-    } catch {
+        if (!ping.ok && ping.status >= 500) {
+            if (FAIL_ON_MISSING) throw new Error("Supabase service unavailable in release validation mode");
+            return;
+        }
+    } catch (e) {
+        if (FAIL_ON_MISSING) throw new Error(`Supabase connection failed in release validation mode: ${e}`);
         return;
     }
 
-    const email = "e2e_marketplace_" + Date.now() + "@onemove.com";
-    const password = "password123";
+    const email = "e2e_mkt_pers_" + Date.now() + "@onemove.com";
+    const password = "password123!";
     
     const signupRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
         method: 'POST',
@@ -28,7 +34,10 @@ test.beforeAll(async () => {
     });
     
     const user = await signupRes.json();
-    if (!user.user) return;
+    if (!user.user) {
+        if (FAIL_ON_MISSING) throw new Error("Failed to create test user: " + JSON.stringify(user));
+        return;
+    }
     
     test_token = user.access_token;
     user_id = user.user.id;
@@ -59,17 +68,17 @@ test.beforeAll(async () => {
     await fetch(`${SUPABASE_URL}/rest/v1/participants`, {
         method: 'POST',
         headers: srv_headers,
-        body: JSON.stringify({ id: user_id, external_id: "ext_" + Date.now(), hash_key_version: "v1" })
+        body: JSON.stringify({ id: user_id, external_id: "ext_mkt_" + Date.now(), hash_key_version: "v1" })
     });
 
-    // 3. Assign OBSERVER Role to Participant
+    // 3. Assign OBSERVER Role
     await fetch(`${SUPABASE_URL}/rest/v1/participant_roles`, {
         method: 'POST',
         headers: srv_headers,
         body: JSON.stringify({ participant_id: user_id, study_id, role: "OBSERVER" })
     });
 
-    // 4. Create Real Assignment (SWIGGY / FOOD / ANCHOR)
+    // 4. Create Active Assignment (SWIGGY / FOOD / ANCHOR)
     const assignRes = await fetch(`${SUPABASE_URL}/rest/v1/assignments`, {
         method: 'POST',
         headers: srv_headers,
@@ -87,68 +96,99 @@ test.beforeAll(async () => {
     assignment_id = assignment[0].id;
 });
 
-test.describe('Marketplace Probe Offline E2E', () => {
-  test('should store probe offline, persist across context restart, and sync 1 row online', async ({ browser }) => {
+test.describe('Marketplace Probe Persistent Offline Profile E2E', () => {
+  test('should persist observation across real persistent browser process restart and sync 1 row online', async () => {
     if (!study_id || !assignment_id) {
-        test.skip(true, "Supabase environment unreachable or keys missing");
+        if (FAIL_ON_MISSING) {
+            throw new Error("Release gate failure: Supabase test setup failed to create study and assignment");
+        }
+        test.skip(true, "Supabase environment unreachable or credentials missing");
         return;
     }
 
-    const context = await browser.newContext();
-    const page = await context.newPage();
-
-    await page.goto('/');
-    await page.evaluate((token) => {
-        localStorage.setItem('zonepilot_jwt', token);
-    }, test_token);
-
-    // Open capture page with real assignment ID
-    await page.goto(`/capture?study_id=${study_id}&assignment_id=${assignment_id}`);
+    const userDataDir = path.join(process.cwd(), '.test_user_data_mkt_' + Date.now());
     
-    // Go offline
-    await context.setOffline(true);
-    
-    // Fill probe form
-    await page.selectOption('select', { label: 'Available' });
-    await page.locator('text=ETA Low (min)').locator('..').locator('input').fill('20');
-    await page.locator('text=ETA High (min)').locator('..').locator('input').fill('25');
-    await page.locator('text=Option Count').locator('..').locator('input').fill('15');
-    await page.locator('text=Basket Price').locator('..').locator('input').fill('350.00');
-    
-    await page.click('button[type="submit"]');
-    await page.waitForSelector('[data-testid="outbox-status"]');
-    
-    // Close context to prove offline persistence (IndexedDB)
-    await context.close();
+    try {
+        // Phase 1: Launch Persistent Context, Go Offline, Submit Observation
+        let context = await chromium.launchPersistentContext(userDataDir, { headless: true });
+        let page = context.pages()[0] || await context.newPage();
 
-    // Reopen context & reconnect online
-    const newContext = await browser.newContext();
-    await newContext.setOffline(false);
-    const newPage = await newContext.newPage();
-    
-    await newPage.goto('/');
-    await newPage.evaluate((token) => {
-        localStorage.setItem('zonepilot_jwt', token);
-    }, test_token);
+        await page.goto('http://localhost:3000/');
+        await page.evaluate((token) => {
+            localStorage.setItem('zonepilot_jwt', token);
+        }, test_token);
 
-    await newPage.goto(`/capture?study_id=${study_id}&assignment_id=${assignment_id}`);
-    await newPage.waitForTimeout(2000);
+        await page.goto(`http://localhost:3000/capture?study_id=${study_id}&assignment_id=${assignment_id}`);
+        
+        // Go offline
+        await context.setOffline(true);
+        
+        await page.selectOption('select', { label: 'Available' });
+        await page.locator('text=ETA Low (min)').locator('..').locator('input').fill('15');
+        await page.locator('text=ETA High (min)').locator('..').locator('input').fill('20');
+        await page.locator('text=Option Count').locator('..').locator('input').fill('12');
+        await page.locator('text=Basket Price').locator('..').locator('input').fill('280.00');
+        
+        await page.click('button[type="submit"]');
+        await page.waitForSelector('[data-testid="outbox-status"]');
+        
+        // Close persistent context completely to simulate browser/process restart
+        await context.close();
 
-    // Verify exactly one probe row is recorded in database
-    const probeRes = await fetch(`${SUPABASE_URL}/rest/v1/probe_observations?assignment_id=eq.${assignment_id}`, {
-        headers: {
-            "apikey": ANON_KEY,
-            "Authorization": `Bearer ${test_token}`
-        }
-    });
-    const data = await probeRes.json();
-    
-    expect(data.length).toBe(1);
-    expect(data[0].platform).toBe('SWIGGY');
-    expect(data[0].protocol).toBe('ANCHOR');
-    expect(data[0].eta_low_min).toBe(20);
-    expect(data[0].eta_high_min).toBe(25);
+        // Phase 2: Relaunch SAME user data directory offline -> Verify IndexedDB persistence
+        context = await chromium.launchPersistentContext(userDataDir, { headless: true, offline: true });
+        page = context.pages()[0] || await context.newPage();
 
-    await newContext.close();
+        await page.goto('http://localhost:3000/');
+        
+        // Inspect IndexedDB outbox key in offline state
+        const pendingCount = await page.evaluate(async () => {
+            return new Promise((resolve) => {
+                const req = indexedDB.open('keyval-store');
+                req.onsuccess = () => {
+                    const db = req.result;
+                    if (!db.objectStoreNames.contains('keyval')) {
+                        resolve(0);
+                        return;
+                    }
+                    const tx = db.transaction('keyval', 'readonly');
+                    const store = tx.objectStore('keyval');
+                    const getReq = store.get('zonepilot_outbox');
+                    getReq.onsuccess = () => {
+                        const val = getReq.result || [];
+                        resolve(val.length);
+                    };
+                    getReq.onerror = () => resolve(0);
+                };
+                req.onerror = () => resolve(0);
+            });
+        });
+
+        expect(pendingCount).toBeGreaterThanOrEqual(1);
+
+        // Phase 3: Reconnect Online & Trigger Sync
+        await context.setOffline(false);
+        await page.goto(`http://localhost:3000/capture?study_id=${study_id}&assignment_id=${assignment_id}`);
+        await page.waitForTimeout(3000);
+
+        // Phase 4: Verify PostgREST database row
+        const probeRes = await fetch(`${SUPABASE_URL}/rest/v1/probe_observations?assignment_id=eq.${assignment_id}`, {
+            headers: {
+                "apikey": ANON_KEY,
+                "Authorization": `Bearer ${test_token}`
+            }
+        });
+        const data = await probeRes.json();
+        
+        expect(data.length).toBe(1);
+        expect(data[0].platform).toBe('SWIGGY');
+        expect(data[0].protocol).toBe('ANCHOR');
+        expect(data[0].eta_low_min).toBe(15);
+        expect(data[0].eta_high_min).toBe(20);
+
+        await context.close();
+    } finally {
+        fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
   });
 });

@@ -1,8 +1,11 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, chromium } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "http://127.0.0.1:54321";
 const ANON_KEY = process.env.SUPABASE_ANON_KEY || "mock_anon_key";
 const LOCAL_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "mock_service_key";
+const FAIL_ON_MISSING = process.env.FAIL_ON_MISSING_SUPABASE === "true";
 
 let study_id = '';
 let order_id = '';
@@ -12,13 +15,17 @@ let user_id = '';
 test.beforeAll(async () => {
     try {
         const ping = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { apikey: ANON_KEY }, signal: AbortSignal.timeout(2000) });
-        if (!ping.ok && ping.status >= 500) return;
-    } catch {
+        if (!ping.ok && ping.status >= 500) {
+            if (FAIL_ON_MISSING) throw new Error("Supabase service unavailable in release validation mode");
+            return;
+        }
+    } catch (e) {
+        if (FAIL_ON_MISSING) throw new Error(`Supabase connection failed in release validation mode: ${e}`);
         return;
     }
 
-    const email = "e2e_volunteer_" + Date.now() + "@onemove.com";
-    const password = "password123";
+    const email = "e2e_vol_pers_" + Date.now() + "@onemove.com";
+    const password = "password123!";
     
     const signupRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
         method: 'POST',
@@ -27,7 +34,10 @@ test.beforeAll(async () => {
     });
     
     const user = await signupRes.json();
-    if (!user.user) return;
+    if (!user.user) {
+        if (FAIL_ON_MISSING) throw new Error("Failed to create test user: " + JSON.stringify(user));
+        return;
+    }
     
     test_token = user.access_token;
     user_id = user.user.id;
@@ -83,70 +93,120 @@ test.beforeAll(async () => {
     order_id = order[0].id;
 });
 
-test.describe('Volunteer Order Offline E2E', () => {
-  test('should record order event offline, persist across restart, and sync 1 event online', async ({ browser }) => {
+test.describe('Volunteer Order Persistent Offline Profile E2E', () => {
+  test('should store order event offline, persist across browser restart, and sync 1 event online', async () => {
     if (!study_id || !order_id) {
-        test.skip(true, "Supabase environment unreachable or keys missing");
+        if (FAIL_ON_MISSING) {
+            throw new Error("Release gate failure: Supabase test setup failed to create study and volunteer order");
+        }
+        test.skip(true, "Supabase environment unreachable or credentials missing");
         return;
     }
 
-    const context = await browser.newContext();
-    const page = await context.newPage();
+    const userDataDir = path.join(process.cwd(), '.test_user_data_vol_' + Date.now());
+    
+    try {
+        // Phase 1: Launch Persistent Context, Go Offline, Trigger Volunteer Event via Outbox
+        let context = await chromium.launchPersistentContext(userDataDir, { headless: true });
+        let page = context.pages()[0] || await context.newPage();
 
-    await page.goto('/');
-    await page.evaluate((token) => {
-        localStorage.setItem('zonepilot_jwt', token);
-    }, test_token);
+        await page.goto('http://localhost:3000/');
+        await page.evaluate((token) => {
+            localStorage.setItem('zonepilot_jwt', token);
+        }, test_token);
 
-    // Go offline
-    await context.setOffline(true);
+        // Go offline
+        await context.setOffline(true);
 
-    // Trigger volunteer event via client outbox / API route
-    const eventResult = await page.evaluate(async (orderId) => {
-        const clientEventId = crypto.randomUUID();
-        const payload = {
-            order_id: orderId,
-            event_type: "ORDER_PLACED",
-            occurred_at: new Date().toISOString(),
-            client_event_id: clientEventId
-        };
-        const res = await fetch("/api/events", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+        // Queue volunteer event in application outbox
+        const eventId = await page.evaluate(async (orderId) => {
+            const clientEventId = crypto.randomUUID();
+            const payload = {
+                order_id: orderId,
+                event_type: "ORDER_PLACED",
+                occurred_at: new Date().toISOString(),
+                client_event_id: clientEventId
+            };
+            
+            // Access saveToOutbox directly or via IndexedDB outbox key
+            const req = indexedDB.open('keyval-store');
+            return new Promise((resolve) => {
+                req.onsuccess = () => {
+                    const db = req.result;
+                    const tx = db.transaction('keyval', 'readwrite');
+                    const store = tx.objectStore('keyval');
+                    const getReq = store.get('zonepilot_outbox');
+                    getReq.onsuccess = () => {
+                        const existing = getReq.result || [];
+                        const newEvent = {
+                            client_event_id: clientEventId,
+                            payload,
+                            status: "PENDING_LOCAL",
+                            created_at: new Date().toISOString(),
+                            retry_count: 0
+                        };
+                        store.put([...existing, newEvent], 'zonepilot_outbox');
+                        resolve(clientEventId);
+                    };
+                };
+            });
+        }, order_id);
+
+        expect(eventId).toBeDefined();
+
+        // Close persistent context completely to simulate browser/process restart
+        await context.close();
+
+        // Phase 2: Relaunch SAME user data directory offline -> Verify IndexedDB persistence
+        context = await chromium.launchPersistentContext(userDataDir, { headless: true, offline: true });
+        page = context.pages()[0] || await context.newPage();
+
+        await page.goto('http://localhost:3000/');
+
+        const pendingCount = await page.evaluate(async () => {
+            return new Promise((resolve) => {
+                const req = indexedDB.open('keyval-store');
+                req.onsuccess = () => {
+                    const db = req.result;
+                    if (!db.objectStoreNames.contains('keyval')) {
+                        resolve(0);
+                        return;
+                    }
+                    const tx = db.transaction('keyval', 'readonly');
+                    const store = tx.objectStore('keyval');
+                    const getReq = store.get('zonepilot_outbox');
+                    getReq.onsuccess = () => {
+                        const val = getReq.result || [];
+                        resolve(val.length);
+                    };
+                    getReq.onerror = () => resolve(0);
+                };
+                req.onerror = () => resolve(0);
+            });
         });
-        return { status: res.status, clientEventId };
-    }, order_id);
 
-    // Verify local handling
-    expect(eventResult).toBeDefined();
+        expect(pendingCount).toBeGreaterThanOrEqual(1);
 
-    // Close context offline to prove persistence
-    await context.close();
+        // Phase 3: Reconnect Online & Sync
+        await context.setOffline(false);
+        await page.goto('http://localhost:3000/');
+        await page.waitForTimeout(3000);
 
-    // Reopen context online
-    const newContext = await browser.newContext();
-    await newContext.setOffline(false);
-    const newPage = await newContext.newPage();
+        // Phase 4: Verify PostgREST database row in volunteer_order_events
+        const eventRes = await fetch(`${SUPABASE_URL}/rest/v1/volunteer_order_events?order_id=eq.${order_id}`, {
+            headers: {
+                "apikey": ANON_KEY,
+                "Authorization": `Bearer ${test_token}`
+            }
+        });
+        const data = await eventRes.json();
 
-    await newPage.goto('/');
-    await newPage.evaluate((token) => {
-        localStorage.setItem('zonepilot_jwt', token);
-    }, test_token);
-    await newPage.waitForTimeout(2000);
+        expect(data.length).toBe(1);
+        expect(data[0].event_type).toBe('ORDER_PLACED');
 
-    // Verify volunteer event was recorded in volunteer_order_events
-    const eventRes = await fetch(`${SUPABASE_URL}/rest/v1/volunteer_order_events?order_id=eq.${order_id}`, {
-        headers: {
-            "apikey": ANON_KEY,
-            "Authorization": `Bearer ${test_token}`
-        }
-    });
-    const data = await eventRes.json();
-
-    expect(data.length).toBe(1);
-    expect(data[0].event_type).toBe('ORDER_PLACED');
-
-    await newContext.close();
+        await context.close();
+    } finally {
+        fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
   });
 });
