@@ -21,7 +21,8 @@ const eslintConfig = defineConfig([
     "**/playwright-report/**",
     "**/test-results/**",
     "**/coverage/**",
-    "**/*.ps1"
+    "**/*.ps1",
+    "**/node_modules/**"
   ]),
   {
     files: [
