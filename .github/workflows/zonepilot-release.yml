@@ -29,7 +29,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest pandas httpx fastapi pydantic pyjwt supabase pytz requests pyarrow
+          pip install ruff pytest pandas httpx fastapi pydantic pyjwt supabase pytz requests pyarrow python-dotenv
           pip install -e ./python
 
       - name: Install Node Dependencies
@@ -48,10 +48,32 @@ jobs:
           supabase start
           supabase db reset
           STATUS_JSON=$(supabase status -o json)
-          API_URL=$(echo "$STATUS_JSON" | jq -r '.API_URL // "http://127.0.0.1:54321"')
+          
+          API_URL=$(echo "$STATUS_JSON" | jq -r '.API_URL')
           ANON_KEY=$(echo "$STATUS_JSON" | jq -r '.ANON_KEY')
           SERVICE_KEY=$(echo "$STATUS_JSON" | jq -r '.SERVICE_ROLE_KEY')
-          JWT_SECRET=$(echo "$STATUS_JSON" | jq -r '.JWT_SECRET // "REDACTED_SYNTHETIC_TEST_SECRET"')
+          JWT_SECRET=$(echo "$STATUS_JSON" | jq -r '.JWT_SECRET')
+          
+          if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
+            echo "Error: Supabase API_URL is missing or null."
+            exit 1
+          fi
+          if [ -z "$ANON_KEY" ] || [ "$ANON_KEY" = "null" ]; then
+            echo "Error: Supabase ANON_KEY is missing or null."
+            exit 1
+          fi
+          if [ -z "$SERVICE_KEY" ] || [ "$SERVICE_KEY" = "null" ]; then
+            echo "Error: Supabase SERVICE_ROLE_KEY is missing or null."
+            exit 1
+          fi
+          if [ -z "$JWT_SECRET" ] || [ "$JWT_SECRET" = "null" ]; then
+            echo "Error: Supabase JWT_SECRET is missing or null."
+            exit 1
+          fi
+
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_KEY"
+          echo "::add-mask::$JWT_SECRET"
           
           echo "SUPABASE_URL=$API_URL" >> $GITHUB_ENV
           echo "SUPABASE_ANON_KEY=$ANON_KEY" >> $GITHUB_ENV
@@ -77,6 +99,13 @@ jobs:
       - name: Run Playwright E2E Integration Suite
         run: |
           python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
-          sleep 3
+          npm start -- -p 3000 &
+          
+          echo "Waiting for FastAPI backend..."
+          timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:8000/healthz)" != "200" ]]; do sleep 2; done' || (echo "Backend failed" && exit 1)
+          
+          echo "Waiting for Next.js frontend..."
+          timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:3000/)" != "200" ]]; do sleep 2; done' || (echo "Frontend failed" && exit 1)
+          
           npx playwright test apps/observatory/tests/e2e/marketplace_probe_offline.spec.ts --project=chromium
           npx playwright test apps/observatory/tests/e2e/volunteer_order_offline.spec.ts --project=chromium
