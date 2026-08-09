@@ -17,7 +17,7 @@ def run_osmium(command_args):
     """Run osmium via docker"""
     # Fix paths for docker volume mount: mount OSM_DIR to /data
     cmd = [
-        "docker", "run", "--rm", "-v", f"{OSM_DIR}:/data", OSMIUM_IMAGE
+        "docker", "run", "--rm", "-v", f"{OSM_DIR}:/data", OSMIUM_IMAGE, "osmium"
     ] + command_args
     subprocess.run(cmd, check=True)
 
@@ -35,9 +35,9 @@ def run_osm_midnight():
     # Download PBF and MD5
     print(f"Downloading {GEOFABRIK_URL}...")
     if not os.path.exists(pbf_path):
-        subprocess.run(["curl", "-s", "-o", pbf_path, GEOFABRIK_URL], check=True)
+        subprocess.run(["curl", "-s", "-L", "-o", pbf_path, GEOFABRIK_URL], check=True)
     if not os.path.exists(md5_path):
-        subprocess.run(["curl", "-s", "-o", md5_path, GEOFABRIK_URL + ".md5"], check=True)
+        subprocess.run(["curl", "-s", "-L", "-o", md5_path, GEOFABRIK_URL + ".md5"], check=True)
     
     # Verify MD5
     with open(md5_path, "r") as f:
@@ -82,7 +82,7 @@ def run_osm_midnight():
     print("Getting road graph statistics...")
     info_proc = subprocess.run([
         "docker", "run", "--rm", "-v", f"{OSM_DIR}:/data", OSMIUM_IMAGE,
-        "fileinfo", "-e", f"/data/{roads_pbf_name}"
+        "osmium", "fileinfo", "-e", f"/data/{roads_pbf_name}"
     ], capture_output=True, text=True, check=True)
     
     nodes_count = 0
@@ -96,7 +96,7 @@ def run_osm_midnight():
     print("Getting POI statistics...")
     poi_info_proc = subprocess.run([
         "docker", "run", "--rm", "-v", f"{OSM_DIR}:/data", OSMIUM_IMAGE,
-        "fileinfo", "-e", f"/data/{pois_pbf_name}"
+        "osmium", "fileinfo", "-e", f"/data/{pois_pbf_name}"
     ], capture_output=True, text=True, check=True)
     
     pois_count = 0
