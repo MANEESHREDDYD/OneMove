@@ -1,14 +1,12 @@
 from fastapi import FastAPI
-from routers import events, governance
+from services.api.routers import events, governance, observatory, health
 
 app = FastAPI(title="ZonePilot API", version="1.5.1")
 
 app.include_router(events.router)
 app.include_router(governance.router)
-
-@app.get("/healthz")
-async def healthz():
-    return {"status": "ok"}
+app.include_router(observatory.router)
+app.include_router(health.router)
 
 @app.get("/readyz")
 async def readyz():
