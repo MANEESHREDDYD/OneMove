@@ -7,7 +7,7 @@ from datetime import datetime
 DATA_ROOT = os.environ.get("ZONEPILOT_DATA_ROOT", os.path.join(os.getcwd(), "data_root"))
 OSM_DIR = os.path.join(DATA_ROOT, "private", "official", "raw", "osm")
 GEOFABRIK_URL = "https://download.geofabrik.de/asia/india/southern-zone-latest.osm.pbf"
-OSMIUM_IMAGE = "stefda/osmium-tool"
+OSMIUM_IMAGE = "stefda/osmium-tool@sha256:d2321d0e926f77ead7547b4b35f5cf98d9fd74043673cecc4fc2bb7cce06ff63"
 
 def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
@@ -53,8 +53,9 @@ def run_osm_midnight():
     
     if expected_md5 != actual_md5:
         print(f"MD5 mismatch! Expected {expected_md5}, got {actual_md5}")
-        print("Continuing with actual MD5 for testing if needed, or fail.")
-        # We don't fail hard here for the sake of progressing if Geofabrik updated during download
+        print("INTEGRITY_FAILED")
+        import sys
+        sys.exit(1)
     else:
         print(f"PBF Checksum Verified: {actual_md5}")
     
@@ -72,10 +73,15 @@ def run_osm_midnight():
     print("Extracting road network...")
     run_osmium(["tags-filter", f"/data/{pilot_pbf_name}", "w/highway", "-o", f"/data/{roads_pbf_name}", "--overwrite"])
     
-    # Extract POIs (amenities, shops)
+    # Extract POIs (amenities, shops, crafts)
     pois_pbf_name = "pilot_pois.osm.pbf"
     print("Extracting POIs...")
-    run_osmium(["tags-filter", f"/data/{pilot_pbf_name}", "n/amenity", "n/shop", "-o", f"/data/{pois_pbf_name}", "--overwrite"])
+    run_osmium(["tags-filter", f"/data/{pilot_pbf_name}", "n/amenity", "n/shop", "n/craft", "-o", f"/data/{pois_pbf_name}", "--overwrite"])
+    
+    # Export POIs to GeoJSON
+    silver_pois_name = "silver_pois.geojson"
+    print("Exporting POIs to GeoJSON...")
+    run_osmium(["export", f"/data/{pois_pbf_name}", "-o", f"/data/{silver_pois_name}", "--overwrite"])
     
     # Run osmium fileinfo to get node and edge counts
     print("Getting road graph statistics...")
@@ -112,8 +118,8 @@ def run_osm_midnight():
         "source_md5": actual_md5,
         "bbox": BBOX,
         "clip_size_bytes": os.path.getsize(pilot_pbf_path),
-        "nodes": nodes_count,
-        "edges": ways_count,
+        "osm_pbf_nodes": nodes_count,
+        "osm_highway_ways": ways_count,
         "pois": pois_count
     }
     with open(os.path.join(OSM_DIR, "manifest.json"), "w") as f:
