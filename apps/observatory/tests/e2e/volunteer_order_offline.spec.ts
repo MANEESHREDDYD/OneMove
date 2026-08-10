@@ -110,7 +110,7 @@ test.describe('Volunteer Order Persistent Offline Profile E2E', () => {
         let context = await chromium.launchPersistentContext(userDataDir, { headless: true });
         let page = context.pages()[0] || await context.newPage();
 
-        await page.goto('http://localhost:3000/');
+        await page.goto('http://localhost:3001/');
         await page.evaluate((token) => {
             localStorage.setItem('zonepilot_jwt', token);
         }, test_token);
@@ -161,7 +161,7 @@ test.describe('Volunteer Order Persistent Offline Profile E2E', () => {
         context = await chromium.launchPersistentContext(userDataDir, { headless: true, offline: true });
         page = context.pages()[0] || await context.newPage();
 
-        await page.goto('http://localhost:3000/');
+        await page.goto('http://localhost:3001/');
 
         const pendingCount = await page.evaluate(async () => {
             return new Promise((resolve) => {
@@ -189,7 +189,7 @@ test.describe('Volunteer Order Persistent Offline Profile E2E', () => {
 
         // Phase 3: Reconnect Online & Sync
         await context.setOffline(false);
-        await page.goto('http://localhost:3000/');
+        await page.goto('http://localhost:3001/');
         await page.waitForTimeout(3000);
 
         // Phase 4: Verify PostgREST database row in volunteer_order_events

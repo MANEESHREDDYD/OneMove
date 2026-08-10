@@ -106,6 +106,7 @@ jobs:
           npm run lint
           npm run typecheck
           npm run build
+          cd apps/observatory && npm ci && npm run build && cd ../..
 
       - name: Run Vitest Unit & Security Suite
         run: npm test
@@ -115,12 +116,17 @@ jobs:
           pkill -f uvicorn || true
           PYTHONPATH=services/api python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
           npm start -- -p 3000 &
+          cd apps/observatory && npm start -- -p 3001 &
+          cd ../..
           
           echo "Waiting for FastAPI backend..."
           timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:8000/healthz)" != "200" ]]; do sleep 2; done' || (echo "Backend failed" && exit 1)
           
           echo "Waiting for Next.js frontend..."
           timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:3000/)" != "200" ]]; do sleep 2; done' || (echo "Frontend failed" && exit 1)
+          
+          echo "Waiting for Observatory frontend..."
+          timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:3001/)" != "200" && "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:3001/)" != "404" ]]; do sleep 2; done' || (echo "Observatory failed" && exit 1)
           
           echo "Seeding demo auth users..."
           npm run seed:auth

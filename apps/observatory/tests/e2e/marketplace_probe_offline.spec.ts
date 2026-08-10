@@ -113,12 +113,12 @@ test.describe('Marketplace Probe Persistent Offline Profile E2E', () => {
         let context = await chromium.launchPersistentContext(userDataDir, { headless: true });
         let page = context.pages()[0] || await context.newPage();
 
-        await page.goto('http://localhost:3000/');
+        await page.goto('http://localhost:3001/');
         await page.evaluate((token) => {
             localStorage.setItem('zonepilot_jwt', token);
         }, test_token);
 
-        await page.goto(`http://localhost:3000/capture?study_id=${study_id}&assignment_id=${assignment_id}`);
+        await page.goto(`http://localhost:3001/capture?study_id=${study_id}&assignment_id=${assignment_id}`);
         
         // Go offline
         await context.setOffline(true);
@@ -139,7 +139,7 @@ test.describe('Marketplace Probe Persistent Offline Profile E2E', () => {
         context = await chromium.launchPersistentContext(userDataDir, { headless: true, offline: true });
         page = context.pages()[0] || await context.newPage();
 
-        await page.goto('http://localhost:3000/');
+        await page.goto('http://localhost:3001/');
         
         // Inspect IndexedDB outbox key in offline state
         const pendingCount = await page.evaluate(async () => {
@@ -168,7 +168,7 @@ test.describe('Marketplace Probe Persistent Offline Profile E2E', () => {
 
         // Phase 3: Reconnect Online & Trigger Sync
         await context.setOffline(false);
-        await page.goto(`http://localhost:3000/capture?study_id=${study_id}&assignment_id=${assignment_id}`);
+        await page.goto(`http://localhost:3001/capture?study_id=${study_id}&assignment_id=${assignment_id}`);
         await page.waitForTimeout(3000);
 
         // Phase 4: Verify PostgREST database row
