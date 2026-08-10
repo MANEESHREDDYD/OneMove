@@ -45,7 +45,7 @@ jobs:
 
       - name: Start Local Supabase Stack & Bootstrap Dynamic Credentials
         run: |
-          sed -i 's/jwt_expiry = 3600/jwt_expiry = 3600\njwt_secret = "REDACTED_SYNTHETIC_TEST_SECRET"/' supabase/config.toml
+          echo 'SUPABASE_JWT_SECRET="REDACTED_SYNTHETIC_TEST_SECRET"' > supabase/.env
           supabase start
           supabase db reset
           STATUS_JSON=$(supabase status -o json)
