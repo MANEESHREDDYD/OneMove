@@ -1,9 +1,10 @@
-import os
-import json
-import subprocess
 import datetime
 import hashlib
+import json
+import os
+import subprocess
 import sys
+
 
 def run_auditor():
     print("=== ZONEPILOT REMOTE EVIDENCE AUDITOR V2 ===")
@@ -48,7 +49,6 @@ def run_auditor():
         # Check actual status
         missing = []
         failed = []
-        found_workflows = [c.get("name") or c.get("context") for c in checks]
         for req in required_workflows:
             req_check = next((c for c in checks if (c.get("name") == req or c.get("context") == req)), None)
             if not req_check:
@@ -153,9 +153,10 @@ def run_auditor():
     # 6. Contamination
     contamination_hits = 0
     forbidden = [b"faker", b"demo", b"synthetic", b"mock", b"staging", b"seed"]
-    for root, dirs, files in os.walk(os.path.join(data_root, 'private', 'official')):
+    for root, _dirs, files in os.walk(os.path.join(data_root, 'private', 'official')):
         for f in files:
-            if f.endswith('.osm.pbf'): continue 
+            if f.endswith('.osm.pbf'):
+                continue
             filepath = os.path.join(root, f)
             try:
                 with open(filepath, 'rb') as file:

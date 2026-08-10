@@ -3,8 +3,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from services.api.routers import events, governance, health, observatory
 from services.api.core.middleware import RequestIdMiddleware
+from services.api.routers import events, governance, health, observatory
 
 app = FastAPI(title="ZonePilot API", version="1.5.1")
 app.add_middleware(RequestIdMiddleware)

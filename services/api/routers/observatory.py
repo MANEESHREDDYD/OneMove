@@ -1,7 +1,9 @@
 
-import h3
 import os
-from fastapi import APIRouter, HTTPException, Request, Depends
+
+import h3
+from fastapi import APIRouter, Depends, HTTPException, Request
+
 from services.api.core.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1", tags=["observatory"])

@@ -1,6 +1,6 @@
+import datetime
 import json
 import os
-import datetime
 
 DATA_ROOT = os.environ.get("ZONEPILOT_DATA_ROOT", os.path.join(os.getcwd(), "data_root"))
 PRIVATE_DIR = os.path.join(DATA_ROOT, "private", "official")

@@ -1,7 +1,8 @@
 import uuid
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
+
+from fastapi import Request
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 MAX_PAYLOAD_SIZE = 1024 * 1024 * 4 # 4 MiB (Limit for standard routes)
 MAX_SCENARIO_PAYLOAD = 1024 * 1024 * 2 # 2 MiB scenario payload
@@ -32,7 +33,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             response.headers["x-request-id"] = req_id
             return response
-        except Exception as e:
+        except Exception:
             # We don't catch HTTPException here as FastAPI handles it,
             # but if it's an unhandled 500 error, we format it centrally.
             return JSONResponse(

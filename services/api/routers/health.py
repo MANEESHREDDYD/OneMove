@@ -1,6 +1,5 @@
 import os
 
-import httpx
 from fastapi import APIRouter, Response
 
 router = APIRouter(tags=["observability"])

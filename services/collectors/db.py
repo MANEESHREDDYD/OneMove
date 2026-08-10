@@ -2,8 +2,10 @@ import datetime
 import json
 import os
 import uuid
+
 import psycopg
 from psycopg.errors import UniqueViolation
+
 
 def get_db_connection():
     """Get a connection to the Postgres database using ZONEPILOT_DB_URL"""

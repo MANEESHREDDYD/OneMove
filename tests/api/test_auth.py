@@ -6,13 +6,16 @@ import pytest
 from core.auth import verify_token
 from fastapi import HTTPException
 
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "REDACTED_SYNTHETIC_TEST_SECRET")
+SUPABASE_JWT_SECRET = "REDACTED_SYNTHETIC_TEST_SECRET"
 os.environ["SUPABASE_JWT_SECRET"] = SUPABASE_JWT_SECRET
+os.environ["SUPABASE_JWT_AUDIENCE"] = "authenticated"
+os.environ["SUPABASE_JWT_ISSUER"] = "zonepilot_issuer"
 
 def test_verify_token_valid():
     payload = {
         "sub": "user-123",
         "aud": "authenticated",
+        "iss": "zonepilot_issuer",
         "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
     }
     token = jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm="HS256")
@@ -23,6 +26,7 @@ def test_verify_token_altered_payload():
     payload = {
         "sub": "user-123",
         "aud": "authenticated",
+        "iss": "zonepilot_issuer",
         "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
     }
     token = jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm="HS256")
@@ -38,6 +42,7 @@ def test_verify_token_altered_signature():
     payload = {
         "sub": "user-123",
         "aud": "authenticated",
+        "iss": "zonepilot_issuer",
         "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
     }
     token = jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm="HS256")
@@ -52,6 +57,7 @@ def test_verify_token_expired():
     payload = {
         "sub": "user-123",
         "aud": "authenticated",
+        "iss": "zonepilot_issuer",
         "exp": datetime.datetime.utcnow() - datetime.timedelta(hours=1)
     }
     token = jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm="HS256")
@@ -69,6 +75,7 @@ def test_verify_token_unsigned():
     payload = {
         "sub": "user-123",
         "aud": "authenticated",
+        "iss": "zonepilot_issuer",
         "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
     }
     token = jwt.encode(payload, "", algorithm="none")
@@ -80,6 +87,7 @@ def test_verify_token_wrong_audience():
     payload = {
         "sub": "user-123",
         "aud": "public",
+        "iss": "zonepilot_issuer",
         "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
     }
     token = jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm="HS256")
@@ -91,6 +99,7 @@ def test_verify_token_wrong_audience():
 def test_verify_token_without_subject():
     payload = {
         "aud": "authenticated",
+        "iss": "zonepilot_issuer",
         "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
     }
     token = jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm="HS256")
@@ -100,6 +109,7 @@ def test_verify_token_without_subject():
     assert "missing sub" in exc.value.detail.lower()
 
 def test_verify_token_wrong_issuer_rejected():
+    original_issuer = os.environ.get("SUPABASE_JWT_ISSUER")
     os.environ["SUPABASE_JWT_ISSUER"] = "https://trusted-supabase.com/auth/v1"
     try:
         payload = {
@@ -114,5 +124,8 @@ def test_verify_token_wrong_issuer_rejected():
         assert exc.value.status_code == 401
         assert "issuer" in exc.value.detail.lower()
     finally:
-        os.environ.pop("SUPABASE_JWT_ISSUER", None)
+        if original_issuer:
+            os.environ["SUPABASE_JWT_ISSUER"] = original_issuer
+        else:
+            os.environ.pop("SUPABASE_JWT_ISSUER", None)
 

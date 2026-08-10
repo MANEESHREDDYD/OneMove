@@ -1,6 +1,5 @@
-import pytest
-from datetime import datetime, timezone
-from services.collectors.dq import check_temporal_semantics, to_ts, check_no_staging_contamination
+from services.collectors.dq import check_no_staging_contamination, check_temporal_semantics, to_ts
+
 
 def test_dq_temporal_case_a():
     """

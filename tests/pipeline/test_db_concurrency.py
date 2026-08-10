@@ -1,10 +1,12 @@
 import datetime
-import os
 import multiprocessing
+import os
+
 import psycopg
 import pytest
 
-from services.collectors.db import attempt_claim_slot, mark_slot_completed
+from services.collectors.db import attempt_claim_slot
+
 
 def _worker_task(worker_id, barrier, queue, provider, dataset, interval, query_hash, db_url):
     os.environ["WORKFLOW_RUN_ID"] = worker_id

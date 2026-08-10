@@ -68,7 +68,7 @@ def test_wrong_workspace():
     assert response.status_code == 403
 
 def test_wrong_role():
-    from fastapi import FastAPI, Depends, Request
+    from fastapi import Depends, FastAPI, Request
     from fastapi.testclient import TestClient
     
     app_test = FastAPI()

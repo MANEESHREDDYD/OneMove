@@ -4,10 +4,10 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from services.api.core.auth import get_supabase
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
+from services.api.core.auth import get_supabase
 from supabase import Client, create_client
 
 router = APIRouter()

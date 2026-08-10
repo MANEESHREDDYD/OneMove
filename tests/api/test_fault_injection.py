@@ -1,7 +1,6 @@
-import os
-import psycopg
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import psycopg
 from fastapi.testclient import TestClient
 
 from services.api.main import app
