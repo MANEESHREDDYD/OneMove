@@ -53,8 +53,15 @@ jobs:
           ANON_KEY=$(echo "$STATUS_JSON" | jq -r '.ANON_KEY')
           SERVICE_KEY=$(echo "$STATUS_JSON" | jq -r '.SERVICE_ROLE_KEY')
           
-          JWKS_JSON=$(curl -s http://127.0.0.1:54321/auth/v1/jwks)
-          X5C=$(echo "$JWKS_JSON" | jq -r '.keys[0].x5c[0]')
+          # Wait for GoTrue JWKS to be available
+          for i in {1..30}; do
+            JWKS_JSON=$(curl -s http://127.0.0.1:54321/auth/v1/jwks || echo "{}")
+            X5C=$(echo "$JWKS_JSON" | jq -r '.keys[0].x5c[0]' 2>/dev/null || echo "null")
+            if [ "$X5C" != "null" ] && [ -n "$X5C" ]; then
+              break
+            fi
+            sleep 1
+          done
           
           if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
             echo "Error: Supabase API_URL is missing or null."
