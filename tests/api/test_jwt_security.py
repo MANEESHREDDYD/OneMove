@@ -1,7 +1,7 @@
-import os
 import time
 
 import jwt
+import pytest
 from fastapi.testclient import TestClient
 
 from services.api.core.auth import get_current_user
@@ -10,9 +10,12 @@ from services.api.main import app
 client = TestClient(app)
 
 SECRET = "REDACTED_SYNTHETIC_TEST_SECRET"
-os.environ["SUPABASE_JWT_SECRET"] = SECRET
-os.environ["SUPABASE_JWT_AUDIENCE"] = "authenticated"
-os.environ["SUPABASE_JWT_ISSUER"] = "zonepilot_issuer"
+
+@pytest.fixture(autouse=True)
+def setup_env(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", SECRET)
+    monkeypatch.setenv("SUPABASE_JWT_AUDIENCE", "authenticated")
+    monkeypatch.setenv("SUPABASE_JWT_ISSUER", "zonepilot_issuer")
 
 def create_token(payload: dict, secret: str = SECRET) -> str:
     default_payload = {
