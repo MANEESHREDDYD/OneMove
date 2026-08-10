@@ -86,6 +86,7 @@ jobs:
           echo "ZONEPILOT_ENV=test" >> $GITHUB_ENV
           echo "ZONEPILOT_ALLOW_DB_TEST_RESET=1" >> $GITHUB_ENV
           echo "ZONEPILOT_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+          echo "DIRECT_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
 
       - name: Run Python Ruff Lint & Pytest Suite
         run: |
@@ -120,6 +121,9 @@ jobs:
           
           echo "Waiting for Next.js frontend..."
           timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:3000/)" != "200" ]]; do sleep 2; done' || (echo "Frontend failed" && exit 1)
+          
+          echo "Seeding demo auth users..."
+          npm run seed:auth
           
           npx playwright test apps/observatory/tests/e2e/marketplace_probe_offline.spec.ts --project=chromium
           npx playwright test apps/observatory/tests/e2e/volunteer_order_offline.spec.ts --project=chromium
