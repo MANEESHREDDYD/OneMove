@@ -29,7 +29,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest pandas httpx fastapi uvicorn pydantic pyjwt supabase pytz requests pyarrow python-dotenv
+          pip install ruff pytest pandas httpx fastapi uvicorn pydantic pyjwt supabase pytz requests pyarrow python-dotenv h3 "psycopg[binary]"
           pip install -e ./python
 
       - name: Install Node Dependencies
