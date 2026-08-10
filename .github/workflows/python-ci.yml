@@ -18,20 +18,18 @@ jobs:
         version: latest
     - name: Start Local Supabase Stack & Bootstrap Dynamic Credentials
       run: |
-        echo 'SUPABASE_JWT_SECRET="REDACTED_SYNTHETIC_TEST_SECRET"' > supabase/.env
         supabase start
         supabase db reset
         STATUS_JSON=$(supabase status -o json)
         API_URL=$(echo "$STATUS_JSON" | jq -r '.API_URL')
         ANON_KEY=$(echo "$STATUS_JSON" | jq -r '.ANON_KEY')
         SERVICE_KEY=$(echo "$STATUS_JSON" | jq -r '.SERVICE_ROLE_KEY')
-        JWT_SECRET=$(echo "$STATUS_JSON" | jq -r '.JWT_SECRET')
         echo "SUPABASE_URL=$API_URL" >> $GITHUB_ENV
         echo "SUPABASE_ANON_KEY=$ANON_KEY" >> $GITHUB_ENV
         echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> $GITHUB_ENV
         echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> $GITHUB_ENV
         echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> $GITHUB_ENV
-        echo "SUPABASE_JWT_SECRET=$JWT_SECRET" >> $GITHUB_ENV
+        echo 'SUPABASE_JWT_SECRET="REDACTED_SYNTHETIC_TEST_SECRET"' >> $GITHUB_ENV
         echo "ZONEPILOT_DATA_ROOT=${{ github.workspace }}/data_root" >> $GITHUB_ENV
     - name: Run Pytest Suite
       run: |
