@@ -27,14 +27,7 @@ email2 = "test_user_f@onemove.com"
 email3 = "test_user_g@onemove.com" # owner
 password = "testpassword123"
 
-def create_local_token(user_id: str) -> str:
-    payload = {
-        "role": "authenticated",
-        "sub": user_id,
-        "aud": "authenticated",
-        "exp": int(time.time()) + 3600
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
 
 @pytest.fixture(scope="module")
 def setup_users():
@@ -47,15 +40,15 @@ def setup_users():
     
     res1 = requests.post(f"{SUPABASE_URL}/auth/v1/token?grant_type=password", headers=headers, json={"email": email1, "password": password})
     u1_id = res1.json().get("user", {}).get("id")
-    user1 = {"token": create_local_token(u1_id), "id": u1_id}
+    user1 = {"token": res1.json().get("access_token"), "id": u1_id}
     
     res2 = requests.post(f"{SUPABASE_URL}/auth/v1/token?grant_type=password", headers=headers, json={"email": email2, "password": password})
     u2_id = res2.json().get("user", {}).get("id")
-    user2 = {"token": create_local_token(u2_id), "id": u2_id}
+    user2 = {"token": res2.json().get("access_token"), "id": u2_id}
     
     res3 = requests.post(f"{SUPABASE_URL}/auth/v1/token?grant_type=password", headers=headers, json={"email": email3, "password": password})
     u3_id = res3.json().get("user", {}).get("id")
-    user3 = {"token": create_local_token(u3_id), "id": u3_id}
+    user3 = {"token": res3.json().get("access_token"), "id": u3_id}
     
     # Use service key to provision studies and assignments
     service_headers = {"apikey": LOCAL_SERVICE_KEY, "Authorization": f"Bearer {LOCAL_SERVICE_KEY}", "Content-Type": "application/json", "Prefer": "return=representation"}
