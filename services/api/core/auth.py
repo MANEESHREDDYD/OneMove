@@ -9,13 +9,13 @@ from supabase import Client, create_client
 security = HTTPBearer(auto_error=False)
 
 def verify_token(token: str) -> dict:
-    jwt_secret = os.environ.get("SUPABASE_JWT_SECRET", "REDACTED_SYNTHETIC_TEST_SECRET")
+    jwt_secret = os.environ.get("SUPABASE_JWT_SECRET")
     jwt_public_key = os.environ.get("SUPABASE_JWT_PUBLIC_KEY")
     expected_issuer = os.environ.get("SUPABASE_JWT_ISSUER")
     expected_audience = os.environ.get("SUPABASE_JWT_AUDIENCE", "authenticated")
     algorithm = os.environ.get("SUPABASE_JWT_ALGORITHM", "HS256")
 
-    verification_key = jwt_public_key if algorithm == "RS256" and jwt_public_key else jwt_secret
+    verification_key = jwt_public_key if algorithm in ("RS256", "ES256") and jwt_public_key else jwt_secret
 
     if not verification_key:
         raise HTTPException(status_code=500, detail="SUPABASE_JWT_SECRET environment variable missing")
