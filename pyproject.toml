@@ -4,18 +4,18 @@ version = "0.1.0"
 description = "ZonePilot Physical Commerce Network Simulator"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi==0.111.0",
-    "uvicorn==0.29.0",
-    "pydantic==2.7.1",
-    "pydantic-settings==2.2.1",
-    "httpx==0.27.0",
-    "psycopg[binary,pool]==3.1.18",
-    "PyYAML==6.0.1",
-    "pytz==2024.1",
-    "h3==3.7.6",
-    "pyarrow==16.0.0",
-    "PyJWT==2.8.0",
-    "osmium==3.6.0",
+    "fastapi>=0.111.0",
+    "uvicorn>=0.29.0",
+    "pydantic>=2.7.1",
+    "pydantic-settings>=2.2.1",
+    "httpx>=0.27.0",
+    "psycopg[binary,pool]>=3.1.18",
+    "PyYAML>=6.0.1",
+    "pytz>=2024.1",
+    "h3>=3.7.6",
+    "pyarrow>=16.0.0",
+    "PyJWT>=2.8.0",
+    "osmium>=3.6.0",
     "pandas>=2.0.0",
     "requests>=2.30.0",
     "supabase>=2.3.0",
@@ -29,6 +29,13 @@ dev = [
     "pytest-cov==5.0.0",
     "ruff==0.4.4"
 ]
+
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["services*", "scripts*"]
 
 [tool.ruff]
 extend-exclude = [
