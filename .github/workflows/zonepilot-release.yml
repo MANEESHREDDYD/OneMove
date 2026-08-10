@@ -29,8 +29,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest pandas httpx fastapi uvicorn pydantic pyjwt supabase pytz requests pyarrow python-dotenv
-          pip install -e ./python
+          pip install -e ".[dev]"
 
       - name: Install Node Dependencies
         run: npm ci
