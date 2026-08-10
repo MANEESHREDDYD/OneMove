@@ -18,6 +18,7 @@ jobs:
         version: latest
     - name: Start Local Supabase Stack & Bootstrap Dynamic Credentials
       run: |
+        echo 'SUPABASE_JWT_SECRET="REDACTED_SYNTHETIC_TEST_SECRET"' > supabase/.env
         supabase start
         supabase db reset
         STATUS_JSON=$(supabase status -o json)
