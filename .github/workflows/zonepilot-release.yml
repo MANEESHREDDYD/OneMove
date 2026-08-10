@@ -45,8 +45,7 @@ jobs:
 
       - name: Start Local Supabase Stack & Bootstrap Dynamic Credentials
         run: |
-          echo 'SUPABASE_JWT_SECRET="REDACTED_SYNTHETIC_TEST_SECRET"' > supabase/.env
-          echo 'SUPABASE_JWT_SECRET="REDACTED_SYNTHETIC_TEST_SECRET"' > .env
+          sed -i 's/jwt_expiry = 3600/jwt_expiry = 3600\njwt_secret = "REDACTED_SYNTHETIC_TEST_SECRET"/' supabase/config.toml
           supabase start
           supabase db reset
           STATUS_JSON=$(supabase status -o json)
@@ -89,14 +88,19 @@ jobs:
       - name: Run Python Ruff Lint & Pytest Suite
         run: |
           ruff check .
-          PYTHONPATH=services/api python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
+          PYTHONPATH=services/api SUPABASE_JWT_SECRET=${{ env.SUPABASE_JWT_SECRET }} python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
           
           # Wait for backend readiness
           for i in {1..15}; do
-            curl -s http://127.0.0.1:8000/docs > /dev/null && break
+            curl -s http://127.0.0.1:8000/healthz && break
+            echo "Waiting for Uvicorn..."
             sleep 1
           done
           
+          SUPABASE_URL=http://127.0.0.1:54321 \
+          SUPABASE_ANON_KEY=${{ env.NEXT_PUBLIC_SUPABASE_ANON_KEY }} \
+          SUPABASE_SERVICE_ROLE_KEY=${{ env.SUPABASE_SERVICE_ROLE_KEY }} \
+          SUPABASE_JWT_SECRET=${{ env.SUPABASE_JWT_SECRET }} \
           pytest -v
 
       - name: Run Node Frontend Checks
