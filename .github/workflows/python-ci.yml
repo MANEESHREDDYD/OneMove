@@ -18,30 +18,58 @@ jobs:
         version: latest
     - name: Start Local Supabase Stack & Bootstrap Dynamic Credentials
       run: |
-        echo 'JWT_SECRET="REDACTED_SYNTHETIC_TEST_SECRET"' > supabase/.env
         supabase start
         supabase db reset
         STATUS_JSON=$(supabase status -o json)
         API_URL=$(echo "$STATUS_JSON" | jq -r '.API_URL')
         ANON_KEY=$(echo "$STATUS_JSON" | jq -r '.ANON_KEY')
         SERVICE_KEY=$(echo "$STATUS_JSON" | jq -r '.SERVICE_ROLE_KEY')
-        echo "SUPABASE_URL=$API_URL" >> $GITHUB_ENV
-        echo "SUPABASE_ANON_KEY=$ANON_KEY" >> $GITHUB_ENV
+        
+        JWKS_JSON=$(curl -s http://127.0.0.1:54321/auth/v1/jwks)
+        X5C=$(echo "$JWKS_JSON" | jq -r '.keys[0].x5c[0]')
+        
+        if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
+          echo "Error: Supabase API_URL is missing or null."
+          exit 1
+        fi
+        if [ -z "$SERVICE_KEY" ] || [ "$SERVICE_KEY" = "null" ]; then
+          echo "Error: Supabase SERVICE_ROLE_KEY is missing or null."
+          exit 1
+        fi
+        if [ -z "$X5C" ] || [ "$X5C" = "null" ]; then
+          echo "Error: Supabase JWKS x5c is missing or null."
+          exit 1
+        fi
+
+        echo "::add-mask::$ANON_KEY"
+        echo "::add-mask::$SERVICE_KEY"
+        
         echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> $GITHUB_ENV
         echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> $GITHUB_ENV
         echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> $GITHUB_ENV
-        echo 'SUPABASE_JWT_SECRET="REDACTED_SYNTHETIC_TEST_SECRET"' >> $GITHUB_ENV
+        
+        echo "SUPABASE_JWT_ALGORITHM=ES256" >> $GITHUB_ENV
+        echo "SUPABASE_JWT_PUBLIC_KEY<<EOF" >> $GITHUB_ENV
+        echo "-----BEGIN PUBLIC KEY-----" >> $GITHUB_ENV
+        echo "$X5C" >> $GITHUB_ENV
+        echo "-----END PUBLIC KEY-----" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+        
         echo "ZONEPILOT_DATA_ROOT=${{ github.workspace }}/data_root" >> $GITHUB_ENV
-    - name: Run Pytest Suite
+    - name: Run Python Ruff Lint & Pytest Suite
       run: |
-        PYTHONPATH=services/api SUPABASE_JWT_SECRET=${{ env.SUPABASE_JWT_SECRET }} python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
+        ruff check .
+        PYTHONPATH=services/api SUPABASE_JWT_ALGORITHM=${{ env.SUPABASE_JWT_ALGORITHM }} SUPABASE_JWT_PUBLIC_KEY="${{ env.SUPABASE_JWT_PUBLIC_KEY }}" python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
+        
+        # Wait for backend readiness
         for i in {1..15}; do
-          curl -s http://127.0.0.1:8000/healthz && break
-          echo "Waiting for Uvicorn..."
+          curl -s http://127.0.0.1:8000/health && break
           sleep 1
         done
+        
         SUPABASE_URL=http://127.0.0.1:54321 \
         SUPABASE_ANON_KEY=${{ env.NEXT_PUBLIC_SUPABASE_ANON_KEY }} \
         SUPABASE_SERVICE_ROLE_KEY=${{ env.SUPABASE_SERVICE_ROLE_KEY }} \
-        SUPABASE_JWT_SECRET=${{ env.SUPABASE_JWT_SECRET }} \
+        SUPABASE_JWT_ALGORITHM=${{ env.SUPABASE_JWT_ALGORITHM }} \
+        SUPABASE_JWT_PUBLIC_KEY="${{ env.SUPABASE_JWT_PUBLIC_KEY }}" \
         pytest -v
