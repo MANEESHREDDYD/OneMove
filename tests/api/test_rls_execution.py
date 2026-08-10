@@ -1,9 +1,7 @@
 import datetime
 import os
-import time
 import uuid
 
-import jwt
 import pytest
 import requests
 
