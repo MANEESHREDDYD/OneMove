@@ -10,6 +10,10 @@ FORBIDDEN_TEXT_PATTERNS = {
     "AWS access key": re.compile(rb"AKIA[0-9A-Z]{16}"),
     "personal email": re.compile(rb"[A-Za-z0-9._%+-]+@(?:gmail|outlook|yahoo|hotmail)\.[A-Za-z]{2,}"),
 }
+KNOWN_PUBLISHED_TEST_SECRETS = {
+    b"REDACTED_SYNTHETIC_TEST_SECRET",
+    b"REDACTED_SYNTHETIC_TEST_SECRET",
+}
 
 
 def test_local_owner_credential_file_is_ignored():
@@ -46,6 +50,9 @@ def test_tracked_public_tree_contains_no_high_confidence_secret_or_personal_iden
         body = path.read_bytes()
         if b"\0" in body[:8192]:
             continue
+        for known_secret in KNOWN_PUBLISHED_TEST_SECRETS:
+            if known_secret in body and path != Path(__file__):
+                findings.append(f"published test secret: {path.relative_to(ROOT).as_posix()}")
         for label, pattern in FORBIDDEN_TEXT_PATTERNS.items():
             if pattern.search(body):
                 findings.append(f"{label}: {path.relative_to(ROOT).as_posix()}")

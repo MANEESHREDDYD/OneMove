@@ -1,14 +1,14 @@
 {
-  "updated_at": "2026-08-13T19:19:49Z",
+  "updated_at": "2026-08-13T19:28:00Z",
   "repository": "https://github.com/MANEESHREDDYD/OneMove",
   "repository_visibility": "PUBLIC_SOURCE_REPOSITORY",
   "private_execution_boundary": "SEPARATE_PRIVATE_REPOSITORY_OR_MANAGED_STORAGE",
   "branch": "ws/phase1-measurement",
-  "head_sha": "9e88061f78bc835abfcd71e19a46530af801f219",
+  "head_sha": "15ceedf2cd142e53587648fe791ccee9de9ddcce",
   "base_sha": "ef09d0f652148011944fff52eb2b822434077fc2",
   "current_milestone": "R1_PUBLIC_EXPOSURE_REMEDIATION",
   "r0_5_status": "NO_GO_OWNER_BLOCKED",
-  "r1_status": "REMOTE_GATE_GREEN_OWNER_MERGE_PENDING",
+  "r1_status": "NO_GO_CURRENT_REMEDIATION_SHA_RED",
   "r2_status": "FOUNDATIONS_LOCAL_VERIFIED_NO_REAL_TRAFFIC",
   "implemented_estimate": 32,
   "verified_estimate": 31,
@@ -27,7 +27,7 @@
     {
       "id": "public_repository_exposure",
       "status": "CURRENT_TREE_REMEDIATED_HISTORY_OWNER_DECISION_REQUIRED",
-      "evidence": "The current-tree personal account/project identifiers were redacted and OneMove.env is now explicitly ignored with an owner-only ACL. The personal email and historical project identifiers remain in public main history and tag v1.0.0-polyglot-local-portfolio-go; rewriting published history requires explicit owner authorization."
+      "evidence": "The current-tree personal account/project identifiers and static HMAC test fixtures were removed. OneMove.env is explicitly ignored, and both local credential files allow only owner/SYSTEM/Administrators. Personal identifiers, obsolete local credential-shaped fixtures, and raw/generated artifacts remain in public history; rewriting published branches and tag v1.0.0-polyglot-local-portfolio-go requires explicit owner authorization."
     },
     {
       "id": "hosted_account_readiness",
@@ -63,6 +63,22 @@
   ],
   "failed_workflows": [
     {
+      "workflow": "ZonePilot Release Validation",
+      "run_id": 31735581428,
+      "head_sha": "15ceedf2cd142e53587648fe791ccee9de9ddcce",
+      "conclusion": "failure",
+      "failure": "The release job reached its generic Python suite and failed on the same missing OSRM graph as Python CI before later gates could run. The local correction scopes that smoke to its artifact-generating evidence workflow.",
+      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31735581428"
+    },
+    {
+      "workflow": "Python CI",
+      "run_id": 31735581415,
+      "head_sha": "15ceedf2cd142e53587648fe791ccee9de9ddcce",
+      "conclusion": "failure",
+      "failure": "The generic clean-checkout job invoked the R1 OSRM smoke test without the private artifacts generated only by the dedicated evidence workflow; 95 passed, 18 skipped, and 1 failed. The correction retains the hard evidence test in its owning workflow and deselects only its registered marker from generic suites.",
+      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31735581415"
+    },
+    {
       "workflow": "ZonePilot R1 Evidence",
       "run_id": 31697642743,
       "head_sha": "f088e107714443c89d574126a95a04bffaa4236d",
@@ -95,13 +111,20 @@
       "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31388225519"
     }
   ],
-  "current_p0": [],
+  "current_p0": [
+    {
+      "failure_id": "RELEASE-P0-CURRENT-SHA-PYTHON",
+      "owner": "release_engineering",
+      "status": "LOCAL_FIX_VERIFIED_REMOTE_PENDING",
+      "evidence": "Python CI 31735581415 and Release Validation 31735581428 failed on 15ceedf because generic jobs lacked the intentionally untracked OSRM graph. Local correction: 96 passed, 18 skipped, 1 evidence test deselected; the OSRM smoke separately passed."
+    }
+  ],
   "current_p1": [
     {
       "failure_id": "PUBLIC-HISTORY-PII-001",
       "owner": "repository_owner",
       "status": "CURRENT_TREE_FIXED_HISTORY_OWNER_DECISION_REQUIRED",
-      "evidence": "A personal email and obsolete Supabase project identifiers predate this PR and remain in reachable public main history and tag v1.0.0-polyglot-local-portfolio-go. No credential from OneMove.env appears in remote history and GitHub reports zero open secret-scanning alerts."
+      "evidence": "A personal email, obsolete Supabase project identifiers, local credential-shaped JWT fixtures, and raw/generated artifacts remain in reachable public history. No credential from OneMove.env appears in remote history and GitHub reports zero open secret-scanning alerts, but code scanning has no analysis and Dependabot alerts are disabled."
     },
     {
       "failure_id": "PRODUCTION-DEPLOY-001",
@@ -135,6 +158,15 @@
     }
   ],
   "last_successful_test_matrix": {
+    "current_remote_candidate": {
+      "head_sha": "15ceedf2cd142e53587648fe791ccee9de9ddcce",
+      "node_ci": {"run_id": 31735581378, "conclusion": "success"},
+      "python_ci": {"run_id": 31735581415, "conclusion": "failure"},
+      "sql_quality": {"run_id": 31735581418, "conclusion": "success"},
+      "polyglot_ci": {"run_id": 31735581409, "conclusion": "success"},
+      "release_validation": {"run_id": 31735581428, "conclusion": "failure"},
+      "r1_evidence": {"run_id": 31735581384, "conclusion": "success"}
+    },
     "remote_last_audited": {
       "head_sha": "9e88061f78bc835abfcd71e19a46530af801f219",
       "node_ci": {"run_id": 31698786881, "conclusion": "success"},
@@ -145,7 +177,7 @@
       "r1_evidence": {"run_id": 31698786726, "conclusion": "success"}
     },
     "local_integrated_worktree": {
-      "python": "107 passed, 1 optional C-integration skip, including live RLS, OSRM, and destructive DB concurrency",
+      "python": "Source-boundary profile: 96 passed, 18 environment-dependent skips, 1 R1 evidence test deselected; OSRM smoke separately 1 passed. Earlier full local integration: 107 passed, 1 optional C-integration skip.",
       "live_rls": "15 passed",
       "ruff": "services, tests, and Python package all passed",
       "root_node": "lint/typecheck/build passed; Vitest 11 passed, 2 skipped",
@@ -157,16 +189,16 @@
     }
   },
   "next_executable_tasks": [
-    "Commit and remotely verify the current-tree exposure remediation on the exact PR SHA.",
+    "Commit and remotely verify the OSRM CI ownership correction on the exact PR SHA; the evidence workflow must continue to run its smoke test directly.",
     "Obtain the owner's explicit public-history rewrite or risk-acceptance decision; do not merge before that decision.",
     "After a safe merge and green main, split release-identity, R2 temporal, R3 optimizer, and production-platform work into smaller milestone branches."
   ],
   "auditor": {
     "false_claims_open": 0,
-    "p0_open": 0,
+    "p0_open": 1,
     "p1_open": 3,
-    "verdict": "R1_ENGINEERING_GATE_GREEN_MERGE_BLOCKED_BY_PUBLIC_HISTORY_DECISION",
-    "evidence": "The current source tree is remediated and supplied credentials are absent from remote history, but a personal email and obsolete hosted project identifiers remain in reachable public history."
+    "verdict": "NO_GO_CURRENT_SHA_RED_AND_PUBLIC_HISTORY_DECISION_REQUIRED",
+    "evidence": "The current source tree is remediated and supplied credentials are absent from remote history, but Python CI is red and personal identifiers, local credential-shaped fixtures, and raw/generated artifacts remain in reachable public history."
   },
   "r1_remote_evidence": {
     "run_id": 31698786726,

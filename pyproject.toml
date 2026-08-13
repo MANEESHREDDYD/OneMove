@@ -60,3 +60,8 @@ ignore = ["E501", "B008", "B904", "B017", "B011"]
 "services/api/routers/*.py" = ["B008"]
 "services/api/core/auth.py" = ["B008"]
 "services/api/main.py" = ["B008"]
+
+[tool.pytest.ini_options]
+markers = [
+    "r1_evidence: requires generated R1 geospatial and OSRM artifacts; runs in the ZonePilot R1 Evidence workflow",
+]

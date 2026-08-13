@@ -16,6 +16,8 @@ DATA_ROOT = os.environ.get("ZONEPILOT_DATA_ROOT", os.path.join(os.getcwd(), "dat
 OSRM_DIR = os.path.join(DATA_ROOT, "private", "official", "raw", "osrm")
 MANIFESTS_DIR = os.path.join(DATA_ROOT, "private", "official", "manifests")
 
+
+@pytest.mark.r1_evidence
 def test_osrm_smoke_server():
     graph_path = os.path.join(OSRM_DIR, "pilot_roads.osrm")
     pbf_path = os.path.join(DATA_ROOT, "private", "official", "raw", "osm", "pilot_roads.osm.pbf")

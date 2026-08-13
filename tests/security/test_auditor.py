@@ -22,7 +22,7 @@ def test_dry_run_contamination_fails_closed():
     assert "DRY_RUN rows in dataset" in str(exc.value)
 
 def test_jwt_tampering_rejected():
-    secret = os.environ.get("SUPABASE_JWT_SECRET", "REDACTED_SYNTHETIC_TEST_SECRET")
+    secret = os.environ["SUPABASE_JWT_SECRET"]
     token = jwt.encode({"sub": "user-1", "aud": "authenticated", "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)}, secret, algorithm="HS256")
     tampered_token = token[:-5] + "XXXXX"
     with pytest.raises(Exception):

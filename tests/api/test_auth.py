@@ -6,8 +6,7 @@ import pytest
 from core.auth import verify_token
 from fastapi import HTTPException
 
-SUPABASE_JWT_SECRET = "REDACTED_SYNTHETIC_TEST_SECRET"
-os.environ["SUPABASE_JWT_SECRET"] = SUPABASE_JWT_SECRET
+SUPABASE_JWT_SECRET = os.environ["SUPABASE_JWT_SECRET"]
 os.environ["SUPABASE_JWT_AUDIENCE"] = "authenticated"
 os.environ["SUPABASE_JWT_ISSUER"] = "zonepilot_issuer"
 
@@ -128,4 +127,3 @@ def test_verify_token_wrong_issuer_rejected():
             os.environ["SUPABASE_JWT_ISSUER"] = original_issuer
         else:
             os.environ.pop("SUPABASE_JWT_ISSUER", None)
-

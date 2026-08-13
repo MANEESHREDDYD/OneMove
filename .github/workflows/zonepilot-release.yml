@@ -112,7 +112,7 @@ jobs:
             sleep 1
           done
           
-          pytest -v
+          pytest -v -m "not r1_evidence"
 
       - name: Run Node Frontend Checks
         run: |

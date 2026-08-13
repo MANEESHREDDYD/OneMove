@@ -1,3 +1,4 @@
+import os
 import time
 
 import jwt
@@ -12,7 +13,7 @@ from services.api.main import app
 
 client = TestClient(app)
 
-SECRET = "REDACTED_SYNTHETIC_TEST_SECRET"
+SECRET = os.environ["SUPABASE_JWT_SECRET"]
 
 @pytest.fixture(autouse=True)
 def setup_env(monkeypatch):
@@ -42,7 +43,7 @@ def test_malformed_bearer():
     assert response.status_code == 401
 
 def test_invalid_signature():
-    token = create_token({}, secret="wrong_secret")
+    token = create_token({}, secret=f"wrong-{SECRET}")
     response = client.get("/api/v1/zones", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
 

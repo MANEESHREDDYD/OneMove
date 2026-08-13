@@ -1,4 +1,5 @@
 import os
+import secrets
 import sys
 from pathlib import Path
 
@@ -29,4 +30,4 @@ if "SUPABASE_SERVICE_ROLE_KEY" not in os.environ:
     os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "mock_service_role_key"
 
 if "SUPABASE_JWT_SECRET" not in os.environ:
-    os.environ["SUPABASE_JWT_SECRET"] = "REDACTED_SYNTHETIC_TEST_SECRET"
+    os.environ["SUPABASE_JWT_SECRET"] = secrets.token_urlsafe(48)

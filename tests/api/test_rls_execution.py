@@ -8,7 +8,7 @@ import requests
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://127.0.0.1:54321")
 ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "mock_anon_key")
 LOCAL_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "mock_service_key")
-JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "REDACTED_SYNTHETIC_TEST_SECRET")
+JWT_SECRET = os.environ["SUPABASE_JWT_SECRET"]
 
 def _is_supabase_reachable():
     try:

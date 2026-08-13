@@ -15,4 +15,4 @@ jobs:
     - run: pip install ruff pytest pandas httpx fastapi uvicorn pydantic "pyjwt[crypto]" supabase pytz requests pyarrow python-dotenv h3 "psycopg[binary]"
     - run: pip install -e ./python
     - run: ruff check .
-    - run: pytest
+    - run: pytest -m "not r1_evidence"
