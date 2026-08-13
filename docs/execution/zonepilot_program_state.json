@@ -1,0 +1,154 @@
+{
+  "updated_at": "2026-08-13T11:50:00Z",
+  "repository": "https://github.com/MANEESHREDDYD/OneMove",
+  "branch": "ws/phase1-measurement",
+  "head_sha": "483c8e1f6d256c39987d3780ffdb342f935f7ac2",
+  "base_sha": "ef09d0f652148011944fff52eb2b822434077fc2",
+  "current_milestone": "R1_REMOTE_RELEASE_GATE_PENDING",
+  "r0_5_status": "NO_GO_OWNER_BLOCKED",
+  "r1_status": "INTEGRATED_LOCAL_GATE_GREEN_REMOTE_PENDING",
+  "r2_status": "FOUNDATIONS_LOCAL_VERIFIED_NO_REAL_TRAFFIC",
+  "implemented_estimate": 32,
+  "verified_estimate": 29,
+  "release_ready_estimate": 16,
+  "active_workstreams": [
+    {
+      "id": "r1_remote_release",
+      "status": "READY_TO_PUSH",
+      "evidence": "The integrated dirty worktree passes local Release Validation-shaped checks; it is not represented by the recorded remote SHA yet."
+    },
+    {
+      "id": "r1_remote_evidence",
+      "status": "READY_TO_PUSH",
+      "evidence": "The real Geofabrik-to-Gold-to-OSRM chain and strict candidate verifier pass locally; the dedicated workflow has no run for the integrated candidate yet."
+    },
+    {
+      "id": "production_platform",
+      "status": "PARTIAL",
+      "evidence": "Backend JSON logging, request IDs, metrics, readiness, Sentry activation, safe errors, CORS, and rate limiting are implemented; hosted activation, frontend error tracking, staging, alerts, backup restore, and load budgets remain."
+    },
+    {
+      "id": "r0_5_private_execution",
+      "status": "OWNER_BLOCKED",
+      "evidence": "The approved private execution repository and hosted least-privilege credentials are not available to this execution environment."
+    }
+  ],
+  "completed_workstreams": [
+    {
+      "id": "release_local_closure",
+      "evidence": "Root and Observatory clean installs/builds/lint/typecheck pass; both required persistent-browser E2Es pass 5/5 with real Supabase sessions and IndexedDB restart persistence."
+    },
+    {
+      "id": "r1_product_local",
+      "evidence": "Real Supabase auth, protected artifact-backed APIs, H3 map, OSM roads/intersections/POIs, provider health, typed evidence, and truthful unavailable traffic state are implemented and locally verified."
+    },
+    {
+      "id": "database_security_local",
+      "evidence": "Fresh local migrations pass, 15 live RLS tests pass, ES256 JWKS verification passes, and the 80-worker slot-claim race passes."
+    },
+    {
+      "id": "r1_evidence_local",
+      "evidence": "Verified local evidence: 65,459 OSM nodes, 20,344 highway ways, 9,163 POIs, 94 H3 cells, 27-file OSRM bundle, positive route, and a fully finite 3x3 matrix."
+    },
+    {
+      "id": "r2_temporal_foundations_local",
+      "evidence": "Strict UTC contracts, leakage-safe point-in-time joins, chronological train/validation/test/prospective splits, and immutable prediction/outcome records pass focused tests."
+    }
+  ],
+  "failed_workflows": [
+    {
+      "workflow": "ZonePilot Release Validation",
+      "run_id": 31388230404,
+      "head_sha": "483c8e1f6d256c39987d3780ffdb342f935f7ac2",
+      "conclusion": "failure",
+      "failure": "Historical candidate attempted navigation while a relaunched persistent browser context was offline.",
+      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31388230404"
+    },
+    {
+      "workflow": "ZonePilot Release Validation",
+      "run_id": 31388225519,
+      "head_sha": "483c8e1f6d256c39987d3780ffdb342f935f7ac2",
+      "conclusion": "failure",
+      "failure": "Duplicate historical validation of the same pre-fix candidate failed the same persistence contract.",
+      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31388225519"
+    }
+  ],
+  "current_p0": [
+    {
+      "failure_id": "RELEASE-REMOTE-001",
+      "owner": "principal_integrator",
+      "status": "READY_TO_PUSH",
+      "evidence": "No remote workflow has evaluated the integrated worktree; local success cannot close the release gate."
+    }
+  ],
+  "current_p1": [
+    {
+      "failure_id": "PRODUCTION-DEPLOY-001",
+      "owner": "production_platform",
+      "status": "OWNER_BLOCKED_PARTIAL",
+      "evidence": "Staging/production accounts, frontend error tracking activation, alert routing, rollback exercise, and backup restore proof are absent."
+    },
+    {
+      "failure_id": "TRAFFIC-001",
+      "owner": "data_platform",
+      "status": "OWNER_BLOCKED",
+      "evidence": "No lawful real zone-linked traffic credential/history is available; the product explicitly reports traffic unavailable."
+    }
+  ],
+  "owner_blockers": [
+    {
+      "id": "OWNER_BLOCKER_PRIVATE_EXECUTION_REPOSITORY",
+      "evidence": "Create or grant access to the approved private scheduled-execution repository."
+    },
+    {
+      "id": "OWNER_BLOCKER_TOMTOM_KEY",
+      "evidence": "Provide the approved lawful traffic-provider credential if TomTom remains the selected source."
+    },
+    {
+      "id": "OWNER_BLOCKER_HOSTED_ENVIRONMENTS",
+      "evidence": "Provision/link hosted Supabase, frontend, API, routing, error-tracking, and secret-store accounts for staging and production."
+    },
+    {
+      "id": "OWNER_BLOCKER_MERGE_APPROVAL",
+      "evidence": "PR #1 must remain unmerged until the new exact SHA satisfies every first-gate workflow, then requires owner merge authorization."
+    }
+  ],
+  "last_successful_test_matrix": {
+    "remote_last_audited": {
+      "head_sha": "483c8e1f6d256c39987d3780ffdb342f935f7ac2",
+      "node_ci": {"run_id": 31388230381, "conclusion": "success"},
+      "python_ci": {"run_id": 31388230107, "conclusion": "success"},
+      "sql_quality": {"run_id": 31388230215, "conclusion": "success"},
+      "polyglot_ci": {"run_id": 31388230109, "conclusion": "success"},
+      "release_validation": {"run_id": 31388230404, "conclusion": "failure"},
+      "r1_evidence": {"run_id": null, "conclusion": "not_run"}
+    },
+    "local_integrated_worktree": {
+      "python": "107 passed, 1 optional C-integration skip, including live RLS, OSRM, and destructive DB concurrency",
+      "live_rls": "15 passed",
+      "ruff": "services, tests, and Python package all passed",
+      "root_node": "lint/typecheck/build passed; Vitest 11 passed, 2 skipped",
+      "observatory_node": "clean install/lint/typecheck/build passed",
+      "playwright_marketplace": "5 passed",
+      "playwright_volunteer": "5 passed",
+      "r1_evidence": "OSM/Gold/OSRM route and matrix audit passed",
+      "dependency_audit": "0 critical/high; 3 moderate dev-only autocannon-chain findings at root, 0 Observatory, 0 tests"
+    }
+  },
+  "next_executable_tasks": [
+    "Commit the integrated batch while excluding private artifacts, local credentials, and unrelated auditor scratch files.",
+    "Push the exact candidate SHA and monitor Node CI, Python CI, SQL Quality, Polyglot CI, Release Validation, and ZonePilot R1 Evidence.",
+    "Repair any remote failure, push a new SHA, and repeat the complete matrix until every first-gate workflow is green.",
+    "Update this ledger with the verified candidate and remote run IDs, then request owner merge authorization.",
+    "After merge, split R2 temporal work from production-platform work into smaller milestone branches."
+  ],
+  "coordination_metadata": {
+    "pull_request": 1,
+    "pull_request_state": "OPEN",
+    "pull_request_url": "https://github.com/MANEESHREDDYD/OneMove/pull/1",
+    "worktree_dirty": true,
+    "recorded_head_is_last_remote_audited_sha": true,
+    "runtime_evidence_is_authoritative": true,
+    "ledger_is_coordination_only": true
+  }
+}

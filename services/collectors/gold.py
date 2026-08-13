@@ -2,13 +2,16 @@ import hashlib
 import json
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
 import geopandas as gpd
 import h3
 import networkx as nx
 import pandas as pd
 from shapely.geometry import LineString, Point, Polygon
+
+from services.evidence.r1 import candidate_code_sha, sha256_file
 
 DATA_ROOT = os.environ.get("ZONEPILOT_DATA_ROOT", os.path.join(os.getcwd(), "data_root"))
 OSM_DIR = os.path.join(DATA_ROOT, "private", "official", "raw", "osm")
@@ -19,12 +22,6 @@ OSMIUM_IMAGE = "stefda/osmium-tool@sha256:d2321d0e926f77ead7547b4b35f5cf98d9fd74
 def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
 
-def get_git_sha():
-    try:
-        return subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-    except Exception:
-        return "unknown"
-
 def generate_gold_dataset():
     ensure_dir(GOLD_DIR)
     ensure_dir(MANIFESTS_DIR)
@@ -34,8 +31,7 @@ def generate_gold_dataset():
     roads_geojson = os.path.join(OSM_DIR, "pilot_roads.geojson")
     
     if not os.path.exists(roads_pbf):
-        print("Missing pilot_roads.osm.pbf. Run OSM pipeline first.")
-        return
+        raise FileNotFoundError("Missing pilot_roads.osm.pbf. Run OSM pipeline first.")
         
     print("Converting roads PBF to GeoJSON for Gold Generation...")
     subprocess.run([
@@ -43,8 +39,7 @@ def generate_gold_dataset():
         "osmium", "export", "/data/pilot_roads.osm.pbf", "-o", "/data/pilot_roads.geojson", "--overwrite"
     ], check=True)
     
-    with open(roads_pbf, "rb") as f:
-        pbf_sha = hashlib.sha256(f.read()).hexdigest()
+    pbf_sha = sha256_file(Path(roads_pbf))
 
     # Load Geometries
     roads_gdf = gpd.read_file(roads_geojson)
@@ -54,8 +49,9 @@ def generate_gold_dataset():
     # 1. Canonical Graph Module
     G = nx.DiGraph()
     for _, row in roads_gdf.iterrows():
-        geom = row.geometry
-        if geom.geom_type == 'LineString':
+        geometry = row.geometry
+        line_geometries = [geometry] if geometry.geom_type == "LineString" else list(geometry.geoms)
+        for geom in line_geometries:
             coords = list(geom.coords)
             oneway = row.get("oneway", "no")
             # Basic oneway handling
@@ -84,6 +80,12 @@ def generate_gold_dataset():
     intersections_count = len(intersections_nodes)
     connected_components = nx.number_weakly_connected_components(G)
     largest_cc = len(max(nx.weakly_connected_components(G), key=len)) if graph_vertices > 0 else 0
+    topology_digest = hashlib.sha256()
+    for start, end in sorted(G.edges()):
+        topology_digest.update(
+            f"{start[0]:.7f},{start[1]:.7f}>{end[0]:.7f},{end[1]:.7f}\n".encode("ascii")
+        )
+    graph_topology_sha256 = topology_digest.hexdigest()
 
     # 2. H3 Features Extraction
     BBOX = "77.58,12.90,77.65,12.98"
@@ -175,6 +177,8 @@ def generate_gold_dataset():
         })
         
     df = pd.DataFrame(gold_rows)
+    if df.empty or graph_vertices <= 0 or graph_directed_edges <= 0:
+        raise ValueError("Gold data quality failed: empty H3 output or canonical graph")
     
     # Store Parquet
     parquet_path = os.path.join(GOLD_DIR, "gold_network_h3_8.parquet")
@@ -187,19 +191,34 @@ def generate_gold_dataset():
     cells_hash = hashlib.sha256(json.dumps(cells_list).encode('utf-8')).hexdigest()
     
     manifest = {
+        "schema_name": "zonepilot_gold_network_h3",
+        "schema_version": "1.0.0",
         "dataset_id": "gold_network_bengaluru",
+        "dataset_version": f"osm-{pbf_sha[:12]}.code-{candidate_code_sha()[:12]}",
         "rows": len(df),
         "columns": list(df.columns),
         "h3_resolution": 8,
-        "osm_source": "southern-zone-latest.osm.pbf",
+        "source": "osm_geofabrik",
+        "source_version": pbf_sha,
+        "osm_source": "pilot_roads.osm.pbf",
         "osm_input_hash": pbf_sha,
-        "graph_version": "1.1",
+        "input_hashes": {
+            "roads_pbf_sha256": pbf_sha,
+            "pois_geojson_sha256": sha256_file(Path(pois_geojson)) if os.path.exists(pois_geojson) else None,
+        },
+        "graph_version": f"1.1.0+{graph_topology_sha256[:12]}",
+        "graph_topology_sha256": graph_topology_sha256,
         "pilot_boundary_hash": boundary_hash,
-        "code_sha": get_git_sha(),
+        "code_sha": candidate_code_sha(),
         "parquet_sha256": parquet_sha256,
         "sorted_cell_list_sha256": cells_hash,
-        "h3_library_version": h3.__version__,
-        "generated_at": datetime.now().isoformat(),
+        "h3_library_version": getattr(h3, "__version__", "unknown"),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "information_availability_range": None,
+        "time_range": None,
+        "record_count": len(df),
+        "evidence_class": "DERIVED",
+        "dq_status": "PASS",
         "graph_metrics": {
             "graph_vertices": graph_vertices,
             "graph_directed_edges": graph_directed_edges,
@@ -216,6 +235,7 @@ def generate_gold_dataset():
     print("Gold Static Dataset Generated Successfully.")
     print(f"Cells (Res 8): {len(cells_list)}")
     print(json.dumps(manifest, indent=2))
+    return manifest
 
 if __name__ == "__main__":
     generate_gold_dataset()

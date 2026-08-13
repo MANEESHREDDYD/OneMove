@@ -12,14 +12,18 @@ dependencies = [
     "psycopg[binary,pool]>=3.1.18",
     "PyYAML>=6.0.1",
     "pytz>=2024.1",
-    "h3>=3.7.6",
+    "h3>=4.1.0,<5",
     "pyarrow>=16.0.0",
-    "PyJWT>=2.8.0",
+    "geopandas>=1.0.0,<2",
+    "networkx>=3.3,<4",
+    "shapely>=2.0.0,<3",
+    "PyJWT[crypto]>=2.8.0",
     "osmium>=3.6.0",
     "pandas>=2.0.0",
     "requests>=2.30.0",
     "supabase>=2.3.0",
-    "python-dotenv>=1.0.0"
+    "python-dotenv>=1.0.0",
+    "sentry-sdk[fastapi]>=2.0.0,<3"
 ]
 
 [project.optional-dependencies]

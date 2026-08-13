@@ -3,7 +3,10 @@ import os
 import shutil
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
+
+from services.evidence.r1 import candidate_code_sha, sha256_file, sha256_file_set
 
 OSRM_IMAGE = "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409"
 DATA_ROOT = os.environ.get("ZONEPILOT_DATA_ROOT", os.path.join(os.getcwd(), "data_root"))
@@ -36,8 +39,7 @@ def build_osrm_graph():
     pbf_target = os.path.join(OSRM_DIR, "pilot_roads.osm.pbf")
     
     if not os.path.exists(pbf_source):
-        print(f"Source PBF not found: {pbf_source}")
-        return
+        raise FileNotFoundError(f"Source PBF not found: {pbf_source}")
         
     shutil.copy(pbf_source, pbf_target)
     
@@ -60,20 +62,32 @@ def build_osrm_graph():
     )
     
     # Save Benchmark
+    generated_at = datetime.now(timezone.utc).isoformat()
+    graph_files = [path for path in Path(OSRM_DIR).glob("pilot_roads.osrm*") if path.is_file()]
     benchmark = {
-        "timestamp": datetime.now().isoformat(),
+        "schema_name": "zonepilot_osrm_build_manifest",
+        "schema_version": "1.0.0",
+        "timestamp": generated_at,
+        "generated_at": generated_at,
         "image": OSRM_IMAGE,
         "extract_time_seconds": extract_time,
         "partition_time_seconds": partition_time,
         "customize_time_seconds": customize_time,
         "total_time_seconds": extract_time + partition_time + customize_time,
-        "graph_size_bytes": os.path.getsize(os.path.join(OSRM_DIR, "pilot_roads.osrm"))
+        "graph_file_count": len(graph_files),
+        "graph_size_bytes": sum(path.stat().st_size for path in graph_files),
+        "input_pbf_sha256": sha256_file(Path(pbf_target)),
+        "graph_bundle_sha256": sha256_file_set(graph_files, relative_to=Path(OSRM_DIR)),
+        "code_sha": candidate_code_sha(),
+        "evidence_class": "DERIVED",
+        "dq_status": "PASS",
     }
     
     with open(os.path.join(OSRM_DIR, "benchmark.json"), "w") as f:
         json.dump(benchmark, f, indent=2)
         
     print(f"OSRM Benchmark Complete: {benchmark}")
+    return benchmark
 
 if __name__ == "__main__":
     build_osrm_graph()

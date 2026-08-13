@@ -2,9 +2,9 @@ name: ZonePilot Release Validation
 
 on:
   push:
-    branches: [ "main", "ws/**" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "ws/**" ]
+    branches: [ "main" ]
 
 jobs:
   release-hardening:
@@ -13,35 +13,48 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            apps/observatory/package-lock.json
+            tests/package-lock.json
 
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest pandas httpx fastapi uvicorn pydantic pyjwt supabase pytz requests pyarrow python-dotenv h3 "psycopg[binary]"
+          pip install ruff pytest pandas httpx fastapi uvicorn pydantic "pyjwt[crypto]" supabase pytz requests pyarrow python-dotenv h3 "psycopg[binary]"
           pip install -e ./python
 
       - name: Install Node Dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm --prefix apps/observatory ci
+          npm --prefix tests ci
+
+      - name: Audit Node Dependencies
+        run: |
+          npm audit --audit-level=high --omit=optional
+          npm --prefix apps/observatory audit --audit-level=high --omit=optional
+          npm --prefix tests audit --audit-level=high --omit=optional
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
       - name: Setup Supabase CLI & Local Environment
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v3
         with:
-          version: 1.136.3
+          version: 2.113.0
 
       - name: Start Local Supabase Stack & Bootstrap Dynamic Credentials
         run: |
@@ -106,7 +119,9 @@ jobs:
           npm run lint
           npm run typecheck
           npm run build
-          cd apps/observatory && npm ci && npm run build && cd ../..
+          npm --prefix apps/observatory run lint
+          npm --prefix apps/observatory run typecheck
+          npm --prefix apps/observatory run build
 
       - name: Run Vitest Unit & Security Suite
         run: npm test
@@ -116,7 +131,7 @@ jobs:
           pkill -f uvicorn || true
           PYTHONPATH=services/api python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
           npm start -- -p 3000 &
-          cd apps/observatory && npm start -- -p 3001 &
+          npm --prefix apps/observatory start -- -p 3001 &
           
           echo "Waiting for FastAPI backend..."
           timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:8000/healthz)" != "200" ]]; do sleep 2; done' || (echo "Backend failed" && exit 1)

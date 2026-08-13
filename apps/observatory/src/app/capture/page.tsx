@@ -8,8 +8,7 @@ import { saveToOutbox, syncOutbox } from "../../lib/outbox";
 
 function CaptureForm() {
   const searchParams = useSearchParams();
-  const order_id = searchParams?.get('order_id') || '';
-
+  const assignmentId = searchParams.get('assignment_id');
   useEffect(() => {
     window.addEventListener('online', syncOutbox);
     syncOutbox();
@@ -48,21 +47,19 @@ function CaptureForm() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!assignmentId) {
+      setErrors({ assignment: "Open this form from an active assignment before capturing evidence." });
+      return;
+    }
     if (validate()) {
       const eventPayload = {
-         study_id: searchParams?.get('study_id') || '00000000-0000-0000-0000-000000000000',
-         assignment_id: searchParams?.get('assignment_id') || '00000000-0000-0000-0000-000000000000',
-         zone_cluster: 'Z-01',
-         platform: 'UBER',
-         intent: 'GO_TO_CENTER',
-         protocol: 'ANCHOR',
+         assignment_id: assignmentId,
          observed_at_device: new Date().toISOString(),
          eta_low_min: formData.etaLow ? parseInt(formData.etaLow, 10) : null,
          eta_high_min: formData.etaHigh ? parseInt(formData.etaHigh, 10) : null,
          option_count: formData.optionCount ? parseInt(formData.optionCount, 10) : null,
          availability_state: formData.availability === 'AVAILABLE' ? 'IN_STOCK' : 'UNAVAILABLE',
-         reference_basket_price: formData.basketPrice ? parseFloat(formData.basketPrice) : null,
-         protocol_version: '1.0'
+         reference_basket_price: formData.basketPrice ? parseFloat(formData.basketPrice) : null
       };
 
       saveToOutbox(eventPayload).then(() => { 
@@ -74,6 +71,11 @@ function CaptureForm() {
 
   return (
       <form onSubmit={handleSubmit} className="p-4 space-y-6">
+        {errors.assignment && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="alert">
+            {errors.assignment}
+          </div>
+        )}
         <div className="bg-white rounded-xl shadow-sm border p-4">
           <h2 className="font-semibold mb-4 text-gray-800">Reference Basket</h2>
           <div className="p-3 bg-blue-50 text-blue-900 rounded-lg text-sm mb-4">

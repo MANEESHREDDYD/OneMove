@@ -1,6 +1,9 @@
 import datetime
+import hashlib
 import json
 import os
+
+from services.evidence.r1 import candidate_code_sha
 
 DATA_ROOT = os.environ.get("ZONEPILOT_DATA_ROOT", os.path.join(os.getcwd(), "data_root"))
 PRIVATE_DIR = os.path.join(DATA_ROOT, "private", "official")
@@ -44,8 +47,6 @@ def build_daily_bundle():
         with open(tomtom_manifest, "r") as f:
             bundle["components"]["tomtom"] = json.load(f)
             
-    import hashlib
-    
     # Calculate intervals (for a 15-minute interval system, expected is 96 per day)
     expected = 96
     available = expected if "tomtom" in bundle["components"] else 0
@@ -76,7 +77,9 @@ def build_daily_bundle():
         "missing_intervals": missing,
         "source_manifest_hashes": source_hashes,
         "output_bundle_hash": bundle_hash,
-        "code_sha": "d3b07384d113edec49eaa6238ad5ff00"
+        "code_sha": candidate_code_sha(),
+        "schema_version": "1.0.0",
+        "evidence_class": "PUBLIC_OFFICIAL",
     }
     
     manifest_path = os.path.join(public_manifest_dir, f"{today}_bundle_manifest.json")
@@ -85,6 +88,7 @@ def build_daily_bundle():
         
     print(f"Built public bundle manifest at {manifest_path}")
     print(json.dumps(manifest, indent=2))
+    return manifest
 
 if __name__ == "__main__":
     build_daily_bundle()

@@ -1,12 +1,22 @@
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
-  const data = await request.json();
   const authHeader = request.headers.get('Authorization') || '';
   
   try {
-    const isProbe = data.protocol !== undefined;
-    const backendEndpoint = isProbe ? "http://127.0.0.1:8000/v1/probes" : "http://127.0.0.1:8000/v1/events";
+    const data: unknown = await request.json();
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "A JSON object is required.", request_id: "proxy", details: {} } },
+        { status: 422 },
+      );
+    }
+    const isProbe =
+      "assignment_id" in data &&
+      typeof data.assignment_id === "string" &&
+      "availability_state" in data;
+    const backendBase = process.env.ZONEPILOT_API_URL ?? "http://127.0.0.1:8000";
+    const backendEndpoint = new URL(isProbe ? "/v1/probes" : "/v1/events", backendBase);
 
     const res = await fetch(backendEndpoint, {
       method: "POST",
@@ -22,8 +32,18 @@ export async function POST(request: Request) {
       return new NextResponse(text, { status: res.status });
     }
     return new NextResponse(text, { status: 201 });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return new NextResponse(message, { status: 500 });
+  } catch {
+    return NextResponse.json(
+      {
+        error: {
+          code: "API_UNAVAILABLE",
+          message: "ZonePilot API is unavailable.",
+          request_id: "proxy",
+          retryable: true,
+          details: {},
+        },
+      },
+      { status: 502 },
+    );
   }
 }

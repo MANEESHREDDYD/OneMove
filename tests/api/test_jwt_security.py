@@ -2,9 +2,12 @@ import time
 
 import jwt
 import pytest
+from cryptography.hazmat.primitives.asymmetric import ec
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from services.api.core.auth import get_current_user
+from services.api.core import auth
+from services.api.core.auth import get_current_user, verify_token
 from services.api.main import app
 
 client = TestClient(app)
@@ -42,6 +45,52 @@ def test_invalid_signature():
     token = create_token({}, secret="wrong_secret")
     response = client.get("/api/v1/zones", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
+
+
+def test_es256_token_uses_supabase_jwks(monkeypatch):
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    token = jwt.encode(
+        {
+            "sub": "user-es256",
+            "aud": "authenticated",
+            "iss": "https://project.supabase.co/auth/v1",
+            "exp": int(time.time()) + 3600,
+        },
+        private_key,
+        algorithm="ES256",
+        headers={"kid": "active-signing-key"},
+    )
+
+    class StaticJwksClient:
+        def get_signing_key_from_jwt(self, candidate):
+            assert candidate == token
+            return type("SigningKey", (), {"key": private_key.public_key()})()
+
+    monkeypatch.delenv("SUPABASE_JWT_ALGORITHM", raising=False)
+    monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+    monkeypatch.setenv("SUPABASE_JWT_ISSUER", "https://project.supabase.co/auth/v1")
+    monkeypatch.setattr(auth, "_jwks_client", lambda _url: StaticJwksClient())
+
+    assert verify_token(token)["sub"] == "user-es256"
+
+
+def test_unapproved_jwt_algorithm_is_rejected(monkeypatch):
+    monkeypatch.delenv("SUPABASE_JWT_ALGORITHM", raising=False)
+    token = jwt.encode(
+        {
+            "sub": "user-384",
+            "aud": "authenticated",
+            "iss": "zonepilot_issuer",
+            "exp": int(time.time()) + 3600,
+        },
+        SECRET,
+        algorithm="HS384",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        verify_token(token)
+
+    assert exc_info.value.status_code == 401
 
 def test_expired_token():
     token = create_token({"exp": int(time.time()) - 3600})

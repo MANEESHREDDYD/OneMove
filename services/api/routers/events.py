@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -11,6 +12,7 @@ from services.api.core.auth import get_supabase
 from supabase import Client, create_client
 
 router = APIRouter()
+logger = logging.getLogger("zonepilot.events")
 
 class OrderEventCreate(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -23,7 +25,7 @@ class OrderEventCreate(BaseModel):
     payload: Optional[Any] = None
 
 @router.post("/v1/events")
-async def create_event(event: OrderEventCreate, supabase: Client = Depends(get_supabase)):
+async def create_event(req: Request, event: OrderEventCreate, supabase: Client = Depends(get_supabase)):
     try:
         res = supabase.table("volunteer_order_events").insert({
             "order_id": event.order_id,
@@ -36,11 +38,14 @@ async def create_event(event: OrderEventCreate, supabase: Client = Depends(get_s
             "payload": event.payload
         }).execute()
         return res.data
-    except Exception as e:
-        print("SUPABASE INSERT ERROR:", e, flush=True)
-        if "duplicate key" in str(e).lower():
-            raise HTTPException(status_code=409, detail=str(e))
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as exc:
+        logger.exception(
+            "order_event_insert_failed",
+            extra={"request_id": req.state.request_id, "error_code": "EVENT_INSERT_FAILED"},
+        )
+        if "duplicate key" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="Duplicate client event identifier") from exc
+        raise HTTPException(status_code=400, detail="Unable to persist event") from exc
 
 class ProbeObservationCreate(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -146,8 +151,14 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
             timing_deviation_seconds = int((obs_dt - sched_dt).total_seconds())
             # For example, +/- 5 minutes is valid
             timing_valid = abs(timing_deviation_seconds) <= 300
-        except Exception:
-            pass
+        except (TypeError, ValueError):
+            logger.warning(
+                "assignment_schedule_parse_failed",
+                extra={
+                    "request_id": req.state.request_id,
+                    "error_code": "INVALID_ASSIGNMENT_SCHEDULE",
+                },
+            )
     
     insert_data = {
         "study_id": study_id,
@@ -192,7 +203,10 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
                     return {"idempotent_replay": True, "message": "Exact payload duplicate ignored."}
                 else:
                     raise HTTPException(status_code=409, detail="Conflicting reuse of client_event_id with different payload.")
-            raise HTTPException(status_code=409, detail=str(e))
+            raise HTTPException(status_code=409, detail="Duplicate client event identifier") from e
         
-        print("PROBE INSERT ERROR:", e, flush=True)
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.exception(
+            "probe_insert_failed",
+            extra={"request_id": req.state.request_id, "error_code": "PROBE_INSERT_FAILED"},
+        )
+        raise HTTPException(status_code=400, detail="Unable to persist probe observation") from e

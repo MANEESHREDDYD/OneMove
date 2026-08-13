@@ -8,3 +8,15 @@
   --primary: #2563eb;
   --primary-foreground: #ffffff;
 }
+
+.leaflet-container {
+  background: #e2e8f0;
+  color: #0f172a;
+  font-family: inherit;
+}
+
+.leaflet-control a:focus-visible,
+.leaflet-interactive:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}

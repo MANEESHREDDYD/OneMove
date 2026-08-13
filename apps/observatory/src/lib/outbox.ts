@@ -1,5 +1,7 @@
 import { get, update } from "idb-keyval";
 
+import { getSupabaseBrowserClient } from "./auth/supabase";
+
 export type OutboxStatus = "PENDING_LOCAL" | "SYNCING" | "ACKNOWLEDGED" | "RETRYABLE_ERROR" | "PERMANENT_REJECT";
 
 export interface OutboxEvent {
@@ -57,7 +59,11 @@ export async function syncOutbox() {
   if (!navigator.onLine) return;
 
   const pending = await getPendingEvents();
-  const token = localStorage.getItem('zonepilot_jwt') || '';
+  const client = getSupabaseBrowserClient();
+  if (!client) return;
+  const currentSession = await client.auth.getSession();
+  if (!currentSession.data.session) return;
+  let token = currentSession.data.session.access_token;
 
   for (const event of pending) {
     if (event.retry_count > 5) continue;
@@ -65,17 +71,25 @@ export async function syncOutbox() {
     await markEventStatus(event.client_event_id, "SYNCING");
     
     try {
-      const res = await fetch("/api/events", {
+      const submit = (accessToken: string) => fetch("/api/events", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": "Bearer " + token
+          "Authorization": "Bearer " + accessToken
         },
         body: JSON.stringify({
           client_event_id: event.client_event_id,
           ...event.payload
         })
       });
+      let res = await submit(token);
+      if (res.status === 401) {
+        const refreshed = await client.auth.refreshSession();
+        if (refreshed.data.session) {
+          token = refreshed.data.session.access_token;
+          res = await submit(token);
+        }
+      }
 
       if (res.ok) {
         await markEventStatus(event.client_event_id, "ACKNOWLEDGED");

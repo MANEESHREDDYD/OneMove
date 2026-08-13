@@ -1,4 +1,4 @@
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect, chromium, type BrowserContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -11,6 +11,8 @@ let study_id = '';
 let order_id = '';
 let test_token = '';
 let user_id = '';
+let test_email = '';
+let test_password = '';
 
 test.beforeAll(async () => {
     try {
@@ -24,13 +26,13 @@ test.beforeAll(async () => {
         return;
     }
 
-    const email = "e2e_vol_pers_" + Date.now() + "@onemove.com";
-    const password = "password123!";
+    test_email = "e2e_vol_pers_" + Date.now() + "@onemove.com";
+    test_password = "password123!";
     
     const signupRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
         method: 'POST',
         headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: test_email, password: test_password })
     });
     
     const user = await signupRes.json();
@@ -84,12 +86,13 @@ test.beforeAll(async () => {
         headers: srv_headers,
         body: JSON.stringify({
             study_id,
-            participant_id: user_id,
-            platform: "ZEPTO",
-            status: "CREATED"
+            participant_id: user_id
         })
     });
     const order = await orderRes.json();
+    if (!orderRes.ok || !Array.isArray(order) || !order[0]?.id) {
+        throw new Error(`Failed to create volunteer order: ${JSON.stringify(order)}`);
+    }
     order_id = order[0].id;
 });
 
@@ -104,16 +107,20 @@ test.describe('Volunteer Order Persistent Offline Profile E2E', () => {
     }
 
     const userDataDir = path.join(process.cwd(), '.test_user_data_vol_' + Date.now());
+    let context: BrowserContext | undefined;
     
     try {
         // Phase 1: Launch Persistent Context, Go Offline, Trigger Volunteer Event via Outbox
-        let context = await chromium.launchPersistentContext(userDataDir, { headless: true });
+        context = await chromium.launchPersistentContext(userDataDir, { headless: true });
         let page = context.pages()[0] || await context.newPage();
 
         await page.goto('http://localhost:3001/');
-        await page.evaluate((token) => {
-            localStorage.setItem('zonepilot_jwt', token);
-        }, test_token);
+        await page.getByLabel('Email').fill(test_email);
+        await page.getByLabel('Password').fill(test_password);
+        await page.getByRole('button', { name: 'Sign in' }).click();
+        await expect(page.getByRole('heading', { name: 'ZonePilot Observatory' })).toBeVisible();
+        await page.goto('http://localhost:3001/capture');
+        await expect(page.getByRole('button', { name: 'Save Observation' })).toBeVisible();
 
         // Go offline
         await context.setOffline(true);
@@ -156,12 +163,15 @@ test.describe('Volunteer Order Persistent Offline Profile E2E', () => {
 
         // Close persistent context completely to simulate browser/process restart
         await context.close();
+        context = undefined;
 
-        // Phase 2: Relaunch SAME user data directory offline -> Verify IndexedDB persistence
-        context = await chromium.launchPersistentContext(userDataDir, { headless: true, offline: true });
+        // Phase 2: Relaunch SAME user data directory, restore the origin, then go
+        // offline before verifying IndexedDB persistence.
+        context = await chromium.launchPersistentContext(userDataDir, { headless: true });
         page = context.pages()[0] || await context.newPage();
 
         await page.goto('http://localhost:3001/');
+        await context.setOffline(true);
 
         const pendingCount = await page.evaluate(async () => {
             return new Promise((resolve) => {
@@ -189,8 +199,13 @@ test.describe('Volunteer Order Persistent Offline Profile E2E', () => {
 
         // Phase 3: Reconnect Online & Sync
         await context.setOffline(false);
-        await page.goto('http://localhost:3001/');
-        await page.waitForTimeout(3000);
+        const syncResponsePromise = page.waitForResponse((response) =>
+            response.url().endsWith('/api/events') && response.request().method() === 'POST'
+        );
+        await page.goto('http://localhost:3001/capture');
+        const syncResponse = await syncResponsePromise;
+        const syncBody = await syncResponse.text();
+        expect(syncResponse.status(), `Outbox sync failed: ${syncBody}`).toBe(201);
 
         // Phase 4: Verify PostgREST database row in volunteer_order_events
         const eventRes = await fetch(`${SUPABASE_URL}/rest/v1/volunteer_order_events?order_id=eq.${order_id}`, {
@@ -205,8 +220,10 @@ test.describe('Volunteer Order Persistent Offline Profile E2E', () => {
         expect(data[0].event_type).toBe('ORDER_PLACED');
 
         await context.close();
+        context = undefined;
     } finally {
-        fs.rmSync(userDataDir, { recursive: true, force: true });
+        await context?.close();
+        fs.rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     }
   });
 });

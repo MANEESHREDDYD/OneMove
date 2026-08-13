@@ -5,14 +5,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Setup Supabase CLI & Local Environment
-      uses: supabase/setup-cli@v1
+      uses: supabase/setup-cli@v3
       with:
-        version: 1.136.3
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
+        version: 2.113.0
+    - uses: actions/checkout@v7
+    - uses: actions/setup-python@v7
       with:
         python-version: '3.11'
-    - run: pip install ruff pytest pandas httpx fastapi uvicorn pydantic pyjwt supabase pytz requests python-dotenv h3 "psycopg[binary]"
+    - run: pip install ruff pytest pandas httpx fastapi uvicorn pydantic "pyjwt[crypto]" supabase pytz requests pyarrow python-dotenv h3 "psycopg[binary]"
     - run: pip install -e ./python
     - run: ruff check .
     - run: pytest
