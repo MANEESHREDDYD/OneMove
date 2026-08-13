@@ -1,5 +1,7 @@
 # Independent Auditor Report (Subagent 11)
 
+> **Historical snapshot — superseded.** This report predates the exact-SHA R1 release gate and must not be used for current CI, authentication, data, or security claims. Use `docs/execution/zonepilot_program_state.json` plus linked GitHub/runtime evidence. In particular, the statements below that auth is stubbed, Geofabrik is stalled, and the then-current CI matrix is green are no longer current-state assertions.
+
 ## P0 (Critical Blockers)
 - None currently within the codebase. CI is green (Ruff 0, Pytest 40 passed).
 - **External Blocker**: Geofabrik download via `curl` in Subagent 3 is hanging or executing very slowly due to network limits. OSRM pipeline (Agent 4) is stalled waiting for the `pilot_corridor.osm.pbf` output.

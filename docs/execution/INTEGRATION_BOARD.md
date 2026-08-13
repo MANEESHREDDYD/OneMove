@@ -1,5 +1,7 @@
 # Integration Board
 
+> **Historical snapshot — superseded.** Agent labels, commit references, tests, and merge wording below describe an earlier integration wave. Use `docs/execution/zonepilot_program_state.json` for current ownership and exact remote evidence; this table is retained only as history.
+
 | Agent | Branch | Status | Tests | Commit | Blocked? |
 |-------|--------|--------|-------|--------|----------|
 | 1. CI Repair | `ws/phase1-measurement` | MERGED | Ruff (0), Pytest (Pass) | `002253a` | No |

@@ -1,27 +1,17 @@
 {
-  "updated_at": "2026-08-13T12:00:07Z",
+  "updated_at": "2026-08-13T12:08:20Z",
   "repository": "https://github.com/MANEESHREDDYD/OneMove",
   "branch": "ws/phase1-measurement",
-  "head_sha": "f088e107714443c89d574126a95a04bffaa4236d",
+  "head_sha": "45153cf986e81aeac0083fdb3b4556f2a7735ab4",
   "base_sha": "ef09d0f652148011944fff52eb2b822434077fc2",
-  "current_milestone": "R1_REMOTE_EVIDENCE_REPAIR",
+  "current_milestone": "R1_FIRST_MAJOR_GATE_GREEN_OWNER_MERGE_PENDING",
   "r0_5_status": "NO_GO_OWNER_BLOCKED",
-  "r1_status": "INTEGRATED_LOCAL_GATE_GREEN_REMOTE_PENDING",
+  "r1_status": "REMOTE_GATE_GREEN_OWNER_MERGE_PENDING",
   "r2_status": "FOUNDATIONS_LOCAL_VERIFIED_NO_REAL_TRAFFIC",
   "implemented_estimate": 32,
-  "verified_estimate": 29,
-  "release_ready_estimate": 16,
+  "verified_estimate": 31,
+  "release_ready_estimate": 18,
   "active_workstreams": [
-    {
-      "id": "r1_remote_release",
-      "status": "REMOTE_SUCCESS_PREDECESSOR",
-      "evidence": "Node, Python, SQL, Polyglot, and Release Validation workflows passed on f088e107; the next repair SHA must repeat the complete matrix."
-    },
-    {
-      "id": "r1_remote_evidence",
-      "status": "REPAIR_READY",
-      "evidence": "Run 31697642743 completed the real OSM, Gold, and OSRM build but failed when the runner hashed a root-owned OSRM output; the POSIX container user mapping repair is ready to push."
-    },
     {
       "id": "production_platform",
       "status": "PARTIAL",
@@ -34,6 +24,10 @@
     }
   ],
   "completed_workstreams": [
+    {
+      "id": "r1_remote_release_gate",
+      "evidence": "Node, Python, SQL, Polyglot, Release Validation, and R1 Evidence all passed on exact candidate 45153cf986e81aeac0083fdb3b4556f2a7735ab4."
+    },
     {
       "id": "release_local_closure",
       "evidence": "Root and Observatory clean installs/builds/lint/typecheck pass; both required persistent-browser E2Es pass 5/5 with real Supabase sessions and IndexedDB restart persistence."
@@ -48,7 +42,7 @@
     },
     {
       "id": "r1_evidence_local",
-      "evidence": "Verified local evidence: 65,459 OSM nodes, 20,344 highway ways, 9,163 POIs, 94 H3 cells, 27-file OSRM bundle, positive route, and a fully finite 3x3 matrix."
+      "evidence": "Remote run 31698148033 verified 65,463 OSM nodes, 20,349 highway ways, 9,165 POIs, 94 H3 cells, a 27-file OSRM bundle, a positive route, and a fully finite 3x3 matrix on the exact candidate SHA."
     },
     {
       "id": "r2_temporal_foundations_local",
@@ -89,14 +83,7 @@
       "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31388225519"
     }
   ],
-  "current_p0": [
-    {
-      "failure_id": "RELEASE-REMOTE-001",
-      "owner": "principal_integrator",
-      "status": "REPAIR_READY",
-      "evidence": "Five workflows pass on f088e107; R1 Evidence requires the verified OSRM ownership repair before the exact-SHA gate can close."
-    }
-  ],
+  "current_p0": [],
   "current_p1": [
     {
       "failure_id": "PRODUCTION-DEPLOY-001",
@@ -131,13 +118,13 @@
   ],
   "last_successful_test_matrix": {
     "remote_last_audited": {
-      "head_sha": "f088e107714443c89d574126a95a04bffaa4236d",
-      "node_ci": {"run_id": 31697642722, "conclusion": "success"},
-      "python_ci": {"run_id": 31697642778, "conclusion": "success"},
-      "sql_quality": {"run_id": 31697642708, "conclusion": "success"},
-      "polyglot_ci": {"run_id": 31697642714, "conclusion": "success"},
-      "release_validation": {"run_id": 31697642797, "conclusion": "success"},
-      "r1_evidence": {"run_id": 31697642743, "conclusion": "failure"}
+      "head_sha": "45153cf986e81aeac0083fdb3b4556f2a7735ab4",
+      "node_ci": {"run_id": 31698148020, "conclusion": "success"},
+      "python_ci": {"run_id": 31698148012, "conclusion": "success"},
+      "sql_quality": {"run_id": 31698148069, "conclusion": "success"},
+      "polyglot_ci": {"run_id": 31698148072, "conclusion": "success"},
+      "release_validation": {"run_id": 31698148097, "conclusion": "success"},
+      "r1_evidence": {"run_id": 31698148033, "conclusion": "success"}
     },
     "local_integrated_worktree": {
       "python": "107 passed, 1 optional C-integration skip, including live RLS, OSRM, and destructive DB concurrency",
@@ -147,17 +134,35 @@
       "observatory_node": "clean install/lint/typecheck/build passed",
       "playwright_marketplace": "5 passed",
       "playwright_volunteer": "5 passed",
-      "r1_evidence": "OSM/Gold/OSRM route and matrix audit passed",
+      "r1_evidence": "Remote exact-SHA OSM/Gold/OSRM route, matrix, hash, provenance, DQ, and manifest audit passed",
       "dependency_audit": "0 critical/high; 3 moderate dev-only autocannon-chain findings at root, 0 Observatory, 0 tests"
     }
   },
   "next_executable_tasks": [
-    "Commit the integrated batch while excluding private artifacts, local credentials, and unrelated auditor scratch files.",
-    "Push the exact candidate SHA and monitor Node CI, Python CI, SQL Quality, Polyglot CI, Release Validation, and ZonePilot R1 Evidence.",
-    "Repair any remote failure, push a new SHA, and repeat the complete matrix until every first-gate workflow is green.",
-    "Update this ledger with the verified candidate and remote run IDs, then request owner merge authorization.",
+    "Request owner authorization to merge PR #1; do not merge without that authorization.",
     "After merge, split R2 temporal work from production-platform work into smaller milestone branches."
   ],
+  "auditor": {
+    "false_claims_open": 0,
+    "p0_open": 0,
+    "p1_open": 2,
+    "verdict": "FIRST_MAJOR_GATE_GO_OWNER_MERGE_PENDING",
+    "evidence": "Current product surfaces label unavailable traffic truthfully, scenario and optimizer endpoints retain typed NOT_IMPLEMENTED semantics, and obsolete audit/coordination reports are explicitly marked historical."
+  },
+  "r1_remote_evidence": {
+    "run_id": 31698148033,
+    "candidate_code_sha": "45153cf986e81aeac0083fdb3b4556f2a7735ab4",
+    "source_md5": "6cdfbb5845de12a70625e073322ed0e1",
+    "source_pbf_sha256": "5b6c273832d8660f2e19402192b1227df0dca88fc37aa2b77a570d231761dc57",
+    "roads_pbf_sha256": "ad0dd3010d3cd309dfbc1a9e6808a26fae457174343f3794bda9f916611d0649",
+    "pois_pbf_sha256": "3643f2162208d137ccae7203ed8d53a30ef48983040af4be3974811c63010aaf",
+    "gold_parquet_sha256": "37ce6b8f549199e6ad9e4442182e6f13cf33ae756d21d2daca55c1bc6b4664ba",
+    "graph_topology_sha256": "44ca2ddb32e97acf76dd85604a2c7f9bc6298a3c154435ec936e536c14c0f78b",
+    "osrm_graph_bundle_sha256": "4cd6cfe959edeea5a203ff5b0b141cc4cddbefc69977ab0a1691daeb1ced1957",
+    "record_counts": {"osm_nodes": 65463, "osm_highway_ways": 20349, "pois": 9165, "h3_cells": 94},
+    "routing_smoke": {"distance_m": 2958.1, "duration_s": 332.3, "matrix_dimensions": "3x3", "finite_cells": 9, "null_cells": 0},
+    "dq_status": "PASS"
+  },
   "coordination_metadata": {
     "pull_request": 1,
     "pull_request_state": "OPEN",
