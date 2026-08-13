@@ -19,6 +19,7 @@ KNOWN_PUBLISHED_TEST_SECRETS = {
 def test_local_owner_credential_file_is_ignored():
     ignore_rules = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert "OneMove.env" in ignore_rules
+    assert ".env.test" in ignore_rules
 
 
 def test_program_state_declares_public_source_private_execution_boundary():
@@ -68,11 +69,16 @@ def test_private_or_generated_artifacts_are_not_tracked():
         capture_output=True,
     ).stdout.split(b"\0")
     paths = {raw_path.decode("utf-8") for raw_path in tracked if raw_path}
-    forbidden_prefixes = ("data/geo/", "data_root/private/")
+    forbidden_prefixes = ("artifacts/", "data/geo/", "data_root/", "scratch/", "temp_sb/")
     forbidden_paths = {
+        "auditor_v2_report.txt",
+        "failed_log.txt",
         "log.txt",
+        "pr_info.json",
+        "pytest_report.json",
         "reports/pre_zonepilot_audit/00_REPOSITORY_STATE.md",
         "reports/zonepilot_build/00_BUILD_START_STATE.md",
+        "runs_info.txt",
     }
 
     assert not any(path.startswith(forbidden_prefixes) for path in paths)
