@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-13T11:50:00Z",
+  "updated_at": "2026-08-13T11:54:59Z",
   "repository": "https://github.com/MANEESHREDDYD/OneMove",
   "branch": "ws/phase1-measurement",
   "head_sha": "483c8e1f6d256c39987d3780ffdb342f935f7ac2",
@@ -56,6 +56,14 @@
     }
   ],
   "failed_workflows": [
+    {
+      "workflow": "ZonePilot R1 Evidence",
+      "run_id": 31697525579,
+      "head_sha": "9a8b0b33294e2667128d503ac24ac21021af3115",
+      "conclusion": "failure",
+      "failure": "GitHub rejected the workflow before job creation because runner.temp is unavailable in job-level env evaluation; corrected to github.workspace.",
+      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31697525579"
+    },
     {
       "workflow": "ZonePilot Release Validation",
       "run_id": 31388230404,

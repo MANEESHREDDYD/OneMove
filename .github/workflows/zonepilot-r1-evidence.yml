@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 60
     env:
       ZONEPILOT_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      ZONEPILOT_DATA_ROOT: ${{ runner.temp }}/zonepilot-r1-data
+      ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/.zonepilot-r1-data
 
     steps:
       - name: Checkout exact candidate
