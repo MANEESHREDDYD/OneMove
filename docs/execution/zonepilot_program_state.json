@@ -1,10 +1,10 @@
 {
-  "updated_at": "2026-08-13T11:54:59Z",
+  "updated_at": "2026-08-13T12:00:07Z",
   "repository": "https://github.com/MANEESHREDDYD/OneMove",
   "branch": "ws/phase1-measurement",
-  "head_sha": "483c8e1f6d256c39987d3780ffdb342f935f7ac2",
+  "head_sha": "f088e107714443c89d574126a95a04bffaa4236d",
   "base_sha": "ef09d0f652148011944fff52eb2b822434077fc2",
-  "current_milestone": "R1_REMOTE_RELEASE_GATE_PENDING",
+  "current_milestone": "R1_REMOTE_EVIDENCE_REPAIR",
   "r0_5_status": "NO_GO_OWNER_BLOCKED",
   "r1_status": "INTEGRATED_LOCAL_GATE_GREEN_REMOTE_PENDING",
   "r2_status": "FOUNDATIONS_LOCAL_VERIFIED_NO_REAL_TRAFFIC",
@@ -14,13 +14,13 @@
   "active_workstreams": [
     {
       "id": "r1_remote_release",
-      "status": "READY_TO_PUSH",
-      "evidence": "The integrated dirty worktree passes local Release Validation-shaped checks; it is not represented by the recorded remote SHA yet."
+      "status": "REMOTE_SUCCESS_PREDECESSOR",
+      "evidence": "Node, Python, SQL, Polyglot, and Release Validation workflows passed on f088e107; the next repair SHA must repeat the complete matrix."
     },
     {
       "id": "r1_remote_evidence",
-      "status": "READY_TO_PUSH",
-      "evidence": "The real Geofabrik-to-Gold-to-OSRM chain and strict candidate verifier pass locally; the dedicated workflow has no run for the integrated candidate yet."
+      "status": "REPAIR_READY",
+      "evidence": "Run 31697642743 completed the real OSM, Gold, and OSRM build but failed when the runner hashed a root-owned OSRM output; the POSIX container user mapping repair is ready to push."
     },
     {
       "id": "production_platform",
@@ -58,6 +58,14 @@
   "failed_workflows": [
     {
       "workflow": "ZonePilot R1 Evidence",
+      "run_id": 31697642743,
+      "head_sha": "f088e107714443c89d574126a95a04bffaa4236d",
+      "conclusion": "failure",
+      "failure": "The pinned OSRM container generated an owner-only file as root, so the host runner could not read the complete graph bundle for strict hashing; corrected by mapping the POSIX host UID/GID into the container.",
+      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31697642743"
+    },
+    {
+      "workflow": "ZonePilot R1 Evidence",
       "run_id": 31697525579,
       "head_sha": "9a8b0b33294e2667128d503ac24ac21021af3115",
       "conclusion": "failure",
@@ -85,8 +93,8 @@
     {
       "failure_id": "RELEASE-REMOTE-001",
       "owner": "principal_integrator",
-      "status": "READY_TO_PUSH",
-      "evidence": "No remote workflow has evaluated the integrated worktree; local success cannot close the release gate."
+      "status": "REPAIR_READY",
+      "evidence": "Five workflows pass on f088e107; R1 Evidence requires the verified OSRM ownership repair before the exact-SHA gate can close."
     }
   ],
   "current_p1": [
@@ -123,13 +131,13 @@
   ],
   "last_successful_test_matrix": {
     "remote_last_audited": {
-      "head_sha": "483c8e1f6d256c39987d3780ffdb342f935f7ac2",
-      "node_ci": {"run_id": 31388230381, "conclusion": "success"},
-      "python_ci": {"run_id": 31388230107, "conclusion": "success"},
-      "sql_quality": {"run_id": 31388230215, "conclusion": "success"},
-      "polyglot_ci": {"run_id": 31388230109, "conclusion": "success"},
-      "release_validation": {"run_id": 31388230404, "conclusion": "failure"},
-      "r1_evidence": {"run_id": null, "conclusion": "not_run"}
+      "head_sha": "f088e107714443c89d574126a95a04bffaa4236d",
+      "node_ci": {"run_id": 31697642722, "conclusion": "success"},
+      "python_ci": {"run_id": 31697642778, "conclusion": "success"},
+      "sql_quality": {"run_id": 31697642708, "conclusion": "success"},
+      "polyglot_ci": {"run_id": 31697642714, "conclusion": "success"},
+      "release_validation": {"run_id": 31697642797, "conclusion": "success"},
+      "r1_evidence": {"run_id": 31697642743, "conclusion": "failure"}
     },
     "local_integrated_worktree": {
       "python": "107 passed, 1 optional C-integration skip, including live RLS, OSRM, and destructive DB concurrency",

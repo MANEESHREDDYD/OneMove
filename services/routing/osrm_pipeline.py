@@ -27,9 +27,13 @@ def measure_time(step_name, func, *args, **kwargs):
 
 def run_docker_osrm(command, *args):
     """Run an OSRM command via Docker, mounting the OSRM_DIR."""
-    subprocess.run([
-        "docker", "run", "-t", "-v", f"{OSRM_DIR}:/data", OSRM_IMAGE, command
-    ] + list(args), check=True)
+    docker_args = ["docker", "run", "-t"]
+    if hasattr(os, "getuid") and hasattr(os, "getgid"):
+        # Keep generated graph files readable by the CI runner. Without this,
+        # the container can emit root-owned files with owner-only permissions.
+        docker_args.extend(["--user", f"{os.getuid()}:{os.getgid()}"])
+    docker_args.extend(["-v", f"{OSRM_DIR}:/data", OSRM_IMAGE, command])
+    subprocess.run(docker_args + list(args), check=True)
 
 def build_osrm_graph():
     ensure_dir(OSRM_DIR)
