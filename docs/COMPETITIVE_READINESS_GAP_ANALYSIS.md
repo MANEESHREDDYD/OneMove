@@ -8,7 +8,7 @@ Final conclusion:
 - Real production competitor: NO
 - Production-preview/demo ready: only if all checks pass
 
-OneMove is a strong private localhost portfolio demo for a full-stack Data/ML/AI marketplace intelligence platform. It should not be described as equal to DoorDash, Uber, Rapido, Swiggy, or Zomato at real-world production scale.
+OneMove is a strong public-source product that can be run as a private localhost portfolio demo for a full-stack Data/ML/AI marketplace intelligence platform. It should not be described as equal to DoorDash, Uber, Rapido, Swiggy, or Zomato at real-world production scale.
 
 Public references reviewed:
 
@@ -44,7 +44,6 @@ Public references reviewed:
 
 ## Honest Positioning
 
-OneMove is credible as a private portfolio/interview demo because it demonstrates role-based marketplace workflows, RLS isolation, analytics, deterministic ML/data intelligence, admin operations surfaces, and local production-preview validation.
+OneMove is credible as a public-source product run in a private localhost portfolio/interview environment because it demonstrates role-based marketplace workflows, RLS isolation, analytics, deterministic ML/data intelligence, admin operations surfaces, and local production-preview validation.
 
 OneMove is not a real DoorDash/Uber/Rapido/Swiggy/Zomato-scale competitor. It lacks real payments, real onboarding/KYC, native GPS, live dispatch operations, production observability, production rate limiting, multi-region scale, native mobile apps, CI/CD deployment gates, and incident operations.
-

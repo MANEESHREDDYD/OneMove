@@ -1,6 +1,6 @@
 # ZonePilot Program State
 
-Updated: `2026-08-13T19:28:00Z`
+Updated: `2026-08-13T19:36:20Z`
 
 This is a restart ledger, not runtime proof. GitHub checks, generated manifests, deployed health signals, and test output remain authoritative. The JSON companion contains the complete machine-readable state.
 
@@ -9,9 +9,9 @@ Repository boundary: `MANEESHREDDYD/OneMove` is the **public source repository**
 ## Candidate
 
 - PR `#1` remains open and unmerged on `ws/phase1-measurement`.
-- Last fully green remote SHA: `9e88061f78bc835abfcd71e19a46530af801f219`.
-- Current remote remediation SHA: `15ceedf2cd142e53587648fe791ccee9de9ddcce`. Node, SQL, Polyglot, and R1 Evidence pass; Python and Release Validation fail because their generic suites incorrectly invoke the OSRM smoke test without first generating its private execution artifacts.
-- A local correction marks the OSRM smoke as `r1_evidence`, keeps its explicit hard-failing invocation in the evidence workflow, and adds a CI ownership regression test. Remote proof is pending a new commit.
+- Last fully green remote SHA: `fc3ec9a7ccfdbcde777db43bba2d516baa6ca5d1`.
+- Node, Python, SQL, Polyglot, Release Validation, and R1 Evidence all pass on that exact SHA. The OSRM smoke remains a hard failure in its artifact-generating evidence workflow and is explicitly deselected only from generic clean-checkout suites.
+- A pinned four-language CodeQL workflow is prepared as the next security-hardening candidate and requires its own remote proof after commit.
 - Base: `ef09d0f652148011944fff52eb2b822434077fc2`.
 
 ## Product state
@@ -19,7 +19,7 @@ Repository boundary: `MANEESHREDDYD/OneMove` is the **public source repository**
 | Milestone | Status | Evidence |
 |---|---|---|
 | R0.5 | **NO-GO / OWNER BLOCKED** | Private scheduled execution and hosted least-privilege credentials are unavailable. |
-| R1 | **NO-GO / CURRENT REMEDIATION SHA RED** | The last product candidate was green, but the current public-boundary remediation SHA has a failed generic Python check. The dedicated current-SHA R1 Evidence job remains green. |
+| R1 | **FIRST MAJOR GATE GREEN / MERGE BLOCKED** | The public-boundary remediation and all six current-SHA product/evidence gates pass. Published-history cleanup still requires explicit owner authorization. |
 | R2 | **FOUNDATIONS PARTIAL** | UTC temporal contracts, point-in-time joins, chronological splits, and prediction/outcome records are tested. No real traffic history, trained model, or prospective result exists. |
 | R3 | **NOT STARTED** | Optimizer API retains typed `NOT_IMPLEMENTED`; no solver result is claimed. |
 | R4 | **NOT STARTED** | No resilience experiments or counterfactual result is claimed. |
@@ -42,7 +42,7 @@ Conservative whole-product estimates: implemented `32%`, verified `31%`, release
 
 ## First major gate
 
-P0 is not zero on the current remediation SHA. At `15ceedf2cd142e53587648fe791ccee9de9ddcce`, Node `31735581378`, SQL `31735581418`, Polyglot `31735581409`, and R1 Evidence `31735581384` pass; Python `31735581415` and Release Validation `31735581428` fail because their clean checkouts have no generated OSRM graph. The PR remains unmerged.
+P0 is zero on the last fully audited remediation SHA. At `fc3ec9a7ccfdbcde777db43bba2d516baa6ca5d1`, Node `31736184127`, Python `31736184132`, SQL `31736184092`, Polyglot `31736184069`, R1 Evidence `31736184189`, and Release Validation `31736184266` all pass. The PR remains unmerged because published-history cleanup requires explicit owner authorization.
 
 The later documentation head `9e88061f78bc835abfcd71e19a46530af801f219` also passed the complete exact-SHA matrix: Node `31698786881`, Python `31698786691`, SQL `31698786788`, Polyglot `31698786735`, Release Validation `31698786988`, and R1 Evidence `31698786726`.
 
@@ -50,7 +50,7 @@ The later documentation head `9e88061f78bc835abfcd71e19a46530af801f219` also pas
 
 - Current-tree personal email and obsolete Supabase project identifiers are redacted. `OneMove.env` is explicitly ignored; both it and `.env.local` now permit only the owner, SYSTEM, and administrators.
 - Static HMAC test fixtures are removed from the current tree. Tests use a cryptographically random per-process fallback unless the local Supabase environment supplies its own secret.
-- No supplied credential appears in reachable remote Git history. GitHub reports zero open secret-scanning alerts, but code scanning has no analysis and Dependabot alerts are disabled.
+- No supplied credential appears in reachable remote Git history. GitHub reports zero open secret-scanning alerts; push protection is enabled and Dependabot vulnerability alerts are now enabled. A pinned, security-extended CodeQL workflow covering C/C++, Java, JavaScript/TypeScript, and Python is prepared for remote validation.
 - A personal email, obsolete project identifiers, local credential-shaped JWT fixtures, and raw/generated artifacts remain in already-published history. Purging them requires an owner-authorized coordinated rewrite of `main`, the PR branch, and tag `v1.0.0-polyglot-local-portfolio-go`; PR `#1` remains unmerged pending that decision.
 - Vercel account/team access and a read-only Supabase PostgreSQL transaction authenticate. Supabase app keys return 401; Vercel has zero projects; Railway lacks an API token; Sentry has no management token; GitHub has no deployment environments, secrets, or variables.
 
@@ -63,6 +63,6 @@ The later documentation head `9e88061f78bc835abfcd71e19a46530af801f219` also pas
 
 ## Immediate resume sequence
 
-1. Commit and verify the OSRM CI ownership correction on a new exact PR SHA; require every first-gate workflow to pass.
-2. Obtain an explicit owner decision to rewrite published history/tag or accept the residual historical PII; do not merge before that decision.
+1. Commit and remotely verify the CodeQL security-hardening candidate.
+2. Obtain explicit owner authorization for a coordinated published-history and tag rewrite; do not merge before that decision.
 3. After a safe merge and green `main`, create smaller release-identity, R2 temporal, R3 optimizer, and R6 production-platform branches.
