@@ -1,8 +1,10 @@
 # ZonePilot Program State
 
-Updated: `2026-08-13T12:08:20Z`
+Updated: `2026-08-13T19:19:49Z`
 
 This is a restart ledger, not runtime proof. GitHub checks, generated manifests, deployed health signals, and test output remain authoritative. The JSON companion contains the complete machine-readable state.
+
+Repository boundary: `MANEESHREDDYD/OneMove` is the **public source repository**. Provider payloads, credentials, scheduled acquisition state, and private execution artifacts belong in a separate private repository or private managed storage and must never be committed here.
 
 ## Candidate
 
@@ -41,6 +43,15 @@ Conservative whole-product estimates: implemented `32%`, verified `31%`, release
 
 P0 is zero. Exact-SHA runs are green: Node `31698148020`, Python `31698148012`, SQL `31698148069`, Polyglot `31698148072`, Release Validation `31698148097`, and R1 Evidence `31698148033`. The PR remains unmerged pending owner authorization.
 
+The later documentation head `9e88061f78bc835abfcd71e19a46530af801f219` also passed the complete exact-SHA matrix: Node `31698786881`, Python `31698786691`, SQL `31698786788`, Polyglot `31698786735`, Release Validation `31698786988`, and R1 Evidence `31698786726`.
+
+## Public exposure and account readiness
+
+- Current-tree personal email and obsolete Supabase project identifiers are redacted. `OneMove.env` is explicitly ignored and its ACL now permits only the owner, SYSTEM, and administrators.
+- No supplied credential appears in reachable remote Git history. GitHub reports zero open secret-scanning alerts. Historical JWT-shaped values are synthetic fixtures, and archived browser tokens target localhost test services.
+- A personal email and obsolete project identifiers remain in already-published `main` history and tag `v1.0.0-polyglot-local-portfolio-go`. Purging them requires an owner-authorized coordinated history rewrite; PR `#1` remains unmerged pending that decision.
+- Vercel account/team access and a read-only Supabase PostgreSQL transaction authenticate. Supabase app keys return 401; Vercel has zero projects; Railway lacks an API token; Sentry has no management token; GitHub has no deployment environments, secrets, or variables.
+
 ## Owner-controlled blockers
 
 - Create or grant access to the approved private execution repository.
@@ -50,6 +61,6 @@ P0 is zero. Exact-SHA runs are green: Node `31698148020`, Python `31698148012`, 
 
 ## Immediate resume sequence
 
-1. Request owner authorization to merge PR `#1`; do not merge without authorization.
-2. After merge, create smaller milestone branches for R2 temporal work and R6 production-platform work.
-3. Continue all unblocked work while retaining the TomTom, private-executor, and hosted-environment owner blockers.
+1. Verify the current-tree exposure remediation on the new exact PR SHA.
+2. Obtain an explicit owner decision to rewrite published history/tag or accept the residual historical PII; do not merge before that decision.
+3. After a safe merge and green `main`, create smaller release-identity, R2 temporal, R3 optimizer, and R6 production-platform branches.

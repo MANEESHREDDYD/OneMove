@@ -1,10 +1,12 @@
 {
-  "updated_at": "2026-08-13T12:08:20Z",
+  "updated_at": "2026-08-13T19:19:49Z",
   "repository": "https://github.com/MANEESHREDDYD/OneMove",
+  "repository_visibility": "PUBLIC_SOURCE_REPOSITORY",
+  "private_execution_boundary": "SEPARATE_PRIVATE_REPOSITORY_OR_MANAGED_STORAGE",
   "branch": "ws/phase1-measurement",
-  "head_sha": "45153cf986e81aeac0083fdb3b4556f2a7735ab4",
+  "head_sha": "9e88061f78bc835abfcd71e19a46530af801f219",
   "base_sha": "ef09d0f652148011944fff52eb2b822434077fc2",
-  "current_milestone": "R1_FIRST_MAJOR_GATE_GREEN_OWNER_MERGE_PENDING",
+  "current_milestone": "R1_PUBLIC_EXPOSURE_REMEDIATION",
   "r0_5_status": "NO_GO_OWNER_BLOCKED",
   "r1_status": "REMOTE_GATE_GREEN_OWNER_MERGE_PENDING",
   "r2_status": "FOUNDATIONS_LOCAL_VERIFIED_NO_REAL_TRAFFIC",
@@ -21,12 +23,22 @@
       "id": "r0_5_private_execution",
       "status": "OWNER_BLOCKED",
       "evidence": "The approved private execution repository and hosted least-privilege credentials are not available to this execution environment."
+    },
+    {
+      "id": "public_repository_exposure",
+      "status": "CURRENT_TREE_REMEDIATED_HISTORY_OWNER_DECISION_REQUIRED",
+      "evidence": "The current-tree personal account/project identifiers were redacted and OneMove.env is now explicitly ignored with an owner-only ACL. The personal email and historical project identifiers remain in public main history and tag v1.0.0-polyglot-local-portfolio-go; rewriting published history requires explicit owner authorization."
+    },
+    {
+      "id": "hosted_account_readiness",
+      "status": "PARTIAL_OWNER_BLOCKED",
+      "evidence": "Vercel account/team and the Supabase PostgreSQL credential authenticate read-only. Supabase app keys are rejected, Vercel has no project, Railway has no API token, Sentry has only an ingestion DSN, and GitHub has no deployment environments/secrets/variables."
     }
   ],
   "completed_workstreams": [
     {
       "id": "r1_remote_release_gate",
-      "evidence": "Node, Python, SQL, Polyglot, Release Validation, and R1 Evidence all passed on exact candidate 45153cf986e81aeac0083fdb3b4556f2a7735ab4."
+      "evidence": "Node, Python, SQL, Polyglot, Release Validation, and R1 Evidence all passed on exact candidate 9e88061f78bc835abfcd71e19a46530af801f219."
     },
     {
       "id": "release_local_closure",
@@ -86,6 +98,12 @@
   "current_p0": [],
   "current_p1": [
     {
+      "failure_id": "PUBLIC-HISTORY-PII-001",
+      "owner": "repository_owner",
+      "status": "CURRENT_TREE_FIXED_HISTORY_OWNER_DECISION_REQUIRED",
+      "evidence": "A personal email and obsolete Supabase project identifiers predate this PR and remain in reachable public main history and tag v1.0.0-polyglot-local-portfolio-go. No credential from OneMove.env appears in remote history and GitHub reports zero open secret-scanning alerts."
+    },
+    {
       "failure_id": "PRODUCTION-DEPLOY-001",
       "owner": "production_platform",
       "status": "OWNER_BLOCKED_PARTIAL",
@@ -109,22 +127,22 @@
     },
     {
       "id": "OWNER_BLOCKER_HOSTED_ENVIRONMENTS",
-      "evidence": "Provision/link hosted Supabase, frontend, API, routing, error-tracking, and secret-store accounts for staging and production."
+      "evidence": "Select the authoritative Supabase project and replace rejected app keys; authorize creation/linking of Vercel staging/production projects; provide Railway and Sentry management tokens; create protected GitHub environments and secrets."
     },
     {
-      "id": "OWNER_BLOCKER_MERGE_APPROVAL",
-      "evidence": "PR #1 must remain unmerged until the new exact SHA satisfies every first-gate workflow, then requires owner merge authorization."
+      "id": "OWNER_BLOCKER_PUBLIC_HISTORY_REWRITE_DECISION",
+      "evidence": "Authorize or decline a coordinated public history rewrite and tag replacement to purge the personal email and obsolete hosted project identifiers. PR #1 must remain unmerged until this exposure decision and the new exact-SHA gate are complete."
     }
   ],
   "last_successful_test_matrix": {
     "remote_last_audited": {
-      "head_sha": "45153cf986e81aeac0083fdb3b4556f2a7735ab4",
-      "node_ci": {"run_id": 31698148020, "conclusion": "success"},
-      "python_ci": {"run_id": 31698148012, "conclusion": "success"},
-      "sql_quality": {"run_id": 31698148069, "conclusion": "success"},
-      "polyglot_ci": {"run_id": 31698148072, "conclusion": "success"},
-      "release_validation": {"run_id": 31698148097, "conclusion": "success"},
-      "r1_evidence": {"run_id": 31698148033, "conclusion": "success"}
+      "head_sha": "9e88061f78bc835abfcd71e19a46530af801f219",
+      "node_ci": {"run_id": 31698786881, "conclusion": "success"},
+      "python_ci": {"run_id": 31698786691, "conclusion": "success"},
+      "sql_quality": {"run_id": 31698786788, "conclusion": "success"},
+      "polyglot_ci": {"run_id": 31698786735, "conclusion": "success"},
+      "release_validation": {"run_id": 31698786988, "conclusion": "success"},
+      "r1_evidence": {"run_id": 31698786726, "conclusion": "success"}
     },
     "local_integrated_worktree": {
       "python": "107 passed, 1 optional C-integration skip, including live RLS, OSRM, and destructive DB concurrency",
@@ -139,29 +157,38 @@
     }
   },
   "next_executable_tasks": [
-    "Request owner authorization to merge PR #1; do not merge without that authorization.",
-    "After merge, split R2 temporal work from production-platform work into smaller milestone branches."
+    "Commit and remotely verify the current-tree exposure remediation on the exact PR SHA.",
+    "Obtain the owner's explicit public-history rewrite or risk-acceptance decision; do not merge before that decision.",
+    "After a safe merge and green main, split release-identity, R2 temporal, R3 optimizer, and production-platform work into smaller milestone branches."
   ],
   "auditor": {
     "false_claims_open": 0,
     "p0_open": 0,
-    "p1_open": 2,
-    "verdict": "FIRST_MAJOR_GATE_GO_OWNER_MERGE_PENDING",
-    "evidence": "Current product surfaces label unavailable traffic truthfully, scenario and optimizer endpoints retain typed NOT_IMPLEMENTED semantics, and obsolete audit/coordination reports are explicitly marked historical."
+    "p1_open": 3,
+    "verdict": "R1_ENGINEERING_GATE_GREEN_MERGE_BLOCKED_BY_PUBLIC_HISTORY_DECISION",
+    "evidence": "The current source tree is remediated and supplied credentials are absent from remote history, but a personal email and obsolete hosted project identifiers remain in reachable public history."
   },
   "r1_remote_evidence": {
-    "run_id": 31698148033,
-    "candidate_code_sha": "45153cf986e81aeac0083fdb3b4556f2a7735ab4",
+    "run_id": 31698786726,
+    "candidate_code_sha": "9e88061f78bc835abfcd71e19a46530af801f219",
     "source_md5": "6cdfbb5845de12a70625e073322ed0e1",
     "source_pbf_sha256": "5b6c273832d8660f2e19402192b1227df0dca88fc37aa2b77a570d231761dc57",
     "roads_pbf_sha256": "ad0dd3010d3cd309dfbc1a9e6808a26fae457174343f3794bda9f916611d0649",
     "pois_pbf_sha256": "3643f2162208d137ccae7203ed8d53a30ef48983040af4be3974811c63010aaf",
     "gold_parquet_sha256": "37ce6b8f549199e6ad9e4442182e6f13cf33ae756d21d2daca55c1bc6b4664ba",
     "graph_topology_sha256": "44ca2ddb32e97acf76dd85604a2c7f9bc6298a3c154435ec936e536c14c0f78b",
-    "osrm_graph_bundle_sha256": "4cd6cfe959edeea5a203ff5b0b141cc4cddbefc69977ab0a1691daeb1ced1957",
+    "osrm_graph_bundle_sha256": "61790cf6c46f1999bd48b4cb378186532f4019220999c08491409993904d2a6b",
     "record_counts": {"osm_nodes": 65463, "osm_highway_ways": 20349, "pois": 9165, "h3_cells": 94},
     "routing_smoke": {"distance_m": 2958.1, "duration_s": 332.3, "matrix_dimensions": "3x3", "finite_cells": 9, "null_cells": 0},
     "dq_status": "PASS"
+  },
+  "account_connectivity": {
+    "supabase_api": "REJECTED_401_BOTH_APP_KEYS",
+    "supabase_postgres": "READ_ONLY_AUTHENTICATED",
+    "vercel": "ACCOUNT_AND_TEAM_AUTHENTICATED_ZERO_PROJECTS",
+    "railway": "PROJECT_ID_ONLY_NO_API_TOKEN",
+    "sentry": "INGEST_DSN_HOST_REACHABLE_NO_MANAGEMENT_TOKEN",
+    "github_deployment_configuration": "NO_ENVIRONMENTS_SECRETS_OR_VARIABLES"
   },
   "coordination_metadata": {
     "pull_request": 1,

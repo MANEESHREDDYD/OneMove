@@ -11,6 +11,7 @@ dist/
 .env
 .env.local
 .env*.local
+OneMove.env
 
 # Private credentials
 private/
@@ -58,9 +59,13 @@ Assist/
 reports/zonepilot_build/raw_logs/COMMAND_LOG_ARCHIVE.txt
 
 reports/zonepilot_build/raw_logs/
+reports/zonepilot_build/00_BUILD_START_STATE.md
+reports/pre_zonepilot_audit/00_REPOSITORY_STATE.md
+log.txt
 
 # Raw datasets & geo binaries
 data/
+data_root/private/
 *.parquet
 *.pbf
 *.osm
