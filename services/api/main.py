@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from services.api.core.middleware import RequestIdMiddleware
 from services.api.core.telemetry import configure_logging, initialize_error_tracking
-from services.api.routers import events, governance, health, observatory
+from services.api.routers import events, governance, health, observatory, version
 
 configure_logging()
 initialize_error_tracking()
@@ -86,4 +86,5 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 app.include_router(events.router)
 app.include_router(governance.router)
 app.include_router(observatory.router)
+app.include_router(version.router)
 app.include_router(health.router)
