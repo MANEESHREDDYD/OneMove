@@ -1,68 +1,78 @@
 # ZonePilot Program State
 
-Updated: `2026-08-13T19:36:20Z`
+Updated: `2026-08-14T08:51:18Z`
 
-This is a restart ledger, not runtime proof. GitHub checks, generated manifests, deployed health signals, and test output remain authoritative. The JSON companion contains the complete machine-readable state.
+This ledger is a restart aid, not runtime proof. Exact GitHub checks, provider health, immutable manifests, and test output remain authoritative.
 
-Repository boundary: `MANEESHREDDYD/OneMove` is the **public source repository**. Provider payloads, credentials, scheduled acquisition state, and private execution artifacts belong in a separate private repository or private managed storage and must never be committed here.
+## Current public release
 
-## Candidate
+- PR `#1` is merged.
+- Main is `43b96185fd8754a959d365b6a202eb673e7b0b9d`.
+- Node `31783549508`, Python `31783549482`, SQL `31783549531`, Polyglot `31783549517`, Release Validation `31783549521`, R1 Evidence `31783549514`, and CodeQL `31783549525` all succeeded on that exact SHA.
+- Main requires pull requests and strict current-base checks across all seven gate families. Admin bypass, force pushes, and branch deletion are disabled.
+- Secret scanning and push protection are enabled. Open secret-scanning alerts: zero.
 
-- PR `#1` remains open and unmerged on `ws/phase1-measurement`.
-- Last fully green remote SHA: `fc3ec9a7ccfdbcde777db43bba2d516baa6ca5d1`.
-- Node, Python, SQL, Polyglot, Release Validation, and R1 Evidence all pass on that exact SHA. The OSRM smoke remains a hard failure in its artifact-generating evidence workflow and is explicitly deselected only from generic clean-checkout suites.
-- A pinned four-language CodeQL workflow is prepared as the next security-hardening candidate and requires its own remote proof after commit.
-- Base: `ef09d0f652148011944fff52eb2b822434077fc2`.
+## Public-history remediation
 
-## Product state
+A private verified recovery bundle and fingerprint-only rewrite manifest were created before filtering. Main, the feature branch, the public tag, and pull refs were surgically rewritten. A fresh remote mirror found zero audited generated/private paths, known bad objects, JWTs, personal consumer-email metadata, obsolete project refs, static signing literals, or exact locally supplied credential values.
+
+Old objects are no longer reachable from advertised refs. GitHub can still serve some old objects by exact object ID until garbage collection or Support cleanup; immediate provider-side purge remains open.
+
+## Milestone state
 
 | Milestone | Status | Evidence |
 |---|---|---|
-| R0.5 | **NO-GO / OWNER BLOCKED** | Private scheduled execution and hosted least-privilege credentials are unavailable. |
-| R1 | **FIRST MAJOR GATE GREEN / MERGE BLOCKED** | The public-boundary remediation and all six current-SHA product/evidence gates pass. Published-history cleanup still requires explicit owner authorization. |
-| R2 | **FOUNDATIONS PARTIAL** | UTC temporal contracts, point-in-time joins, chronological splits, and prediction/outcome records are tested. No real traffic history, trained model, or prospective result exists. |
-| R3 | **NOT STARTED** | Optimizer API retains typed `NOT_IMPLEMENTED`; no solver result is claimed. |
-| R4 | **NOT STARTED** | No resilience experiments or counterfactual result is claimed. |
-| R5 | **NOT STARTED** | No ZonePilot economics or experiment registry result is claimed. |
-| R6 | **PARTIAL / OWNER BLOCKED** | API logging, metrics, readiness, optional Sentry activation, safe errors, CORS, and rate limiting exist; hosted environments, alerts, restore proof, and measured load budgets do not. |
-| R7 | **NOT STARTED** | No shadow decision freeze/outcome loop is claimed. |
-| R8 | **SCAFFOLD ONLY** | No authoritative ZonePilot LLM layer or fine-tuning result is claimed. |
-| R9 | **NOT STARTED** | Final product gate is not met. |
+| R0.5 | **SCAFFOLD GREEN / EXECUTION NO-GO** | Private `MANEESHREDDYD/ZonePilot-Data` exists at `41e6fe18141f2c44a333fa9584defe1667fa0547`; validation is green and the exact public SHA contract is enforced. The executor intentionally exits 78 until real least-privilege DB/storage/provider credentials and adapters exist. |
+| R1 | **MERGED / EXACT GATES GREEN** | Authenticated artifact-backed product, OSM/Gold/OSRM evidence, map, provider health, and truthful traffic-unavailable state passed the dedicated main workflow. |
+| R2 | **ENGINEERING COMPLETE / EVIDENCE ACCUMULATING** | UTC contracts, PIT joins, temporal splits, prospective freeze, prediction records, and outcome records are tested. No fabricated history or outcome superiority is claimed. |
+| R3-R5 | **NOT COMPLETE** | Deterministic optimizer, resilience, and economics outcome evidence remain to be built and observed. |
+| R6 | **PARTIAL** | GitHub controls and local API hardening exist. Vercel Preview and Production are READY on the exact audited main SHA. Hosted Supabase, Railway, Sentry, backups/restores, alerts, and rollback evidence remain blocked by unavailable management access. |
+| R7 | **FOUNDATION ONLY** | Private immutable manifest and reconciliation contracts exist; real shadow operations have not run. |
+| R8 | **SCAFFOLD ONLY** | Deterministic engines remain the priority. Fine-tuning is not justified. |
+| R9 | **PARTIAL** | Public history, CI, security gates, and execution ledger are materially improved; hosted product proof is incomplete. |
 
-Conservative whole-product estimates: implemented `32%`, verified `31%`, release-ready `18%`.
+Conservative whole-product estimates: implemented `36%`, verified `35%`, release-ready `20%`.
 
-## Local integrated evidence
+## Active security follow-up
 
-- Python source-boundary profile: `96 passed, 18 environment-dependent skips, 1 R1 evidence test deselected`; the OSRM smoke separately passes locally (`1 passed`). The earlier integrated environment remains `107 passed, 1 optional C-integration skip`, including live RLS and destructive DB concurrency.
-- Root frontend: lint, typecheck, 62-route production build, and Vitest (`11 passed, 2 skipped`) pass.
-- Observatory: clean install, lint, typecheck, and 6-route production build pass.
-- Persistent Playwright: marketplace `5/5`; volunteer `5/5`, with real login/session, browser restart, offline IndexedDB assertion, explicit sync response, and database row proof.
-- Dependency audit: zero critical/high findings. Three moderate findings remain in the dev-only `autocannon -> hyperid -> uuid` load-test chain; the suggested automated fix is a breaking downgrade.
-- R1 remote data: Geofabrik checksum verified; `65,463` OSM nodes, `20,349` highway ways, `9,165` POIs, `94` H3 R8 cells; 27-file OSRM bundle; route `2,958.1 m / 332.3 s`; finite `3x3` matrix.
+Main has one medium CodeQL finding in the legacy admin MLOps route and 25 Dependabot alerts, including 10 high Python findings. The protected follow-up branch:
 
-## First major gate
+- removes server-side shell execution;
+- enforces authenticated admin access and returns a structured fail-closed `503` until a durable executor exists;
+- pins patched PyJWT, cryptography, pyarrow, pytest, pydantic, Supabase, and H3-compatible versions;
+- makes root and API requirement sets resolve together;
+- declares API runtime dependencies that were previously supplied only by CI;
+- adds weekly grouped Dependabot configuration.
 
-P0 is zero on the last fully audited remediation SHA. At `fc3ec9a7ccfdbcde777db43bba2d516baa6ca5d1`, Node `31736184127`, Python `31736184132`, SQL `31736184092`, Polyglot `31736184069`, R1 Evidence `31736184189`, and Release Validation `31736184266` all pass. The PR remains unmerged because published-history cleanup requires explicit owner authorization.
+Local evidence: Ruff passes; root lint has zero errors; root typecheck passes; a clean virtual environment reports `99 passed, 17 skipped, 1 R1 evidence test deselected`.
 
-The later documentation head `9e88061f78bc835abfcd71e19a46530af801f219` also passed the complete exact-SHA matrix: Node `31698786881`, Python `31698786691`, SQL `31698786788`, Polyglot `31698786735`, Release Validation `31698786988`, and R1 Evidence `31698786726`.
+## Private execution boundary
 
-## Public exposure and account readiness
+Private scheduled execution and licensed/provider data belong only in `MANEESHREDDYD/ZonePilot-Data` or approved private managed storage. The private repository has staging and production environments plus the approved public SHA/repository variables. It has no runtime secrets. Private branch protection and environment wait timers are unavailable on the current GitHub plan.
 
-- Current-tree personal email and obsolete Supabase project identifiers are redacted. `OneMove.env` is explicitly ignored; both it and `.env.local` now permit only the owner, SYSTEM, and administrators.
-- Static HMAC test fixtures are removed from the current tree. Tests use a cryptographically random per-process fallback unless the local Supabase environment supplies its own secret.
-- No supplied credential appears in reachable remote Git history. GitHub reports zero open secret-scanning alerts; push protection is enabled and Dependabot vulnerability alerts are now enabled. A pinned, security-extended CodeQL workflow covering C/C++, Java, JavaScript/TypeScript, and Python is prepared for remote validation.
-- A personal email, obsolete project identifiers, local credential-shaped JWT fixtures, and raw/generated artifacts remain in already-published history. Purging them requires an owner-authorized coordinated rewrite of `main`, the PR branch, and tag `v1.0.0-polyglot-local-portfolio-go`; PR `#1` remains unmerged pending that decision.
-- Vercel account/team access and a read-only Supabase PostgreSQL transaction authenticate. Supabase app keys return 401; Vercel has zero projects; Railway lacks an API token; Sentry has no management token; GitHub has no deployment environments, secrets, or variables.
+## External capability blockers
 
-## Owner-controlled blockers
+- Supabase project creation requires a valid management access token. The configured hosted ref is NXDOMAIN; direct DB/application credentials cannot create separate staging and production projects.
+- The supplied Railway candidate returns `AUTH_REJECTED` in every documented token mode. A workspace-scoped `RAILWAY_API_TOKEN` is required.
+- Sentry project and alert management require an organization auth token; a DSN is ingestion-only.
+- Immediate GitHub deletion of unreachable old objects requires Support cleanup because no repository API exposes that operation.
+- GitHub private-repository branch protection and protected wait timers require a supporting paid plan.
 
-- Create or grant access to the approved private execution repository.
-- Provide the approved traffic-provider credential if TomTom remains selected.
-- Link hosted staging/production Supabase, frontend, API, routing, Sentry/alerting, and secret-store accounts.
-- Authorize merge only after every first-gate workflow is green on the exact candidate.
+TomTom is separately owned and is not a blocker for the deterministic main program.
 
-## Immediate resume sequence
+## Hosted frontend evidence
 
-1. Commit and remotely verify the CodeQL security-hardening candidate.
-2. Obtain explicit owner authorization for a coordinated published-history and tag rewrite; do not merge before that decision.
-3. After a safe merge and green `main`, create smaller release-identity, R2 temporal, R3 optimizer, and R6 production-platform branches.
+Vercel project `onemove-zonepilot` was built from detached exact main SHA `43b96185fd8754a959d365b6a202eb673e7b0b9d`.
+
+- Preview/staging `dpl_B8JkPDpzrR9Dg7ZBvBiGpehRwBTX` is READY and returned `200`, title `OneMove`, with no server error.
+- Production `dpl_67EQs8qfriyXq1kWrifjSiaRG2XU` was built with a skipped domain, smoked, promoted, and is the deployment behind `https://onemove-zonepilot.vercel.app`.
+- The public production alias returned `200` with no redirect, Vercel login, or server error.
+- No Vercel application environment values were published because the available Supabase values are stale/rejected. Authenticated hosted product flows therefore remain explicitly unverified.
+
+## Resume sequence
+
+1. Push the security/dependency baseline, require all exact-SHA checks, clear the CodeQL finding and high dependency alerts, merge, and reverify main.
+2. Redeploy and re-smoke Vercel from the eventual post-security main SHA before promotion.
+3. Provision distinct hosted staging/production data and API infrastructure as soon as valid provider management access exists.
+4. Implement the private acquisition/state/object/manifest executor using least-privilege identities and prove restore/reconciliation.
+5. Continue deterministic R3-R7 engineering without fake traffic or business-outcome claims.

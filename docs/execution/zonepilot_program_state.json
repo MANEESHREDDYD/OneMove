@@ -1,225 +1,168 @@
 {
-  "updated_at": "2026-08-13T19:36:20Z",
+  "updated_at": "2026-08-14T08:51:18Z",
   "repository": "https://github.com/MANEESHREDDYD/OneMove",
   "repository_visibility": "PUBLIC_SOURCE_REPOSITORY",
   "private_execution_boundary": "SEPARATE_PRIVATE_REPOSITORY_OR_MANAGED_STORAGE",
-  "branch": "ws/phase1-measurement",
-  "head_sha": "fc3ec9a7ccfdbcde777db43bba2d516baa6ca5d1",
-  "base_sha": "ef09d0f652148011944fff52eb2b822434077fc2",
-  "current_milestone": "R1_PUBLIC_EXPOSURE_REMEDIATION",
-  "r0_5_status": "NO_GO_OWNER_BLOCKED",
-  "r1_status": "REMOTE_GATE_GREEN_HISTORY_OWNER_AUTHORIZATION_REQUIRED",
-  "r2_status": "FOUNDATIONS_LOCAL_VERIFIED_NO_REAL_TRAFFIC",
-  "implemented_estimate": 32,
-  "verified_estimate": 31,
-  "release_ready_estimate": 18,
+  "private_execution_repository": "MANEESHREDDYD/ZonePilot-Data",
+  "branch": "main",
+  "head_sha": "43b96185fd8754a959d365b6a202eb673e7b0b9d",
+  "base_sha": "bb876f15c03c20bbca74e4b6838a64c17917b141",
+  "current_milestone": "POST_MERGE_SECURITY_AND_HOSTED_PROVISIONING",
+  "r0_5_status": "PRIVATE_CONTROL_PLANE_SCAFFOLD_GREEN_EXECUTOR_FAIL_CLOSED",
+  "r1_status": "MERGED_MAIN_EXACT_GATES_GREEN",
+  "r2_status": "ENGINEERING_FOUNDATIONS_COMPLETE_EVIDENCE_ACCUMULATING",
+  "implemented_estimate": 36,
+  "verified_estimate": 35,
+  "release_ready_estimate": 20,
   "active_workstreams": [
+    {
+      "id": "post_merge_security",
+      "status": "IN_PROGRESS",
+      "evidence": "A protected follow-up branch removes the one medium CodeQL shell-command finding, fails closed without a durable executor, upgrades vulnerable Python deployment pins, adds complete API runtime dependencies, and adds Dependabot configuration. Local Ruff, lint, typecheck, and clean-venv tests pass."
+    },
     {
       "id": "production_platform",
       "status": "PARTIAL",
-      "evidence": "Backend JSON logging, request IDs, metrics, readiness, Sentry activation, safe errors, CORS, and rate limiting are implemented; hosted activation, frontend error tracking, staging, alerts, backup restore, and load budgets remain."
+      "evidence": "GitHub staging and production environments, repository variables, main branch protection, secret scanning, push protection, Dependabot security updates, and the private execution repository exist. Vercel Preview and Production are READY on the exact audited main SHA. Hosted Supabase, Railway, and Sentry management remain unavailable through the supplied credentials."
     },
     {
       "id": "r0_5_private_execution",
-      "status": "OWNER_BLOCKED",
-      "evidence": "The approved private execution repository and hosted least-privilege credentials are not available to this execution environment."
+      "status": "SCAFFOLD_VERIFIED_NO_EXECUTION_CLAIM",
+      "evidence": "Private repository MANEESHREDDYD/ZonePilot-Data main at 41e6fe18141f2c44a333fa9584defe1667fa0547 has exact-public-SHA checkout, contract/manifest schemas, policy tests, retention/reconciliation runbook, scheduled workflow, and 17 passing tests. It intentionally exits 78 until real least-privilege credentials and acquisition/storage adapters exist."
     },
     {
-      "id": "public_repository_exposure",
-      "status": "CURRENT_TREE_REMEDIATED_HISTORY_OWNER_DECISION_REQUIRED",
-      "evidence": "The current-tree personal account/project identifiers and static HMAC test fixtures were removed. OneMove.env is explicitly ignored, and both local credential files allow only owner/SYSTEM/Administrators. Personal identifiers, obsolete local credential-shaped fixtures, and raw/generated artifacts remain in public history; rewriting published branches and tag v1.0.0-polyglot-local-portfolio-go requires explicit owner authorization."
-    },
-    {
-      "id": "hosted_account_readiness",
-      "status": "PARTIAL_OWNER_BLOCKED",
-      "evidence": "Vercel account/team and the Supabase PostgreSQL credential authenticate read-only. Supabase app keys are rejected, Vercel has no project, Railway has no API token, Sentry has only an ingestion DSN, and GitHub has no deployment environments/secrets/variables."
+      "id": "r2_evidence_collection",
+      "status": "ENGINEERING_COMPLETE_EVIDENCE_ACCUMULATING",
+      "evidence": "UTC-aware contracts, point-in-time joins, chronological train/validation/test/prospective splits, and immutable prediction/outcome records are tested. No lawful long-horizon traffic history or prospective superiority result is claimed."
     }
   ],
   "completed_workstreams": [
     {
-      "id": "r1_remote_release_gate",
-      "evidence": "Node, Python, SQL, Polyglot, Release Validation, and R1 Evidence all passed on exact candidate 9e88061f78bc835abfcd71e19a46530af801f219."
+      "id": "public_history_remediation",
+      "evidence": "A private verified recovery bundle and rewrite manifest were created before surgical filtering. Advertised main, feature, tag, and pull refs contain zero audited generated/private roots, known bad objects, JWTs, personal consumer email metadata, obsolete hosted identifiers, static test secrets, or exact locally supplied credential values."
     },
     {
-      "id": "release_local_closure",
-      "evidence": "Root and Observatory clean installs/builds/lint/typecheck pass; both required persistent-browser E2Es pass 5/5 with real Supabase sessions and IndexedDB restart persistence."
+      "id": "pr1_merge_and_main_verification",
+      "evidence": "PR #1 merged as 43b96185fd8754a959d365b6a202eb673e7b0b9d. Node 31783549508, Python 31783549482, SQL 31783549531, Polyglot 31783549517, Release 31783549521, R1 Evidence 31783549514, and CodeQL 31783549525 all succeeded on that exact main SHA."
     },
     {
-      "id": "r1_product_local",
-      "evidence": "Real Supabase auth, protected artifact-backed APIs, H3 map, OSM roads/intersections/POIs, provider health, typed evidence, and truthful unavailable traffic state are implemented and locally verified."
+      "id": "r1_product_and_evidence",
+      "evidence": "Authenticated artifact-backed APIs, H3 map, OSM/Gold/OSRM provenance and integrity, provider health, typed evidence, and truthful unavailable traffic state are implemented and passed the dedicated exact-SHA R1 workflow."
     },
     {
-      "id": "database_security_local",
-      "evidence": "Fresh local migrations pass, 15 live RLS tests pass, ES256 JWKS verification passes, and the 80-worker slot-claim race passes."
+      "id": "github_control_plane",
+      "evidence": "Public main requires pull requests, strict successful checks across all seven gate families, current-base branches, resolved conversations, and blocks admin bypass, force pushes, and deletion. Secret scanning and push protection are enabled; CodeQL covers all four product languages."
     },
     {
-      "id": "r1_evidence_local",
-      "evidence": "Remote run 31698148033 verified 65,463 OSM nodes, 20,349 highway ways, 9,165 POIs, 94 H3 cells, a 27-file OSRM bundle, a positive route, and a fully finite 3x3 matrix on the exact candidate SHA."
-    },
-    {
-      "id": "r2_temporal_foundations_local",
-      "evidence": "Strict UTC contracts, leakage-safe point-in-time joins, chronological train/validation/test/prospective splits, and immutable prediction/outcome records pass focused tests."
+      "id": "vercel_hosted_frontend",
+      "evidence": "Vercel project onemove-zonepilot deployed exact main SHA 43b96185fd8754a959d365b6a202eb673e7b0b9d to READY Preview dpl_B8JkPDpzrR9Dg7ZBvBiGpehRwBTX and promoted Production dpl_67EQs8qfriyXq1kWrifjSiaRG2XU. Both immutable URLs and the public production alias returned 200 with the OneMove title and no server error."
     }
   ],
-  "failed_workflows": [
-    {
-      "workflow": "ZonePilot Release Validation",
-      "run_id": 31735581428,
-      "head_sha": "15ceedf2cd142e53587648fe791ccee9de9ddcce",
-      "conclusion": "failure",
-      "failure": "The release job reached its generic Python suite and failed on the same missing OSRM graph as Python CI before later gates could run. The local correction scopes that smoke to its artifact-generating evidence workflow.",
-      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31735581428"
-    },
-    {
-      "workflow": "Python CI",
-      "run_id": 31735581415,
-      "head_sha": "15ceedf2cd142e53587648fe791ccee9de9ddcce",
-      "conclusion": "failure",
-      "failure": "The generic clean-checkout job invoked the R1 OSRM smoke test without the private artifacts generated only by the dedicated evidence workflow; 95 passed, 18 skipped, and 1 failed. The correction retains the hard evidence test in its owning workflow and deselects only its registered marker from generic suites.",
-      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31735581415"
-    },
-    {
-      "workflow": "ZonePilot R1 Evidence",
-      "run_id": 31697642743,
-      "head_sha": "f088e107714443c89d574126a95a04bffaa4236d",
-      "conclusion": "failure",
-      "failure": "The pinned OSRM container generated an owner-only file as root, so the host runner could not read the complete graph bundle for strict hashing; corrected by mapping the POSIX host UID/GID into the container.",
-      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31697642743"
-    },
-    {
-      "workflow": "ZonePilot R1 Evidence",
-      "run_id": 31697525579,
-      "head_sha": "9a8b0b33294e2667128d503ac24ac21021af3115",
-      "conclusion": "failure",
-      "failure": "GitHub rejected the workflow before job creation because runner.temp is unavailable in job-level env evaluation; corrected to github.workspace.",
-      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31697525579"
-    },
-    {
-      "workflow": "ZonePilot Release Validation",
-      "run_id": 31388230404,
-      "head_sha": "483c8e1f6d256c39987d3780ffdb342f935f7ac2",
-      "conclusion": "failure",
-      "failure": "Historical candidate attempted navigation while a relaunched persistent browser context was offline.",
-      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31388230404"
-    },
-    {
-      "workflow": "ZonePilot Release Validation",
-      "run_id": 31388225519,
-      "head_sha": "483c8e1f6d256c39987d3780ffdb342f935f7ac2",
-      "conclusion": "failure",
-      "failure": "Duplicate historical validation of the same pre-fix candidate failed the same persistence contract.",
-      "url": "https://github.com/MANEESHREDDYD/OneMove/actions/runs/31388225519"
-    }
-  ],
+  "failed_workflows": [],
   "current_p0": [],
   "current_p1": [
     {
-      "failure_id": "PUBLIC-HISTORY-PII-001",
-      "owner": "repository_owner",
-      "status": "CURRENT_TREE_FIXED_HISTORY_OWNER_DECISION_REQUIRED",
-      "evidence": "A personal email, obsolete Supabase project identifiers, local credential-shaped JWT fixtures, and raw/generated artifacts remain in reachable public history. No credential from OneMove.env appears in remote history; GitHub reports zero open secret-scanning alerts, push protection and Dependabot vulnerability alerts are enabled, and the next candidate adds pinned four-language CodeQL analysis."
+      "failure_id": "CODEQL-MEDIUM-001",
+      "owner": "post_merge_security",
+      "status": "LOCAL_FIX_VERIFIED_REMOTE_PROOF_PENDING",
+      "evidence": "Main alert #1 identifies shell-command construction in app/admin/mlops/actions/route.ts. The follow-up removes local process execution, adds direct user/admin authorization and structured fail-closed 503 behavior; new CodeQL evidence is pending."
     },
     {
-      "failure_id": "PRODUCTION-DEPLOY-001",
+      "failure_id": "DEPENDENCY-BASELINE-001",
+      "owner": "post_merge_security",
+      "status": "LOCAL_FIX_VERIFIED_REMOTE_PROOF_PENDING",
+      "evidence": "Dependabot currently reports 25 Python/npm alerts including 10 high. The follow-up pins patched PyJWT, cryptography, pyarrow, pytest, pydantic, Supabase, and H3-compatible versions; combined resolution succeeds and a clean venv passes 99 tests with 17 environment-dependent skips."
+    },
+    {
+      "failure_id": "GITHUB-OBJECT-CACHE-001",
+      "owner": "repository_operations",
+      "status": "UNREACHABLE_FROM_REFS_PROVIDER_PURGE_PENDING",
+      "evidence": "Pre-rewrite sensitive objects are unreachable from advertised refs but remain fetchable by exact old object ID until GitHub garbage collection or Support cached-view cleanup."
+    },
+    {
+      "failure_id": "HOSTED-PLATFORM-001",
       "owner": "production_platform",
-      "status": "OWNER_BLOCKED_PARTIAL",
-      "evidence": "Staging/production accounts, frontend error tracking activation, alert routing, rollback exercise, and backup restore proof are absent."
-    },
-    {
-      "failure_id": "TRAFFIC-001",
-      "owner": "data_platform",
-      "status": "OWNER_BLOCKED",
-      "evidence": "No lawful real zone-linked traffic credential/history is available; the product explicitly reports traffic unavailable."
+      "status": "PARTIAL_EXTERNAL_AUTH_BLOCK",
+      "evidence": "No usable Supabase management token, Railway workspace token, or Sentry management token is available. The supplied Railway candidate is rejected in every documented token mode; the supplied hosted Supabase ref is NXDOMAIN and cannot be enumerated without management auth."
     }
   ],
   "owner_blockers": [
     {
-      "id": "OWNER_BLOCKER_PRIVATE_EXECUTION_REPOSITORY",
-      "evidence": "Create or grant access to the approved private scheduled-execution repository."
+      "id": "SUPABASE_MANAGEMENT_AUTH_REQUIRED",
+      "evidence": "Creating separate hosted staging and production projects requires a valid Supabase management access token; direct database or application keys cannot provision projects."
     },
     {
-      "id": "OWNER_BLOCKER_TOMTOM_KEY",
-      "evidence": "Provide the approved lawful traffic-provider credential if TomTom remains the selected source."
+      "id": "RAILWAY_WORKSPACE_TOKEN_REQUIRED",
+      "evidence": "The supplied Railway candidate returns AUTH_REJECTED for account, workspace/project, and project-token modes. A valid workspace-scoped RAILWAY_API_TOKEN is required to create environments and services."
     },
     {
-      "id": "OWNER_BLOCKER_HOSTED_ENVIRONMENTS",
-      "evidence": "Select the authoritative Supabase project and replace rejected app keys; authorize creation/linking of Vercel staging/production projects; provide Railway and Sentry management tokens; create protected GitHub environments and secrets."
+      "id": "SENTRY_MANAGEMENT_AUTH_REQUIRED",
+      "evidence": "A DSN permits event ingestion only. Project creation, release setup, and alert rules require a Sentry organization auth token with management scopes."
     },
     {
-      "id": "OWNER_BLOCKER_PUBLIC_HISTORY_REWRITE_DECISION",
-      "evidence": "Authorize or decline a coordinated public history rewrite and tag replacement to purge the personal email and obsolete hosted project identifiers. PR #1 must remain unmerged until this exposure decision and the new exact-SHA gate are complete."
+      "id": "GITHUB_PRIVATE_PROTECTION_PLAN_REQUIRED",
+      "evidence": "GitHub returned HTTP 403 requiring GitHub Pro for branch protection on the private ZonePilot-Data repository; staging/production wait-timer protection likewise requires a supporting billing plan."
+    },
+    {
+      "id": "GITHUB_OBJECT_PURGE_SUPPORT_REQUIRED",
+      "evidence": "GitHub exposes no repository API for immediate purge of unreachable sensitive objects or cached commit views; Support intervention is required for immediate deletion before normal garbage collection."
     }
   ],
   "last_successful_test_matrix": {
-    "current_remote_candidate": {
-      "head_sha": "fc3ec9a7ccfdbcde777db43bba2d516baa6ca5d1",
-      "node_ci": {"run_id": 31736184127, "conclusion": "success"},
-      "python_ci": {"run_id": 31736184132, "conclusion": "success"},
-      "sql_quality": {"run_id": 31736184092, "conclusion": "success"},
-      "polyglot_ci": {"run_id": 31736184069, "conclusion": "success"},
-      "release_validation": {"run_id": 31736184266, "conclusion": "success"},
-      "r1_evidence": {"run_id": 31736184189, "conclusion": "success"}
+    "main_exact_sha": {
+      "head_sha": "43b96185fd8754a959d365b6a202eb673e7b0b9d",
+      "node_ci": {"run_id": 31783549508, "conclusion": "success"},
+      "python_ci": {"run_id": 31783549482, "conclusion": "success"},
+      "sql_quality": {"run_id": 31783549531, "conclusion": "success"},
+      "polyglot_ci": {"run_id": 31783549517, "conclusion": "success"},
+      "release_validation": {"run_id": 31783549521, "conclusion": "success"},
+      "r1_evidence": {"run_id": 31783549514, "conclusion": "success"},
+      "codeql": {"run_id": 31783549525, "conclusion": "success"}
     },
-    "remote_last_audited": {
-      "head_sha": "fc3ec9a7ccfdbcde777db43bba2d516baa6ca5d1",
-      "node_ci": {"run_id": 31736184127, "conclusion": "success"},
-      "python_ci": {"run_id": 31736184132, "conclusion": "success"},
-      "sql_quality": {"run_id": 31736184092, "conclusion": "success"},
-      "polyglot_ci": {"run_id": 31736184069, "conclusion": "success"},
-      "release_validation": {"run_id": 31736184266, "conclusion": "success"},
-      "r1_evidence": {"run_id": 31736184189, "conclusion": "success"}
+    "security_follow_up_local": {
+      "ruff": "pass",
+      "python_clean_venv": "99 passed, 17 environment-dependent skips, 1 R1 evidence test deselected",
+      "targeted_security": "6 passed",
+      "targeted_api_and_runtime_manifest": "22 passed, 15 environment-dependent skips",
+      "root_lint": "0 errors; existing warnings only",
+      "root_typecheck": "pass",
+      "dependency_resolution": "combined root and API requirements resolve successfully"
     },
-    "local_integrated_worktree": {
-      "python": "Source-boundary profile: 96 passed, 18 environment-dependent skips, 1 R1 evidence test deselected; OSRM smoke separately 1 passed. Earlier full local integration: 107 passed, 1 optional C-integration skip.",
-      "live_rls": "15 passed",
-      "ruff": "services, tests, and Python package all passed",
-      "root_node": "lint/typecheck/build passed; Vitest 11 passed, 2 skipped",
-      "observatory_node": "clean install/lint/typecheck/build passed",
-      "playwright_marketplace": "5 passed",
-      "playwright_volunteer": "5 passed",
-      "r1_evidence": "Remote exact-SHA OSM/Gold/OSRM route, matrix, hash, provenance, DQ, and manifest audit passed",
-      "dependency_audit": "0 critical/high; 3 moderate dev-only autocannon-chain findings at root, 0 Observatory, 0 tests"
+    "private_executor": {
+      "head_sha": "41e6fe18141f2c44a333fa9584defe1667fa0547",
+      "validate_run_id": 31784728981,
+      "conclusion": "success",
+      "tests": "17 passed"
     }
   },
   "next_executable_tasks": [
-    "Commit and remotely verify the pinned four-language CodeQL security workflow.",
-    "Obtain the owner's explicit public-history rewrite authorization; do not merge before that decision.",
-    "After a safe merge and green main, split release-identity, R2 temporal, R3 optimizer, and production-platform work into smaller milestone branches."
+    "Commit the post-merge security/dependency baseline, open a protected pull request, require all exact-SHA gates, clear CodeQL alert #1 and high Dependabot alerts, then merge and reverify main.",
+    "Redeploy Vercel Preview and Production from the eventual post-security main SHA and repeat the immutable/public smoke before promotion.",
+    "Provision hosted Supabase, Railway, and Sentry immediately when valid management credentials exist; do not reuse staging and production identities.",
+    "Implement the private executor acquisition/state/object/manifest adapters only after least-privilege hosted credentials and suitable private object storage exist.",
+    "Continue deterministic R3-R7 engineering without fabricating traffic outcomes or blocking on the separately owned TomTom workstream."
   ],
   "auditor": {
     "false_claims_open": 0,
     "p0_open": 0,
-    "p1_open": 3,
-    "verdict": "R1_GATE_GREEN_MERGE_BLOCKED_BY_PUBLIC_HISTORY_AUTHORIZATION",
-    "evidence": "All six gates pass on fc3ec9a and the current source tree is remediated, but personal identifiers, local credential-shaped fixtures, and raw/generated artifacts remain in reachable public history."
-  },
-  "r1_remote_evidence": {
-    "run_id": 31698786726,
-    "candidate_code_sha": "9e88061f78bc835abfcd71e19a46530af801f219",
-    "source_md5": "6cdfbb5845de12a70625e073322ed0e1",
-    "source_pbf_sha256": "5b6c273832d8660f2e19402192b1227df0dca88fc37aa2b77a570d231761dc57",
-    "roads_pbf_sha256": "ad0dd3010d3cd309dfbc1a9e6808a26fae457174343f3794bda9f916611d0649",
-    "pois_pbf_sha256": "3643f2162208d137ccae7203ed8d53a30ef48983040af4be3974811c63010aaf",
-    "gold_parquet_sha256": "37ce6b8f549199e6ad9e4442182e6f13cf33ae756d21d2daca55c1bc6b4664ba",
-    "graph_topology_sha256": "44ca2ddb32e97acf76dd85604a2c7f9bc6298a3c154435ec936e536c14c0f78b",
-    "osrm_graph_bundle_sha256": "61790cf6c46f1999bd48b4cb378186532f4019220999c08491409993904d2a6b",
-    "record_counts": {"osm_nodes": 65463, "osm_highway_ways": 20349, "pois": 9165, "h3_cells": 94},
-    "routing_smoke": {"distance_m": 2958.1, "duration_s": 332.3, "matrix_dimensions": "3x3", "finite_cells": 9, "null_cells": 0},
-    "dq_status": "PASS"
+    "p1_open": 4,
+    "verdict": "MAIN_GREEN_POST_MERGE_HARDENING_IN_PROGRESS",
+    "evidence": "All advertised refs are P0-clean and all seven main gates pass on the merge SHA. One medium CodeQL finding, dependency alerts, provider object-cache cleanup, and hosted management access remain explicitly open."
   },
   "account_connectivity": {
-    "supabase_api": "REJECTED_401_BOTH_APP_KEYS",
-    "supabase_postgres": "READ_ONLY_AUTHENTICATED",
-    "vercel": "ACCOUNT_AND_TEAM_AUTHENTICATED_ZERO_PROJECTS",
-    "railway": "PROJECT_ID_ONLY_NO_API_TOKEN",
-    "sentry": "INGEST_DSN_HOST_REACHABLE_NO_MANAGEMENT_TOKEN",
-    "github_deployment_configuration": "NO_ENVIRONMENTS_SECRETS_OR_VARIABLES"
+    "github": "ADMIN_AUTHENTICATED_CONTROLS_CONFIGURED",
+    "vercel": "PREVIEW_AND_PRODUCTION_READY_EXACT_MAIN_SHA_SMOKE_PASS",
+    "supabase_management": "NO_MANAGEMENT_TOKEN",
+    "supabase_application": "CONFIGURED_HOST_NXDOMAIN_KEYS_UNUSABLE",
+    "supabase_postgres": "LEGACY_DIRECT_CREDENTIAL_PREVIOUSLY_AUTHENTICATED_NOT_APPROVED_FOR_RUNTIME",
+    "railway": "SUPPLIED_CANDIDATE_AUTH_REJECTED",
+    "sentry": "NO_MANAGEMENT_TOKEN"
   },
   "coordination_metadata": {
     "pull_request": 1,
-    "pull_request_state": "OPEN",
+    "pull_request_state": "MERGED",
     "pull_request_url": "https://github.com/MANEESHREDDYD/OneMove/pull/1",
-    "worktree_dirty": true,
+    "worktree_dirty": false,
     "recorded_head_is_last_remote_audited_sha": true,
     "runtime_evidence_is_authoritative": true,
     "ledger_is_coordination_only": true

@@ -12,7 +12,7 @@ jobs:
     - uses: actions/setup-python@v7
       with:
         python-version: '3.11'
-    - run: pip install ruff pytest pandas httpx fastapi uvicorn pydantic "pyjwt[crypto]" supabase pytz requests pyarrow python-dotenv h3 "psycopg[binary]"
+    - run: python -m pip install ruff==0.16.3 -r requirements.txt -r services/api/requirements.txt
     - run: pip install -e ./python
     - run: ruff check .
     - run: pytest -m "not r1_evidence"

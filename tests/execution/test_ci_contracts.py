@@ -23,3 +23,12 @@ def test_codeql_scans_every_product_language_with_pinned_actions():
     assert "queries: security-extended" in workflow
     assert "github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd" in workflow
     assert "github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd" in workflow
+
+
+def test_python_gates_install_the_reviewed_runtime_manifests():
+    expected_install = "-r requirements.txt -r services/api/requirements.txt"
+    python_workflow = (ROOT / ".github/workflows/python-ci.yml").read_text(encoding="utf-8")
+    release_workflow = (ROOT / ".github/workflows/zonepilot-release.yml").read_text(encoding="utf-8")
+
+    assert expected_install in python_workflow
+    assert expected_install in release_workflow

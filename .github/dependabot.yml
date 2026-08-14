@@ -1,0 +1,80 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    groups:
+      production-dependencies:
+        dependency-type: production
+      development-dependencies:
+        dependency-type: development
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /apps/observatory
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:15"
+      timezone: Etc/UTC
+    groups:
+      observatory-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: npm
+    directory: /tests
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+      timezone: Etc/UTC
+    groups:
+      test-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 2
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:45"
+      timezone: Etc/UTC
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: pip
+    directory: /services/api
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Etc/UTC
+    groups:
+      api-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:15"
+      timezone: Etc/UTC
+    groups:
+      action-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 3
