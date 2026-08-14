@@ -32,3 +32,13 @@ def test_python_gates_install_the_reviewed_runtime_manifests():
 
     assert expected_install in python_workflow
     assert expected_install in release_workflow
+
+
+def test_public_workflows_do_not_execute_private_provider_acquisition():
+    workflow_dir = ROOT / ".github" / "workflows"
+
+    for workflow_path in workflow_dir.glob("*.yml"):
+        workflow = workflow_path.read_text(encoding="utf-8")
+        assert "services.collectors.scheduler_intraday" not in workflow
+        assert "services.collectors.scheduler_midnight" not in workflow
+        assert "TOMTOM_API_KEY" not in workflow
