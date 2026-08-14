@@ -22,7 +22,7 @@ Once the project is ready:
 4. Locate the **Secret key** (`sb_secret_...`) and copy it.
 
 **IMPORTANT KEY MAPPING:**
-* `NEXT_PUBLIC_SUPABASE_URL` = Supabase Project URL (`https://redacted-project-ref.supabase.co`)
+* `NEXT_PUBLIC_SUPABASE_URL` = Supabase Project URL (`https://your-project-ref.supabase.co`)
 * `NEXT_PUBLIC_SUPABASE_ANON_KEY` = Supabase `Publishable key`
 * `SUPABASE_SERVICE_ROLE_KEY` = Supabase `Secret key`
 

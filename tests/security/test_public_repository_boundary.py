@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import subprocess
@@ -10,10 +11,11 @@ FORBIDDEN_TEXT_PATTERNS = {
     "AWS access key": re.compile(rb"AKIA[0-9A-Z]{16}"),
     "personal email": re.compile(rb"[A-Za-z0-9._%+-]+@(?:gmail|outlook|yahoo|hotmail)\.[A-Za-z]{2,}"),
 }
-KNOWN_PUBLISHED_TEST_SECRETS = {
-    b"REDACTED_SYNTHETIC_TEST_SECRET",
-    b"REDACTED_SYNTHETIC_TEST_SECRET",
+KNOWN_PUBLISHED_TEST_SECRET_SHA256 = {
+    "a064b502e61d27e94b8717290e5e1b32e36720e9fbdf952ec81a84c07128cb37",
+    "21cf266072236b7ef70367635565445b708f04fae647bd98206c9c819aa605fa",
 }
+SECRET_CANDIDATE = re.compile(rb"[A-Za-z0-9_-]{20,}")
 
 
 def test_local_owner_credential_file_is_ignored():
@@ -51,8 +53,9 @@ def test_tracked_public_tree_contains_no_high_confidence_secret_or_personal_iden
         body = path.read_bytes()
         if b"\0" in body[:8192]:
             continue
-        for known_secret in KNOWN_PUBLISHED_TEST_SECRETS:
-            if known_secret in body and path != Path(__file__):
+        for candidate in SECRET_CANDIDATE.findall(body):
+            digest = hashlib.sha256(candidate).hexdigest()
+            if digest in KNOWN_PUBLISHED_TEST_SECRET_SHA256:
                 findings.append(f"published test secret: {path.relative_to(ROOT).as_posix()}")
         for label, pattern in FORBIDDEN_TEXT_PATTERNS.items():
             if pattern.search(body):
