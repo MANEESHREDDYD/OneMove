@@ -1,0 +1,11 @@
+{
+  "completeness": 80.0,
+  "invalid_eta_count": 1,
+  "missing_intervals": 0,
+  "failed_rows": [
+    {
+      "id": 4,
+      "reason": "Negative ETA"
+    }
+  ]
+}

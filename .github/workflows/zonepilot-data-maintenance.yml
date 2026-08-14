@@ -1,0 +1,39 @@
+name: ZonePilot Data Maintenance
+
+on:
+  schedule:
+    - cron: '0 20 * * *' # 20:00 UTC = 01:30 IST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          pip install pytz
+
+      - name: Run Retention Verification
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python scripts/retention_manager.py
+          
+      - name: Commit cleanups if any
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/rolling/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore(data): prune >365d rolling dataset artifacts" && git push)

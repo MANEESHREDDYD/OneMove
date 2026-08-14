@@ -1,10 +1,12 @@
 # Supabase Connection Report
 
+> **Historical, sanitized snapshot.** Personal account identifiers and hosted project identifiers have been removed from this public repository. This report is not current deployment evidence; use the execution ledger and runtime checks for current claims.
+
 ## Environment Details
-- **Connected Org:** redacted-personal@users.noreply.github.com's Org
-- **Connected Project:** redacted-personal@users.noreply.github.com's Project
-- **Project Ref:** `redacted-project-ref`
-- **Project URL:** `https://redacted-project-ref.supabase.co`
+- **Connected Org:** Redacted personal development organization
+- **Connected Project:** Redacted historical development project
+- **Project Ref:** Redacted
+- **Project URL:** Redacted
 - **Branch / Environment:** main / Production
 - **Key Model Used:** Supabase new publishable/secret keys (`sb_publishable_...` / `sb_secret_...`)
 
@@ -23,6 +25,5 @@
 - **Seed Data Verified:** ✅ Yes
 
 ## Final Status
-**Status:** Ready for localhost validation
-
+**Historical status:** Was ready for localhost validation at the time of this report. No hosted-production readiness claim is made.
 

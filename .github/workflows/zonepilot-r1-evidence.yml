@@ -1,0 +1,70 @@
+name: ZonePilot R1 Evidence
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zonepilot-r1-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evidence:
+    name: R1 Geospatial Evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ZONEPILOT_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/.zonepilot-r1-data
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.ZONEPILOT_CANDIDATE_SHA }}
+
+      - name: Verify candidate checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$ZONEPILOT_CANDIDATE_SHA"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install evidence dependencies
+        run: python -m pip install --disable-pip-version-check -e ".[dev]"
+
+      - name: Acquire and verify Geofabrik source, clip, roads, and POIs
+        run: python -m services.collectors.context.osm
+
+      - name: Build canonical graph, H3 R8 features, POIs, and Gold
+        run: python -m services.collectors.gold
+
+      - name: Build versioned OSRM graph
+        run: python -m services.routing.osrm_pipeline
+
+      - name: Verify OSRM route and matrix
+        run: python -m pytest tests/pipeline/test_osrm_smoke.py -v
+
+      - name: Audit hashes, provenance, DQ, and candidate SHA
+        run: >-
+          python -m services.evidence.r1
+          --data-root "$ZONEPILOT_DATA_ROOT"
+          --code-sha "$ZONEPILOT_CANDIDATE_SHA"
+          --output artifacts/r1_evidence_manifest.json
+
+      - name: Upload sanitized evidence manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zonepilot-r1-evidence-${{ env.ZONEPILOT_CANDIDATE_SHA }}
+          path: artifacts/r1_evidence_manifest.json
+          if-no-files-found: error
+          retention-days: 30

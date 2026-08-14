@@ -11,6 +11,8 @@ dist/
 .env
 .env.local
 .env*.local
+.env.test
+OneMove.env
 
 # Private credentials
 private/
@@ -53,3 +55,27 @@ __pycache__/
 
 # Nested/embedded project (not part of OneMove)
 Assist/
+
+# Ignore large raw command logs
+reports/zonepilot_build/raw_logs/COMMAND_LOG_ARCHIVE.txt
+
+reports/zonepilot_build/raw_logs/
+reports/zonepilot_build/00_BUILD_START_STATE.md
+reports/pre_zonepilot_audit/00_REPOSITORY_STATE.md
+log.txt
+
+# Raw datasets & geo binaries
+data/
+data_root/private/
+data_root/
+artifacts/
+scratch/
+temp_sb/
+auditor_v2_report.txt
+failed_log.txt
+pr_info.json
+pytest_report.json
+runs_info.txt
+*.parquet
+*.pbf
+*.osm

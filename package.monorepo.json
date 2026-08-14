@@ -1,0 +1,10 @@
+{
+  "name": "zonepilot-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*",
+    "legacy_demo/*"
+  ]
+}

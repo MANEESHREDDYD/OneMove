@@ -1,0 +1,149 @@
+name: ZonePilot Release Validation
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  release-hardening:
+    name: ZonePilot Full Release Gate Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            apps/observatory/package-lock.json
+            tests/package-lock.json
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest pandas httpx fastapi uvicorn pydantic "pyjwt[crypto]" supabase pytz requests pyarrow python-dotenv h3 "psycopg[binary]"
+          pip install -e ./python
+
+      - name: Install Node Dependencies
+        run: |
+          npm ci
+          npm --prefix apps/observatory ci
+          npm --prefix tests ci
+
+      - name: Audit Node Dependencies
+        run: |
+          npm audit --audit-level=high --omit=optional
+          npm --prefix apps/observatory audit --audit-level=high --omit=optional
+          npm --prefix tests audit --audit-level=high --omit=optional
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Setup Supabase CLI & Local Environment
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.113.0
+
+      - name: Start Local Supabase Stack & Bootstrap Dynamic Credentials
+        run: |
+          supabase start
+          supabase db reset
+          STATUS_JSON=$(supabase status -o json)
+          
+          API_URL=$(echo "$STATUS_JSON" | jq -r '.API_URL')
+          ANON_KEY=$(echo "$STATUS_JSON" | jq -r '.ANON_KEY')
+          SERVICE_KEY=$(echo "$STATUS_JSON" | jq -r '.SERVICE_ROLE_KEY')
+          JWT_SECRET=$(echo "$STATUS_JSON" | jq -r '.JWT_SECRET')
+          
+          if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
+            echo "Error: Supabase API_URL is missing or null."
+            exit 1
+          fi
+          if [ -z "$ANON_KEY" ] || [ "$ANON_KEY" = "null" ]; then
+            echo "Error: Supabase ANON_KEY is missing or null."
+            exit 1
+          fi
+          if [ -z "$SERVICE_KEY" ] || [ "$SERVICE_KEY" = "null" ]; then
+            echo "Error: Supabase SERVICE_ROLE_KEY is missing or null."
+            exit 1
+          fi
+          if [ -z "$JWT_SECRET" ] || [ "$JWT_SECRET" = "null" ]; then
+            echo "Error: Supabase JWT_SECRET is missing or null."
+            exit 1
+          fi
+
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_KEY"
+          echo "::add-mask::$JWT_SECRET"
+          
+          echo "SUPABASE_URL=$API_URL" >> $GITHUB_ENV
+          echo "SUPABASE_ANON_KEY=$ANON_KEY" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> $GITHUB_ENV
+          echo "SUPABASE_JWT_SECRET=$JWT_SECRET" >> $GITHUB_ENV
+          echo "ZONEPILOT_DATA_ROOT=${{ github.workspace }}/data_root" >> $GITHUB_ENV
+          echo "FAIL_ON_MISSING_SUPABASE=true" >> $GITHUB_ENV
+          echo "ZONEPILOT_ENV=test" >> $GITHUB_ENV
+          echo "ZONEPILOT_ALLOW_DB_TEST_RESET=1" >> $GITHUB_ENV
+          echo "ZONEPILOT_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+          echo "DIRECT_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+
+      - name: Run Python Ruff Lint & Pytest Suite
+        run: |
+          ruff check .
+          PYTHONPATH=services/api python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
+          
+          # Wait for backend readiness
+          for i in {1..15}; do
+            curl -s http://127.0.0.1:8000/docs > /dev/null && break
+            sleep 1
+          done
+          
+          pytest -v -m "not r1_evidence"
+
+      - name: Run Node Frontend Checks
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run build
+          npm --prefix apps/observatory run lint
+          npm --prefix apps/observatory run typecheck
+          npm --prefix apps/observatory run build
+
+      - name: Run Vitest Unit & Security Suite
+        run: npm test
+
+      - name: Run Playwright E2E Integration Suite
+        run: |
+          pkill -f uvicorn || true
+          PYTHONPATH=services/api python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 &
+          npm start -- -p 3000 &
+          npm --prefix apps/observatory start -- -p 3001 &
+          
+          echo "Waiting for FastAPI backend..."
+          timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:8000/healthz)" != "200" ]]; do sleep 2; done' || (echo "Backend failed" && exit 1)
+          
+          echo "Waiting for Next.js frontend..."
+          timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:3000/)" != "200" ]]; do sleep 2; done' || (echo "Frontend failed" && exit 1)
+          
+          echo "Waiting for Observatory frontend..."
+          timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:3001/)" != "200" && "$(curl -s -o /dev/null -w ''%{http_code}'' http://127.0.0.1:3001/)" != "404" ]]; do sleep 2; done' || (echo "Observatory failed" && exit 1)
+          
+          echo "Seeding demo auth users..."
+          npm run seed:auth
+          
+          npx playwright test apps/observatory/tests/e2e/marketplace_probe_offline.spec.ts --project=chromium
+          npx playwright test apps/observatory/tests/e2e/volunteer_order_offline.spec.ts --project=chromium

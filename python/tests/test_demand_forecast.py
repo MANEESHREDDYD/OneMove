@@ -1,5 +1,6 @@
 from onemove_intelligence.ml.demand_forecast import forecast_demand
 
+
 def test_forecast_demand():
     df = forecast_demand()
     assert len(df) == 24

@@ -1,0 +1,72 @@
+[
+  {
+    "id": 1,
+    "trip_id": "T001",
+    "eta": 15,
+    "zone": "Z1",
+    "status": "ACTIVE",
+    "timestamp": "2026-08-07T10:00:00Z",
+    "_provenance": {
+      "_source": "snapshot",
+      "_loaded_at": "2026-08-07T18:24:51.031997"
+    },
+    "zone_name": "North Zone",
+    "weather": "Sunny"
+  },
+  {
+    "id": 2,
+    "trip_id": "T001",
+    "eta": 12,
+    "zone": "Z1",
+    "status": "ACTIVE",
+    "timestamp": "2026-08-07T10:05:00Z",
+    "_provenance": {
+      "_source": "snapshot",
+      "_loaded_at": "2026-08-07T18:24:51.031997"
+    },
+    "zone_name": "North Zone",
+    "weather": "Sunny"
+  },
+  {
+    "id": 3,
+    "trip_id": "T001",
+    "eta": 12,
+    "zone": "Z1",
+    "status": "ACTIVE",
+    "timestamp": "2026-08-07T10:05:00Z",
+    "_provenance": {
+      "_source": "snapshot",
+      "_loaded_at": "2026-08-07T18:24:51.031997"
+    },
+    "zone_name": "North Zone",
+    "weather": "Sunny"
+  },
+  {
+    "id": 4,
+    "trip_id": "T002",
+    "eta": -5,
+    "zone": "Z2",
+    "status": "ACTIVE",
+    "timestamp": "2026-08-07T10:10:00Z",
+    "_provenance": {
+      "_source": "snapshot",
+      "_loaded_at": "2026-08-07T18:24:51.031997"
+    },
+    "zone_name": "South Zone",
+    "weather": "Rain"
+  },
+  {
+    "id": 5,
+    "trip_id": "T003",
+    "eta": 20,
+    "zone": "Z3",
+    "status": "INACTIVE",
+    "timestamp": "2026-08-07T10:15:00Z",
+    "_provenance": {
+      "_source": "snapshot",
+      "_loaded_at": "2026-08-07T18:24:51.031997"
+    },
+    "zone_name": "East Zone",
+    "weather": "Cloudy"
+  }
+]

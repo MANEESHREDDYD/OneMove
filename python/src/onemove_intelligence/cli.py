@@ -1,6 +1,7 @@
 import argparse
 import sys
 
+
 def main():
     parser = argparse.ArgumentParser(description="OneMove Intelligence CLI")
     subparsers = parser.add_subparsers(dest="command")

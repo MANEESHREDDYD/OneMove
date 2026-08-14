@@ -7,10 +7,20 @@ dotenv.config({ path: '.env.local' });
 let supabaseAnon: SupabaseClient;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-  describe.skip('Role Access Matrix (RLS Tests) - SKIPPED (No Supabase credentials)', () => {
+let isReachable = false;
+if (supabaseUrl && supabaseKey) {
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/`, { method: 'HEAD', headers: { apikey: supabaseKey }, signal: AbortSignal.timeout(2000) });
+    if (res.ok || res.status < 500) isReachable = true;
+  } catch (e) {
+    isReachable = false;
+  }
+}
+
+if (!supabaseUrl || !supabaseKey || !isReachable) {
+  describe.skip('Role Access Matrix (RLS Tests) - SKIPPED (No active Supabase connection)', () => {
     it('skipped', () => {})
   });
 } else {

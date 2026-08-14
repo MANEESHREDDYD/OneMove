@@ -1,6 +1,6 @@
 from onemove_intelligence.evaluation.model_evaluation import (
-    evaluate_models,
     evaluate_forecast,
+    evaluate_models,
     evaluate_recommendations,
     evaluate_segments,
 )

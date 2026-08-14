@@ -1,0 +1,81 @@
+name: ZonePilot Midnight Acquisition
+
+on:
+  schedule:
+    - cron: '30 18 * * *'  # 00:00 IST
+  workflow_dispatch:
+    inputs:
+      code_sha_override:
+        description: 'Override ZONEPILOT_CODE_SHA for testing'
+        required: false
+        type: string
+
+concurrency:
+  group: zonepilot-midnight
+  cancel-in-progress: false
+
+jobs:
+  run-midnight-acquisition:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout private execution repo
+        uses: actions/checkout@v4
+
+      - name: Resolve SHA to pin
+        id: resolve-sha
+        run: |
+          if [ -n "${{ inputs.code_sha_override }}" ]; then
+            echo "PINNED_SHA=${{ inputs.code_sha_override }}" >> $GITHUB_ENV
+          else
+            echo "PINNED_SHA=${{ vars.ZONEPILOT_CODE_SHA }}" >> $GITHUB_ENV
+          fi
+          echo "Expected SHA: $PINNED_SHA"
+
+      - name: Checkout public ZonePilot code
+        uses: actions/checkout@v4
+        with:
+          repository: MANEESHREDDYD/OneMove
+          ref: ${{ env.PINNED_SHA }}
+          path: zonepilot-code
+          persist-credentials: false
+
+      - name: Validate correct code SHA
+        working-directory: zonepilot-code
+        run: |
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          echo "Actual SHA: $ACTUAL_SHA"
+          if [ "$ACTUAL_SHA" != "${{ env.PINNED_SHA }}" ]; then
+            echo "Error: SHA mismatch"
+            exit 1
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: zonepilot-code
+        run: pip install -r requirements.txt
+
+      - name: Execute Midnight Collectors
+        working-directory: zonepilot-code
+        env:
+          ZONEPILOT_DB_URL: ${{ secrets.ZONEPILOT_DB_URL }}
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: python -m services.collectors.scheduler_midnight
+
+      - name: Execute Daily Reconciled Bundle Generation
+        working-directory: zonepilot-code
+        env:
+          ZONEPILOT_DB_URL: ${{ secrets.ZONEPILOT_DB_URL }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: python -m services.collectors.bundle_daily
+
+      - name: Upload Daily Reconciled Bundles (365-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: zp-daily-bundle-${{ github.run_id }}
+          path: zonepilot-code/data_root/private/official/bundles/
+          retention-days: 365
