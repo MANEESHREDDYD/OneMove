@@ -87,3 +87,11 @@ def test_private_or_generated_artifacts_are_not_tracked():
     assert not any(path.startswith(forbidden_prefixes) for path in paths)
     assert not any(path.endswith(".parquet") for path in paths)
     assert paths.isdisjoint(forbidden_paths)
+
+
+def test_mlops_route_fails_closed_without_a_durable_executor():
+    route = (ROOT / "app/admin/mlops/actions/route.ts").read_text(encoding="utf-8")
+
+    assert "DURABLE_EXECUTOR_REQUIRED" in route
+    assert "child_process" not in route
+    assert "exec(" not in route

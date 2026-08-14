@@ -1,26 +1,42 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
-import { exec } from 'child_process'
-import path from 'path'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
-  if (!supabase) return Response.json({ error: 'Supabase setup required' })
-
-  const formData = await request.formData()
-  const action = formData.get('action') as string
-
-  if (action === 'score_all') {
-    // We cannot reliably await a long-running background process in a server action without timing out
-    // But for demo purposes we can spawn it
-    const scriptPath = path.join(process.cwd(), 'scripts', 'ml', 'score-all.ts')
-    const child = exec(`node --env-file=.env.local node_modules/tsx/dist/cli.mjs ${scriptPath}`)
-    child.unref()
+  if (!supabase) {
+    return Response.json({ error: 'Supabase setup required' }, { status: 503 })
   }
 
-  revalidatePath('/admin/mlops')
-  redirect('/admin/mlops')
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+  if (profile?.role !== 'admin') {
+    return Response.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const formData = await request.formData()
+  const action = formData.get('action')
+
+  if (action === 'score_all') {
+    return Response.json(
+      {
+        error: 'Durable private executor is not configured',
+        code: 'DURABLE_EXECUTOR_REQUIRED',
+      },
+      {
+        status: 503,
+        headers: { 'Cache-Control': 'no-store' },
+      },
+    )
+  }
+
+  return Response.json({ error: 'Unsupported action' }, { status: 400 })
 }

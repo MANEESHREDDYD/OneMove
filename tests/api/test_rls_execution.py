@@ -11,9 +11,11 @@ LOCAL_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "mock_service_ke
 JWT_SECRET = os.environ["SUPABASE_JWT_SECRET"]
 
 def _is_supabase_reachable():
+    if ANON_KEY == "mock_anon_key" or LOCAL_SERVICE_KEY == "mock_service_key":
+        return False
     try:
         r = requests.head(f"{SUPABASE_URL}/rest/v1/", headers={"apikey": ANON_KEY}, timeout=2)
-        return r.status_code < 500
+        return r.status_code < 400
     except Exception:
         return False
 
