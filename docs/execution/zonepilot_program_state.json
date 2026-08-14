@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-14T08:46:21Z",
+  "updated_at": "2026-08-14T08:51:18Z",
   "repository": "https://github.com/MANEESHREDDYD/OneMove",
   "repository_visibility": "PUBLIC_SOURCE_REPOSITORY",
   "private_execution_boundary": "SEPARATE_PRIVATE_REPOSITORY_OR_MANAGED_STORAGE",
@@ -23,7 +23,7 @@
     {
       "id": "production_platform",
       "status": "PARTIAL",
-      "evidence": "GitHub staging and production environments, repository variables, main branch protection, secret scanning, push protection, Dependabot security updates, and the private execution repository exist. Vercel provisioning is in progress. Hosted Supabase, Railway, and Sentry management remain unavailable through the supplied credentials."
+      "evidence": "GitHub staging and production environments, repository variables, main branch protection, secret scanning, push protection, Dependabot security updates, and the private execution repository exist. Vercel Preview and Production are READY on the exact audited main SHA. Hosted Supabase, Railway, and Sentry management remain unavailable through the supplied credentials."
     },
     {
       "id": "r0_5_private_execution",
@@ -52,6 +52,10 @@
     {
       "id": "github_control_plane",
       "evidence": "Public main requires pull requests, strict successful checks across all seven gate families, current-base branches, resolved conversations, and blocks admin bypass, force pushes, and deletion. Secret scanning and push protection are enabled; CodeQL covers all four product languages."
+    },
+    {
+      "id": "vercel_hosted_frontend",
+      "evidence": "Vercel project onemove-zonepilot deployed exact main SHA 43b96185fd8754a959d365b6a202eb673e7b0b9d to READY Preview dpl_B8JkPDpzrR9Dg7ZBvBiGpehRwBTX and promoted Production dpl_67EQs8qfriyXq1kWrifjSiaRG2XU. Both immutable URLs and the public production alias returned 200 with the OneMove title and no server error."
     }
   ],
   "failed_workflows": [],
@@ -133,7 +137,7 @@
   },
   "next_executable_tasks": [
     "Commit the post-merge security/dependency baseline, open a protected pull request, require all exact-SHA gates, clear CodeQL alert #1 and high Dependabot alerts, then merge and reverify main.",
-    "Complete Vercel Preview and Production project provisioning using the authenticated owner account and record hosted smoke evidence.",
+    "Redeploy Vercel Preview and Production from the eventual post-security main SHA and repeat the immutable/public smoke before promotion.",
     "Provision hosted Supabase, Railway, and Sentry immediately when valid management credentials exist; do not reuse staging and production identities.",
     "Implement the private executor acquisition/state/object/manifest adapters only after least-privilege hosted credentials and suitable private object storage exist.",
     "Continue deterministic R3-R7 engineering without fabricating traffic outcomes or blocking on the separately owned TomTom workstream."
@@ -147,7 +151,7 @@
   },
   "account_connectivity": {
     "github": "ADMIN_AUTHENTICATED_CONTROLS_CONFIGURED",
-    "vercel": "OWNER_AUTHENTICATED_PROVISIONING_IN_PROGRESS",
+    "vercel": "PREVIEW_AND_PRODUCTION_READY_EXACT_MAIN_SHA_SMOKE_PASS",
     "supabase_management": "NO_MANAGEMENT_TOKEN",
     "supabase_application": "CONFIGURED_HOST_NXDOMAIN_KEYS_UNUSABLE",
     "supabase_postgres": "LEGACY_DIRECT_CREDENTIAL_PREVIOUSLY_AUTHENTICATED_NOT_APPROVED_FOR_RUNTIME",

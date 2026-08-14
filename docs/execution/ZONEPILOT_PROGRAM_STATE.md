@@ -1,6 +1,6 @@
 # ZonePilot Program State
 
-Updated: `2026-08-14T08:46:21Z`
+Updated: `2026-08-14T08:51:18Z`
 
 This ledger is a restart aid, not runtime proof. Exact GitHub checks, provider health, immutable manifests, and test output remain authoritative.
 
@@ -26,7 +26,7 @@ Old objects are no longer reachable from advertised refs. GitHub can still serve
 | R1 | **MERGED / EXACT GATES GREEN** | Authenticated artifact-backed product, OSM/Gold/OSRM evidence, map, provider health, and truthful traffic-unavailable state passed the dedicated main workflow. |
 | R2 | **ENGINEERING COMPLETE / EVIDENCE ACCUMULATING** | UTC contracts, PIT joins, temporal splits, prospective freeze, prediction records, and outcome records are tested. No fabricated history or outcome superiority is claimed. |
 | R3-R5 | **NOT COMPLETE** | Deterministic optimizer, resilience, and economics outcome evidence remain to be built and observed. |
-| R6 | **PARTIAL** | GitHub controls and local API hardening exist. Hosted Supabase, Railway, Sentry, backups/restores, alerts, and rollback evidence are blocked by unavailable management access. Vercel provisioning is active. |
+| R6 | **PARTIAL** | GitHub controls and local API hardening exist. Vercel Preview and Production are READY on the exact audited main SHA. Hosted Supabase, Railway, Sentry, backups/restores, alerts, and rollback evidence remain blocked by unavailable management access. |
 | R7 | **FOUNDATION ONLY** | Private immutable manifest and reconciliation contracts exist; real shadow operations have not run. |
 | R8 | **SCAFFOLD ONLY** | Deterministic engines remain the priority. Fine-tuning is not justified. |
 | R9 | **PARTIAL** | Public history, CI, security gates, and execution ledger are materially improved; hosted product proof is incomplete. |
@@ -60,10 +60,19 @@ Private scheduled execution and licensed/provider data belong only in `MANEESHRE
 
 TomTom is separately owned and is not a blocker for the deterministic main program.
 
+## Hosted frontend evidence
+
+Vercel project `onemove-zonepilot` was built from detached exact main SHA `43b96185fd8754a959d365b6a202eb673e7b0b9d`.
+
+- Preview/staging `dpl_B8JkPDpzrR9Dg7ZBvBiGpehRwBTX` is READY and returned `200`, title `OneMove`, with no server error.
+- Production `dpl_67EQs8qfriyXq1kWrifjSiaRG2XU` was built with a skipped domain, smoked, promoted, and is the deployment behind `https://onemove-zonepilot.vercel.app`.
+- The public production alias returned `200` with no redirect, Vercel login, or server error.
+- No Vercel application environment values were published because the available Supabase values are stale/rejected. Authenticated hosted product flows therefore remain explicitly unverified.
+
 ## Resume sequence
 
 1. Push the security/dependency baseline, require all exact-SHA checks, clear the CodeQL finding and high dependency alerts, merge, and reverify main.
-2. Complete Vercel Preview/Production provisioning and hosted smoke evidence.
+2. Redeploy and re-smoke Vercel from the eventual post-security main SHA before promotion.
 3. Provision distinct hosted staging/production data and API infrastructure as soon as valid provider management access exists.
 4. Implement the private acquisition/state/object/manifest executor using least-privilege identities and prove restore/reconciliation.
 5. Continue deterministic R3-R7 engineering without fake traffic or business-outcome claims.
