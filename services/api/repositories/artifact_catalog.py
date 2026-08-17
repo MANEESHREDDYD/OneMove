@@ -72,6 +72,9 @@ class ArtifactCatalogRepository:
     def osrm_manifest(self) -> dict[str, Any] | None:
         return self._read_json("manifests/osrm_smoke_manifest.json", required=False)
 
+    def osrm_build_manifest(self) -> dict[str, Any] | None:
+        return self._read_json("raw/osrm/benchmark.json", required=False)
+
     def daily_manifests(self) -> list[dict[str, Any]]:
         manifests_dir = self._path("manifests")
         if not manifests_dir.is_dir():
@@ -124,6 +127,27 @@ class ArtifactCatalogRepository:
 
     def network_artifact_available(self) -> bool:
         return self._path("raw/osrm/pilot_roads.osrm").is_file()
+
+    def osrm_graph_bundle_hash(self) -> str:
+        """Hash OSRM file names and bytes using the release evidence contract."""
+
+        osrm_dir = self._path("raw/osrm")
+        try:
+            graph_files = [path for path in osrm_dir.glob("pilot_roads.osrm*") if path.is_file()]
+            if not graph_files:
+                raise ArtifactNotReady("OSRM graph bundle is not mounted")
+            digest = hashlib.sha256()
+            for path in sorted(graph_files, key=lambda item: item.relative_to(osrm_dir).as_posix()):
+                relative_name = path.relative_to(osrm_dir).as_posix().encode("utf-8")
+                digest.update(relative_name)
+                digest.update(b"\0")
+                with path.open("rb") as artifact:
+                    for block in iter(lambda: artifact.read(1024 * 1024), b""):
+                        digest.update(block)
+                digest.update(b"\0")
+        except OSError as exc:
+            raise ArtifactNotReady("OSRM graph bundle cannot be read") from exc
+        return digest.hexdigest()
 
     def geojson_features(self, relative_path: str) -> list[dict[str, Any]]:
         path = self._path(relative_path)

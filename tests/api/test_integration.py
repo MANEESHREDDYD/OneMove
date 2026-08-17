@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 from main import app
 
@@ -9,14 +10,30 @@ def test_api_health():
     assert response.json() == {"status": "ok"}
 
 
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("post", "/governance/consent?participant_id=part-123&agreed=true"),
+        ("post", "/governance/withdraw?participant_id=part-123"),
+        ("post", "/governance/activate?participant_id=part-123"),
+        ("get", "/governance/retention"),
+    ],
+)
+def test_governance_stub_routes_are_not_served(method: str, path: str):
+    """The governance router was removed.
 
-def test_governance_consent_endpoint():
-    response = client.post("/governance/consent?participant_id=part-123&agreed=true")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "CONSENT_RECORDED"
-    assert data["participant_id"] == "part-123"
-    assert data["agreed"] is True
+    Those four routes had no auth dependency and no storage: they returned
+    hardcoded success strings for consent, withdrawal, activation and retention
+    audit. An unauthenticated endpoint that says "CONSENT_RECORDED" without
+    recording consent is worse than a 404, so the router is gone and must stay
+    gone.
+    """
+    response = getattr(client, method)(path)
+    assert response.status_code == 404
+
+
+def test_no_governance_routes_are_registered():
+    assert [route for route in app.routes if getattr(route, "path", "").startswith("/governance")] == []
 
 def test_unauthenticated_probes_endpoint():
     # Attempting to submit probe without bearer token must return 401 or 403

@@ -12,6 +12,7 @@ from services.api.contracts.observatory import (
     DatasetListResponse,
     DatasetRecord,
     DQResult,
+    EvidenceClass,
     EvidenceRecord,
     EvidenceResponse,
     FieldEvidence,
@@ -36,12 +37,15 @@ from services.api.repositories.artifact_catalog import (
     ArtifactNotReady,
 )
 
-PROVIDER_EVIDENCE_CLASS = {
-    "openmeteo": "OFFICIAL_API_REAL",
-    "osm": "PUBLIC_GEOGRAPHIC",
-    "osrm": "DERIVED",
-    "tomtom": "PROVIDER_ESTIMATED",
-    "ondc": "OFFICIAL_API_REAL",
+# Every value here must be a member of the canonical taxonomy in
+# services/temporal/contracts.py. Open-Meteo and ONDC are public official data
+# sources, so they classify as PUBLIC_OFFICIAL.
+PROVIDER_EVIDENCE_CLASS: dict[str, EvidenceClass] = {
+    "openmeteo": EvidenceClass.PUBLIC_OFFICIAL,
+    "osm": EvidenceClass.PUBLIC_GEOGRAPHIC,
+    "osrm": EvidenceClass.DERIVED,
+    "tomtom": EvidenceClass.PROVIDER_ESTIMATED,
+    "ondc": EvidenceClass.PUBLIC_OFFICIAL,
 }
 
 DEFAULT_FRESHNESS_SECONDS = {
@@ -112,7 +116,7 @@ class ObservatoryService:
         if actual_hash != expected_hash:
             raise ArtifactCorrupt("Gold network artifact hash does not match its manifest")
         return {
-            "evidence_class": "PUBLIC_GEOGRAPHIC",
+            "evidence_class": EvidenceClass.PUBLIC_GEOGRAPHIC,
             "source": _required_str(manifest, "osm_source", "Gold manifest"),
             "source_version": str(manifest.get("graph_version")) if manifest.get("graph_version") is not None else None,
             "observed_at": _parse_timestamp(manifest.get("generated_at")),
@@ -215,11 +219,14 @@ class ObservatoryService:
                     dataset_id=f"{provider}:{dataset}",
                     provider=provider,
                     version=version,
+                    # Collection runs carry no schema identity in
+                    # zonepilot_ops.collection_runs, so there is nothing
+                    # truthful to report here.
                     schema_version=None,
                     availability=availability,
                     record_count=record_count,
                     run_id=run_id,
-                    evidence_class=PROVIDER_EVIDENCE_CLASS.get(provider, "OBSERVED"),
+                    evidence_class=PROVIDER_EVIDENCE_CLASS.get(provider, EvidenceClass.OBSERVED),
                     source=provider,
                     source_version=str(run.get("source_version")) if run.get("source_version") is not None else None,
                     observed_at=_parse_timestamp(run.get("completed_at") or run.get("started_at")),
@@ -235,7 +242,13 @@ class ObservatoryService:
             dataset_id=_required_str(manifest, "dataset_id", "Gold manifest"),
             provider="osm",
             version=_required_str(manifest, "parquet_sha256", "Gold manifest"),
-            schema_version=str(manifest.get("graph_version")) if manifest.get("graph_version") is not None else None,
+            # The Gold manifest's own `schema_version` is the schema identity
+            # (see services/collectors/gold.py). `graph_version` identifies the
+            # road graph the rows were derived from, not the row schema, and is
+            # reported separately as NetworkSnapshot.graph_version.
+            schema_version=(
+                str(manifest.get("schema_version")) if manifest.get("schema_version") is not None else None
+            ),
             availability=DatasetAvailability.AVAILABLE,
             record_count=_required_int(manifest, "rows", "Gold manifest"),
             evidence_class=provenance["evidence_class"],
@@ -268,7 +281,7 @@ class ObservatoryService:
                     graph_metrics, "largest_component_vertices", "Gold graph metrics"
                 ),
             ),
-            evidence_class="DERIVED",
+            evidence_class=EvidenceClass.DERIVED,
             source="OSRM",
             source_version=str(osrm.get("OSRM_image_digest")) if osrm.get("OSRM_image_digest") else None,
             observed_at=_parse_timestamp(osrm.get("generated_at")),
@@ -315,7 +328,9 @@ class ObservatoryService:
                 returned_feature_count=0,
                 selection_policy="Artifact is not mounted.",
                 geojson={"type": "FeatureCollection", "features": []},
-                evidence_class="UNAVAILABLE",
+                # No mounted artifact means no observation, so there is no
+                # evidence to classify. Availability lives in `state`.
+                evidence_class=None,
                 source=source,
                 source_version=source_version,
                 observed_at=observed_at,
@@ -343,7 +358,7 @@ class ObservatoryService:
                     returned_feature_count=len(displayed_roads),
                     selection_policy="All major-class OSM road features, evenly sampled only above 3000.",
                     geojson={"type": "FeatureCollection", "features": displayed_roads},
-                    evidence_class="PUBLIC_GEOGRAPHIC",
+                    evidence_class=EvidenceClass.PUBLIC_GEOGRAPHIC,
                     source="pilot_roads.geojson",
                     source_version=source_version,
                     observed_at=observed_at,
@@ -390,7 +405,7 @@ class ObservatoryService:
                     returned_feature_count=len(displayed_intersections),
                     selection_policy="Canonical degree >= 3 intersections, evenly sampled only above 1500.",
                     geojson={"type": "FeatureCollection", "features": intersection_features},
-                    evidence_class="DERIVED",
+                    evidence_class=EvidenceClass.DERIVED,
                     source="canonical OSM graph",
                     source_version=str(gold.get("graph_version")) if gold.get("graph_version") else None,
                     observed_at=_parse_timestamp(gold.get("generated_at")),
@@ -426,7 +441,7 @@ class ObservatoryService:
                     returned_feature_count=len(displayed_pois),
                     selection_policy="Commercial OSM POIs, evenly sampled only above 1500.",
                     geojson={"type": "FeatureCollection", "features": displayed_pois},
-                    evidence_class="PUBLIC_GEOGRAPHIC",
+                    evidence_class=EvidenceClass.PUBLIC_GEOGRAPHIC,
                     source="silver_pois.geojson",
                     source_version=source_version,
                     observed_at=observed_at,

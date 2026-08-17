@@ -1,11 +1,17 @@
-fastapi==0.111.0
-uvicorn==0.29.0
-pydantic==2.13.4
-pydantic-settings==2.15.0
+# ZonePilot API runtime.
+#
+# Shared runtime pins live in the repository-root requirements.txt and are
+# included here rather than duplicated. Duplicating an exact pin in both files
+# is what produced the recurring ResolutionImpossible failures: Dependabot
+# would bump fastapi in one manifest while the other still pinned the old
+# version, and every workflow installs both with
+#   pip install -r requirements.txt -r services/api/requirements.txt
+#
+# Only dependencies that the API needs and the base does not belong below.
+# tests/execution/test_dependency_consistency.py enforces this.
+-r ../../requirements.txt
+
 supabase==2.31.0
-PyJWT==2.13.0
 cryptography==50.0.0
-h3==4.5.0
 pandas==3.0.5
-pyarrow==23.0.1
 requests==2.34.2
