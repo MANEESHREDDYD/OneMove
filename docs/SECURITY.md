@@ -1,13 +1,16 @@
 # ZonePilot Security
 
 **Scope:** the ZonePilot API (`services/api/`) and the public/private repository boundary.
-**Reference commit:** `main` at `502e20817d4319d6867090b7765fe35326973e67`.
+**Reference commit:** `main` at `666ade66f965df76097c557cdf419501b683db75`.
 
 This document states what is implemented and what is not. The gaps in section 7 are real and are not
 softened.
 
-> This is an engineering reference, not a vulnerability disclosure policy. ZonePilot is **not
-> deployed anywhere**, so there is no production attack surface today.
+> This is an engineering reference, not a vulnerability disclosure policy. The **ZonePilot API is not
+> deployed anywhere**, so none of the controls below has ever faced real traffic. The Observatory
+> frontend *is* live at <https://zonepilot-observatory.vercel.app>, with no backend behind it and no
+> error monitoring on it — see
+> [`operations/DEPLOYMENT_STATE.md`](operations/DEPLOYMENT_STATE.md).
 
 ---
 
@@ -194,8 +197,14 @@ restricted to `authorization`, `content-type`, `x-correlation-id`, `x-request-id
 | `/healthz` | none | Liveness only; returns no internal state |
 | `/readyz` | none | Attempts `SELECT 1` against `ZONEPILOT_DB_URL` (3 s timeout); `503` when unready. Returns only `{status, db_connected}` — no error detail |
 | `/metrics` | token | **Disabled by default.** `404` unless `ZONEPILOT_METRICS_ENABLED` is truthy; then requires `Bearer $ZONEPILOT_METRICS_TOKEN`, compared with `hmac.compare_digest` |
+| `/api/v1/version` | **Supabase JWT** | Release identity. **Authenticated, and fails closed.** Every failure — missing config, malformed identifier, absent artifact, stale manifest, hash mismatch, failed DQ, invalid routing smoke — returns the same opaque, retryable `503 RELEASE_IDENTITY_UNAVAILABLE`, disclosing no path or value. Never returns a partially trusted identity. See [`operations/RELEASE_IDENTITY.md`](operations/RELEASE_IDENTITY.md) |
 
 `/metrics` returning `404` rather than `403` when disabled avoids confirming the endpoint exists.
+
+`/api/v1/version` is deliberately **not** an unauthenticated build-info endpoint. Version and artifact
+hashes are fingerprinting material, so the route requires a valid session and collapses every failure
+mode into one indistinguishable response rather than letting an unauthenticated caller enumerate which
+check failed.
 
 **Gap:** if `ZONEPILOT_METRICS_ENABLED` is on but `ZONEPILOT_METRICS_TOKEN` is unset, the token check
 is skipped and metrics are exposed unauthenticated. Always set both together.
@@ -225,7 +234,12 @@ closed with `503 DATASET_NOT_READY` rather than returning empty or synthetic dat
 - **Only a sanitized projection is published.** `services/evidence/r1.py` emits hashes, counts,
   versions, and DQ status — never data rows, never geometry.
 - **Secrets are never committed.** `.env*`, `private/`, and credential exports are ignored;
-  GitHub secret scanning reports **0 alerts** at `502e2081`.
+  GitHub secret scanning reports **0 alerts** at `666ade66`.
+- **No public workflow may touch private acquisition at all.** The four scheduled acquisition
+  workflows have been deleted, and `tests/execution/test_ci_contracts.py` enforces four boundary
+  invariants as tests: no public workflow may read a private provider secret, invoke an acquisition
+  scheduler, hold `contents: write` or push while running on a schedule, or manage `data/rolling`
+  state. The boundary is a gate, not a convention.
 - **Container images are pinned by digest**, not tag (`osmium` and OSRM), and CI actions are pinned by
   commit SHA — so a mutated upstream tag cannot silently change what CI executes.
 - `make public-export` / `make publish-check` (`services/etl/public_export.py`,
@@ -234,8 +248,10 @@ closed with `503 DATASET_NOT_READY` rather than returning empty or synthetic dat
 
 ### Static analysis
 
-CodeQL runs on push and pull request against `main` with a pinned action. At `502e2081`: **0 open
-CodeQL alerts, 0 secret-scanning alerts, 2 medium Dependabot alerts.**
+CodeQL runs on push and pull request against `main` with a pinned action, and
+`tests/execution/test_ci_contracts.py` asserts that it scans every product language with SHA-pinned
+actions. At `666ade66`: **0 open CodeQL alerts, 0 secret-scanning alerts, 1 medium Dependabot
+alert.**
 
 ---
 
@@ -292,13 +308,18 @@ workspace, no row is tagged with a workspace, and the `x-workspace-id` header is
 is semantically inert. ZonePilot is currently a **single-tenant** system and must not be described
 otherwise.
 
-### 7.3 The `governance` router has no authentication
+### 7.3 The unauthenticated `governance` router — RESOLVED
 
-`services/api/routers/governance.py` exposes four routes under `/governance` —
+`services/api/routers/governance.py` used to expose four routes under `/governance` —
 `POST /consent`, `POST /withdraw`, `POST /activate`, `GET /retention` — with **no `Depends(...)` auth
-dependency of any kind**. They currently return hardcoded strings and touch no storage, so nothing is
-exposed or mutated today, but they are unauthenticated endpoints with governance-suggestive names and
-must be secured before they do anything real.
+dependency of any kind**. They returned hardcoded strings with governance-suggestive names.
+
+**The router has been deleted.** The module is gone and `services/api/main.py` mounts exactly four
+routers: `events`, `observatory`, `version`, `health`. Nothing replaced it, so ZonePilot has no
+governance API surface — which is the correct state, since it never had a governance capability.
+
+The finding is recorded here rather than removed because the fix was deletion: if a governance
+surface is ever reintroduced, it must ship with an auth dependency from the first commit.
 
 ### 7.4 Other gaps
 
@@ -312,5 +333,7 @@ must be secured before they do anything real.
 | **No signed evidence attestation** | Manifest integrity relies on trusting the CI run |
 | **Evidence classes have no database constraint** | See [`EVIDENCE_MODEL.md`](EVIDENCE_MODEL.md) |
 | **Legacy `/v1/events` and `/v1/probes`** | Belong to the earlier field-study design; `/v1/probes` re-parses the `Authorization` header manually rather than using the dependency, and uses a service-role Supabase client that bypasses RLS for assignment lookups and idempotency checks |
-| **2 medium Dependabot alerts open** | At `502e2081` |
-| **Nothing is deployed** | There is no production configuration to review, and none of the above has been validated under real traffic |
+| **1 medium Dependabot alert open** | At `666ade66` |
+| **The API is not deployed** | There is no production configuration to review, and none of the above has been validated under real traffic |
+| **No error monitoring on what *is* running** | The deployed Observatory has **zero Sentry instrumentation** — no `@sentry/nextjs`, nothing reads a DSN — so a frontend crash produces no signal. The only Sentry path is in `services/api/core/telemetry.py`, in the app that is not deployed |
+| **Deploys are manual and unverifiable** | Vercel is not connected to GitHub; the GitHub Deployment record asserting the deployed commit is written by hand and nothing verifies it |

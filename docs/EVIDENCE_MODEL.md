@@ -1,6 +1,6 @@
 # ZonePilot Evidence Model
 
-**Reference commit:** `main` at `502e20817d4319d6867090b7765fe35326973e67`.
+**Reference commit:** `main` at `666ade66f965df76097c557cdf419501b683db75`.
 
 ZonePilot's premise is that a capacity decision is only defensible if every number behind it can be
 traced to what produced it, how trustworthy that thing is, and when it became knowable. That requires
@@ -83,7 +83,7 @@ meaningful in time:
 `prediction_fingerprint()` producing a stable SHA-256 content hash so a rewritten prediction is
 detectable.
 
-Coverage: **9 tests** in `tests/temporal/test_temporal_foundations.py`.
+Coverage: **10 tests** in `tests/temporal/test_temporal_foundations.py`.
 
 ### NOT enforced: the database
 
@@ -98,23 +98,40 @@ Coverage: **9 tests** in `tests/temporal/test_temporal_foundations.py`.
 - **No temporal record has ever been written through these contracts**, so the enforcement has never
   been exercised against real data. Its practical strength is currently untested.
 
-### NOT enforced: the API response layer
+### Enforced: the API response layer
 
-The Observatory API emits evidence-class strings that are **not members of the nine-value enum**:
+**There is now exactly one evidence vocabulary in the system.** This was not always true, and the
+drift is worth recording because it is the failure mode this model exists to prevent.
 
-| Emitter | Value emitted | In the enum? |
-| --- | --- | --- |
-| `services/api/services/observatory.py` — `PROVIDER_EVIDENCE_CLASS["openmeteo"]`, `["ondc"]` | `OFFICIAL_API_REAL` | **No** |
-| `services/api/contracts/observatory.py` — unavailable map layers | `UNAVAILABLE` | **No** |
+Previously the Observatory API emitted two strings that were **not** members of the nine-value enum:
+`OFFICIAL_API_REAL` for the `openmeteo` and `ondc` providers, and `UNAVAILABLE` for artifacts that
+were not mounted. The response contract typed the field as `StrictStr`, so both passed validation. A
+**fourth** vocabulary also existed in a dead module at `services/api/core/provenance.py`.
 
-The response contract types the field as `StrictStr`, not as `EvidenceClass`, so these pass
-validation. The intended mapping is presumably `OFFICIAL_API_REAL -> PUBLIC_OFFICIAL`, but that
-reconciliation does not exist in code. **Today the API vocabulary and the contract vocabulary are not
-the same vocabulary.** Note that both offending values only ever appear for providers that have never
-collected data (`openmeteo`, `ondc`) or for artifacts that are not mounted, so no verified R1 number
-is currently mislabelled — but the divergence is real.
+All of it has been corrected:
 
-The classes that the working path does emit are correct and in-enum:
+| Was | Is now |
+| --- | --- |
+| `evidence_class: StrictStr` on Observatory responses | `evidence_class: EvidenceClass`, imported from `services/temporal/contracts.py` — an unknown string is rejected |
+| `openmeteo`, `ondc` -> `OFFICIAL_API_REAL` | `openmeteo`, `ondc` -> **`PUBLIC_OFFICIAL`** (both are public/authoritative published sources) |
+| `evidence_class: "UNAVAILABLE"` for absent artifacts | availability moved to a separate **`state`** field; `evidence_class` is **nullable** and is `null` exactly when `state` is `UNAVAILABLE` |
+| A fourth enum in `services/api/core/provenance.py` | **deleted** |
+
+`MapLayer` enforces the pairing with a model validator: an `UNAVAILABLE` layer must not claim an
+evidence class, and an `AVAILABLE` layer must declare one. `UnavailableLayer` fixes
+`evidence_class: None` in the type itself. There is no evidence to classify when there is no
+observation, so the field is absent rather than borrowing a non-member value.
+
+`DatasetRecord.schema_version` was fixed in the same pass: it now reads the **Gold manifest's own
+`schema_version`** (`1.0.0`, or `null` when undeclared) instead of being populated from
+`graph_version`. The field name and its contents now agree.
+
+The TypeScript client mirrors the same closed vocabulary — `apps/observatory/src/lib/api/types.ts`
+declares `EvidenceClass` as a nine-member union and types `Provenance.evidence_class` as
+`EvidenceClass | null`, so Python and TypeScript cannot drift into disagreeing about what a legal
+class is.
+
+The classes that the working path emits are correct and in-enum:
 
 | Artifact | Evidence class | Source |
 | --- | --- | --- |
@@ -193,24 +210,24 @@ The OSRM graph is a multi-file artifact, so `sha256_file_set()` gives it a singl
 Any failure raises `EvidenceValidationError` and the workflow fails. The candidate SHA itself must be
 a full 40-hex lowercase Git SHA (`ZONEPILOT_CANDIDATE_SHA`, validated by regex).
 
-### Verified manifest at `502e2081`
+### Verified manifest at `666ade66`
 
 ```json
 {
   "schema_name": "zonepilot_r1_evidence",
   "schema_version": "1.0.0",
   "evidence_class": "PUBLIC_GEOGRAPHIC",
-  "candidate_code_sha": "502e20817d4319d6867090b7765fe35326973e67",
+  "candidate_code_sha": "666ade66f965df76097c557cdf419501b683db75",
   "versions": {
-    "dataset_version": "osm-b87981dd6e64.code-502e20817d43",
-    "graph_version": "1.1.0+fa711557c25b",
+    "dataset_version": "osm-bc92c2e263d3.code-666ade66f965",
+    "graph_version": "1.1.0+c0f22beaa7f2",
     "gold_schema_version": "1.0.0",
     "osrm_image": "...@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409"
   },
   "record_counts": {
-    "osm_nodes": 65463,
-    "osm_highway_ways": 20349,
-    "pois": 9165,
+    "osm_nodes": 65479,
+    "osm_highway_ways": 20353,
+    "pois": 9161,
     "h3_cells": 94
   },
   "routing_smoke": {
@@ -249,7 +266,7 @@ every Observatory response object carries the same fields inline:
 
 | Field | Meaning |
 | --- | --- |
-| `evidence_class` | Which of the classes above (see the divergence noted in section 2) |
+| `evidence_class` | One of the nine classes above, typed as the `EvidenceClass` enum; `null` only when the paired `state` field says `UNAVAILABLE` |
 | `source` | Where it came from (e.g. the Geofabrik URL, `OSRM`, `pilot_roads.geojson`) |
 | `source_version` | `graph_version`, OSRM image digest, or provider source version |
 | `observed_at` | Manifest `generated_at` / run completion timestamp |
@@ -265,8 +282,7 @@ missing entity. Path resolution is checked so an artifact path cannot escape the
 
 | Gap | Impact |
 | --- | --- |
-| Evidence classes are enforced by **Python contracts only, not by database constraints** | Any non-Pydantic writer can persist an arbitrary class string |
-| The API emits `OFFICIAL_API_REAL` and `UNAVAILABLE`, which are **not in the nine-value enum** | Two vocabularies coexist; the response field is typed `StrictStr`, not `EvidenceClass` |
+| Evidence classes are enforced by **Python and TypeScript contracts only, not by database constraints** | Any non-Pydantic writer can persist an arbitrary class string. There is no `evidence_class` column, `CHECK`, enum type, domain, or trigger in any merged migration |
 | No **class-propagation / combination logic** exists | A `DERIVED` value does not automatically inherit its weakest input's class |
 | **No temporal record has ever been written** | The contracts have never been exercised against real data |
 | **No decision ledger** | Evidence is attached to artifacts, never to a decision — the "explain the decision" claim is not yet supported end to end |

@@ -1,10 +1,12 @@
 # ZonePilot API Reference
 
 **App:** `services.api.main:app` — FastAPI, title `ZonePilot API`, version `1.5.1`.
-**Reference commit:** `main` at `502e20817d4319d6867090b7765fe35326973e67`.
+**Reference commit:** `main` at `666ade66f965df76097c557cdf419501b683db75`.
 
-> **Nothing is deployed.** There is no hosted base URL. All examples assume a locally run instance at
-> `http://127.0.0.1:8000`.
+> **This API is not deployed.** There is no hosted base URL. The Observatory frontend *is* live at
+> <https://zonepilot-observatory.vercel.app>, but it has no API behind it — see
+> [`operations/DEPLOYMENT_STATE.md`](operations/DEPLOYMENT_STATE.md). All examples below assume a
+> locally run instance at `http://127.0.0.1:8000`.
 
 ```bash
 PYTHONPATH=services/api python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000
@@ -31,6 +33,12 @@ PYTHONPATH=services/api python -m uvicorn services.api.main:app --host 127.0.0.1
 | POST | `/api/v1/optimizations` | required | **501 NOT_IMPLEMENTED** |
 | GET | `/api/v1/optimizations/{opt_id}` | required | **404 stub** (always) |
 
+### `/api/v1` — Release identity (`services/api/routers/version.py`)
+
+| Method | Route | Auth | Status |
+| --- | --- | --- | --- |
+| GET | `/api/v1/version` | required | **WORKING** — fails closed to `503` |
+
 ### Operational (`services/api/routers/health.py`)
 
 | Method | Route | Auth | Status |
@@ -45,10 +53,13 @@ PYTHONPATH=services/api python -m uvicorn services.api.main:app --host 127.0.0.1
 | --- | --- | --- | --- |
 | POST | `/v1/events` | required | **LEGACY** — field-study Supabase write |
 | POST | `/v1/probes` | required | **LEGACY** — field-study Supabase write |
-| POST | `/governance/consent` | **none** | **SCAFFOLD** — hardcoded response |
-| POST | `/governance/withdraw` | **none** | **SCAFFOLD** — hardcoded response |
-| POST | `/governance/activate` | **none** | **SCAFFOLD** — hardcoded response |
-| GET | `/governance/retention` | **none** | **SCAFFOLD** — hardcoded response |
+
+> **The `/governance/*` router has been deleted.** `POST /governance/consent`, `/withdraw`,
+> `/activate`, and `GET /governance/retention` were unauthenticated stubs returning hardcoded strings.
+> They no longer exist: `services/api/routers/governance.py` is gone and `services/api/main.py`
+> mounts exactly four routers — `events`, `observatory`, `version`, `health`. **ZonePilot has no
+> governance API surface at all**, which is the honest state; it previously had one that looked like a
+> capability and was not.
 
 ---
 
@@ -125,11 +136,19 @@ Every Observatory response object carries the same five provenance fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `evidence_class` | string | See [`EVIDENCE_MODEL.md`](EVIDENCE_MODEL.md) |
+| `evidence_class` | `EvidenceClass` | The real enum, not a free string — see [`EVIDENCE_MODEL.md`](EVIDENCE_MODEL.md) |
 | `source` | string | Origin of the value |
 | `source_version` | string \| null | `graph_version`, image digest, or provider version |
 | `observed_at` | datetime \| null | When the backing artifact was generated |
 | `artifact_hash` | string \| null | Re-derived SHA-256 of the backing artifact |
+
+**`evidence_class` and availability are separate vocabularies.** `evidence_class` is typed as the
+`EvidenceClass` enum imported from `services/temporal/contracts.py`; an unknown string is rejected at
+serialization. Availability lives in a distinct `state` field (`AVAILABLE` / `UNAVAILABLE`, or the
+provider-health states). An object with nothing behind it carries `state: "UNAVAILABLE"` and
+`evidence_class: null` — it does not borrow a non-enum value like `UNAVAILABLE` to fill the slot.
+`MapLayer` enforces the pairing with a model validator: `UNAVAILABLE` must not claim an evidence
+class, `AVAILABLE` must declare one.
 
 ---
 
@@ -137,7 +156,7 @@ Every Observatory response object carries the same five provenance fields:
 
 ### `GET /api/v1/zones`
 
-Lists the H3 cells present in the verified Gold artifact. At `502e2081` this is **94 cells at H3
+Lists the H3 cells present in the verified Gold artifact. At `666ade66` this is **94 cells at H3
 resolution 8**, covering the ~68 km² pilot bbox `77.58,12.90,77.65,12.98` in central Bengaluru.
 
 **200** — `{"data": [ZoneSummary]}` where `ZoneSummary` is a `Provenance` plus:
@@ -163,7 +182,7 @@ Static, evidence-bearing state for one real Gold H3 cell.
 | --- | --- |
 | `zone_id`, `resolution`, `boundary` | as above |
 | `static` | eight `FieldEvidence` objects, each with its own `value`, `unit`, and full provenance |
-| `unavailable_dynamic_layers` | list of `{layer, state: "UNAVAILABLE", reason, evidence_class: "UNAVAILABLE"}` |
+| `unavailable_dynamic_layers` | list of `{layer, state: "UNAVAILABLE", reason, evidence_class: null}` — availability lives in `state`; the evidence class is explicitly absent |
 
 `static` fields: `cell_area_km2`, `road_length_km`, `intersection_count`, `restaurant_count`,
 `grocery_count`, `commercial_poi_count`, `road_density_km_per_sqkm`,
@@ -185,7 +204,7 @@ snapshot today.
 | Field | Notes |
 | --- | --- |
 | `snapshot_id` | the OSRM graph-bundle hash |
-| `graph_version` | `1.1.0+fa711557c25b` at `502e2081` |
+| `graph_version` | `1.1.0+c0f22beaa7f2` at `666ade66` |
 | `h3_resolution` | 8 |
 | `status` | always `"AVAILABLE"` (the list omits unavailable snapshots) |
 | `metrics` | `{graph_vertices, graph_directed_edges, intersections, connected_components, largest_component_vertices}` |
@@ -232,19 +251,20 @@ Dataset versions discovered from immutable manifests.
 | `dataset_id` | from the manifest's `dataset_id` |
 | `provider` | `osm` for the Gold record; the provider name for collection runs |
 | `version` | for the Gold record this is the **parquet SHA-256**, i.e. content identity |
-| `schema_version` | for the Gold record this is populated from `graph_version` (`1.1.0+fa711557c25b` at `502e2081`) — note the field name does not match its contents |
+| `schema_version` | the Gold manifest's **own `schema_version`** (`1.0.0`), or `null` when the manifest declares none. It is no longer populated from `graph_version`, so the field name and its contents now agree |
 | `availability` | `AVAILABLE` \| `EMPTY` \| `FAILED` \| `UNAVAILABLE` |
-| `record_count` | rows — 94 for the Gold H3 dataset at `502e2081` |
+| `record_count` | rows — 94 for the Gold H3 dataset at `666ade66` |
 | `run_id` | collection run, when applicable |
 
 The Gold dataset is always first, followed by any per-provider collection runs.
 
 > **In practice only the Gold dataset is ever `AVAILABLE`.** The `openmeteo`, `tomtom`, and `ondc`
 > providers have never produced a successful collection run.
->
-> Note also that this route maps `openmeteo` and `ondc` to the evidence-class string
-> `OFFICIAL_API_REAL`, which is **not** one of the nine enum values — a known vocabulary divergence,
-> documented in [`EVIDENCE_MODEL.md`](EVIDENCE_MODEL.md).
+
+Provider evidence classes come from `PROVIDER_EVIDENCE_CLASS` in
+`services/api/services/observatory.py` and are all real `EvidenceClass` members. `openmeteo` and
+`ondc` map to **`PUBLIC_OFFICIAL`**, because both are public/authoritative published sources. The
+earlier non-enum string `OFFICIAL_API_REAL` no longer exists anywhere in the codebase.
 
 ### `GET /api/v1/data-health`
 
@@ -283,6 +303,46 @@ a scalar-valued `metadata` map:
 
 **404** `NOT_FOUND` if the entity is not present.
 
+### `GET /api/v1/version`
+
+The authenticated release-identity gate (`services/api/routers/version.py`). **It exists and it
+works** — it is not a stub, and it is not unauthenticated. It returns `200` only when the deployed
+application identity is bound to Gold and OSRM artifacts whose SHA-256 hashes it **recomputes on every
+request**.
+
+Required deployment configuration:
+
+| Variable | Requirement |
+| --- | --- |
+| `ZONEPILOT_APP_VERSION` | immutable semantic release version |
+| `ZONEPILOT_GIT_SHA` | exact lowercase **40-hex** commit; abbreviated, floating, or placeholder values are rejected |
+| `ZONEPILOT_SCHEMA_VERSION` | semantic Gold schema version expected by that release |
+| `ZONEPILOT_DATA_ROOT` | mounted private artifact root |
+
+**200** — `{"data": ReleaseIdentity}`:
+
+| Field | Contents |
+| --- | --- |
+| `app_version`, `git_sha`, `schema_version` | the deployed application identity |
+| `gold` | `{dataset_id, dataset_version, schema_version, artifact_sha256, record_count}` |
+| `graph` | `{graph_version, topology_sha256, bundle_sha256}` |
+
+The response contains identifiers and hashes only — never filesystem paths, environment values,
+credentials, or partial data.
+
+**503 `RELEASE_IDENTITY_UNAVAILABLE`** — **every** failure mode collapses to this one retryable
+envelope: missing configuration, malformed identifiers, absent artifacts, a stale manifest, a hash
+mismatch, a schema or commit mismatch, failed DQ, or invalid routing-smoke evidence. The endpoint
+never discloses which check failed and never returns a partially trusted identity. **401** precedes
+all of it for an unauthenticated caller.
+
+`/healthz` and `/readyz` are orchestration probes and must not be used as release identity. Full
+contract: [`operations/RELEASE_IDENTITY.md`](operations/RELEASE_IDENTITY.md).
+
+> This gate has **never run against a deployment**, because the API is not deployed anywhere. The
+> Observatory `/system-health` page consumes it through the session proxy and, with no backend, can
+> only render it as unavailable.
+
 ---
 
 ## Not-implemented routes
@@ -310,8 +370,10 @@ Unconditional `404 NOT_FOUND` ("Scenario not found."). No storage exists behind 
            "request_id": "...", "retryable": false, "details": {}}}
 ```
 
-**Optimizer engine code exists in the repository, but it is not reachable through the API and no
-optimization has ever been executed.**
+**A real optimizer engine exists on `main` at `services/zonepilot/optimization/` — a deterministic
+OR-Tools CP-SAT robust facility solver with 23 tests — but it is not reachable through the API and no
+optimization has ever been executed.** Wiring it to this route (R3) is in flight and unmerged; on
+`main` at `666ade66` the route is `501`.
 
 ### `GET /api/v1/optimizations/{opt_id}` — 404
 
@@ -371,11 +433,10 @@ returns `{"idempotent_replay": true}`; a conflicting reuse of `client_event_id` 
 uses a **service-role** Supabase client (bypassing RLS) for assignment lookup and idempotency checks.
 Flagged in [`SECURITY.md`](SECURITY.md).
 
-### `/governance/*`
+### `/governance/*` — removed
 
-`POST /consent`, `POST /withdraw`, `POST /activate`, `GET /retention` return hardcoded strings, touch
-no storage, and have **no authentication dependency at all**. They must not be treated as a
-governance capability.
+These four unauthenticated stubs no longer exist. `services/api/routers/governance.py` was deleted
+and the router is no longer mounted. Nothing replaced them: **ZonePilot has no governance API.**
 
 ---
 
@@ -394,6 +455,9 @@ curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/api/v1/data-heal
 # Provenance for a dataset (take the dataset_id from /api/v1/datasets)
 curl -s -H "Authorization: Bearer $TOKEN" \
   "http://127.0.0.1:8000/api/v1/evidence/dataset/$DATASET_ID"
+
+# Release identity — 200 only with a fully verified deployment, else 503
+curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/api/v1/version
 
 # 501
 curl -s -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/api/v1/optimizations

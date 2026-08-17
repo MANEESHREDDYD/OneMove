@@ -44,6 +44,12 @@ Two Vercel deployments exist and they are **not** the same application:
 | <https://zonepilot-observatory.vercel.app> | The ZonePilot Observatory (`apps/observatory`), title `ZonePilot Observatory` |
 | `onemove-zonepilot.vercel.app` | The **legacy OneMove marketplace** |
 
+The Observatory deployment was cut from `666ade66f965df76097c557cdf419501b683db75` and recorded as
+GitHub Deployment `5941546097` (`production`). All four routes — `/`, `/capture`, `/qc`,
+`/system-health` — answer `200`. It is a **frontend only**: there is no ZonePilot API deployed behind
+it, and Vercel is **not** connected to GitHub, so the deploy was a manual upload rather than a
+push-to-deploy. See [`docs/operations/DEPLOYMENT_STATE.md`](docs/operations/DEPLOYMENT_STATE.md).
+
 ---
 
 ## The problem
@@ -193,7 +199,7 @@ Details and known gaps: [`docs/SECURITY.md`](docs/SECURITY.md).
 - an enforced **`information_available_at <= decision_time`** leakage invariant (plus
   `issued_at <= information_available_at <= retrieved_at`),
 
-covered by **9 tests** in `tests/temporal/test_temporal_foundations.py`. These are contracts only —
+covered by **10 tests** in `tests/temporal/test_temporal_foundations.py`. These are contracts only —
 no temporal data has ever been written through them.
 
 The same enum is the **single** evidence vocabulary in the system: `services/api/contracts/observatory.py`
@@ -208,22 +214,46 @@ worker, fails closed to a `SOLVER_ERROR` result rather than raising, and is cove
 `tests/optimization/test_facility_optimizer.py`, including brute-force optimality checks and a timeout
 path.
 
-**The engine is not wired to anything.** `POST /api/v1/optimizations` still returns `501
-NOT_IMPLEMENTED`, and no optimization has ever been executed through the product.
+**The engine is not wired to anything.** On `main` at `666ade66`, `POST /api/v1/optimizations` still
+returns `501 NOT_IMPLEMENTED`, and no optimization has ever been executed through the product.
+Work to connect the engine to that route (R3) is **in flight and not merged**; until it lands, this
+README describes the engine as unreachable because that is what `main` does.
 
 ### 7. CI
 
-All green on `main` at `666ade66`:
+The public repository has **exactly seven workflows**, and all seven are green on `main` at
+`666ade66`:
 
-`Node.js CI` · `Python CI` · `SQL Quality` · `Polyglot CI` · `ZonePilot Release Validation` ·
-`ZonePilot R1 Evidence` · `CodeQL`
+| Workflow | File | Result at `666ade66` |
+| --- | --- | --- |
+| Node.js CI | `ci.yml` | green — Vitest 11 passed, 2 skipped (legacy OneMove) |
+| Python CI | `python-ci.yml` | green — ruff clean, **176 passed, 18 skipped, 1 deselected** |
+| SQL Quality | `sql-quality.yml` | green |
+| Polyglot CI | `polyglot-ci.yml` | green (Java / C legacy subsystems) |
+| ZonePilot Release Validation | `zonepilot-release.yml` | green — **193 passed, 1 skipped, 1 deselected**, Vitest **18 passed**, Playwright **10 passed** |
+| ZonePilot R1 Evidence | `zonepilot-r1-evidence.yml` | green — real pipeline executed, hash chain audited |
+| CodeQL Security | `codeql.yml` | green, 0 open alerts |
 
-**176 pytest tests passing** (18 skipped, 1 deselected) on that commit. Security posture at the same
-point: **0 open CodeQL alerts, 0 secret-scanning alerts, 1 medium Dependabot alert.**
+The two pytest numbers differ for a real reason and neither is wrong: `Python CI` installs the
+reviewed runtime manifests only, so the 18 tests that need optional extras (chiefly `ortools`) skip;
+`ZonePilot Release Validation` installs the full stack and runs **193**. Security posture at the same
+commit: **0 open CodeQL alerts, 0 secret-scanning alerts, 1 medium Dependabot alert.**
 
-`tests/execution/test_ci_contracts.py` additionally enforces the public-repository boundary as a test,
-not a convention: no public workflow may read a private provider secret, invoke an acquisition
-scheduler, hold `contents: write` or push while running on a schedule, or manage `data/rolling` state.
+**There are no scheduled acquisition workflows in this repository.** The four that used to exist
+(`zonepilot-midnight-acquisition.yml`, `zonepilot-intraday-acquisition.yml`,
+`zonepilot-midnight-catchup.yml`, `zonepilot-data-maintenance.yml`) were deleted; the seven above are
+the complete set.
+
+`tests/execution/test_ci_contracts.py` enforces the public-repository boundary as a test, not a
+convention. Its four boundary invariants: no public workflow may read a private provider secret,
+invoke an acquisition scheduler, hold `contents: write` or push while running on a schedule, or
+manage `data/rolling` state. Three further tests pin R1 OSRM smoke ownership, CodeQL language
+coverage with SHA-pinned actions, and the exact runtime manifests the Python gates install.
+
+`tests/execution/test_dependency_consistency.py` enforces the other half: Python dependencies have a
+**single source**. `services/api/requirements.txt` includes the root set with
+`-r ../../requirements.txt` instead of duplicating pins, so a package can no longer be pinned to two
+different versions across manifests and make the combined install unsatisfiable.
 
 ---
 
@@ -314,11 +344,13 @@ npm run dev
 ## How to test
 
 ```bash
-# Full Python suite as CI runs it (176 passed, 18 skipped, 1 deselected on main @ 666ade66)
+# Full Python suite. 176 passed / 18 skipped / 1 deselected with the base runtime manifests
+# (as `Python CI` runs it); 193 passed / 1 skipped / 1 deselected with the full stack installed
+# (as `ZonePilot Release Validation` runs it). Both were green on main @ 666ade66.
 python -m pytest -m "not r1_evidence" -q
 
 # Focused suites
-python -m pytest tests/temporal/ -q       # 9 temporal contract tests
+python -m pytest tests/temporal/ -q       # 10 temporal contract tests
 python -m pytest tests/api/ -q            # auth, JWT security, middleware, role attacks
 python -m pytest tests/evidence/ -q       # R1 evidence manifest validation
 python -m pytest tests/optimization/ -q   # 23 optimizer tests (needs ortools)
@@ -328,11 +360,17 @@ python -m pytest tests/execution/ -q      # program state, CI boundary, dependen
 python -m ruff check .
 ```
 
+Python dependencies are single-sourced: install with
+`pip install -r requirements.txt -r services/api/requirements.txt`, where the second file includes the
+first. Do not add a duplicate pin to both.
+
 The `r1_evidence` marker is deselected by default because those tests require Docker and a mounted
 artifact root; the `ZonePilot R1 Evidence` workflow is what runs them.
 
 Node-side checks (`npm run lint`, `npm run typecheck`, `npm test`) currently cover the **legacy
-OneMove** application. `apps/observatory` has **zero tests**.
+OneMove** application. The 18 Vitest tests and 10 Playwright tests in `ZonePilot Release Validation`
+are all OneMove tests — `apps/observatory` has **zero tests of its own**, including for the live
+`/system-health` route.
 
 ---
 
@@ -357,18 +395,23 @@ These are limitations, not roadmap items. Nothing here is partially working.
 - **The optimizer engine is on `main` but unreachable from the product.**
   `services/zonepilot/optimization/` is real, deterministic, and tested (23 tests), yet
   `POST /api/v1/optimizations` still returns `501 NOT_IMPLEMENTED`. No optimization has ever been run
-  through the API. Shipping the engine did not ship the capability.
+  through the API. Shipping the engine did not ship the capability. **R3 is not done**, and the work
+  to wire the engine to the route is in flight but unmerged.
 - **No resilience engine, no counterfactual engine, no economics engine.**
 - **No decision ledger, no shadow operations, no experiment registry.**
 - **No LLM tool layer.**
 - Scenario routes are `501` / `404` stubs.
 
 **Deployment and durability**
-- **No backend is deployed.** No ZonePilot API is hosted anywhere. The live Observatory has no API to
-  talk to.
-- The Observatory frontend **is** deployed at <https://zonepilot-observatory.vercel.app>, but
-  **Vercel has no GitHub connection** for this project — there is no push-to-deploy, and every deploy
-  is a manual upload. The deployed bundle is therefore not provably the current `main`.
+- **No backend is deployed anywhere, so the live Observatory has no API to talk to.** Railway has no
+  usable token, so the FastAPI app has never been hosted. Its release gate `GET /api/v1/version` has
+  therefore never run against a deployment, and the proxy in the deployed frontend still defaults to
+  `http://127.0.0.1:8000`.
+- The Observatory frontend **is** deployed at <https://zonepilot-observatory.vercel.app> (cut from
+  `666ade66`, GitHub Deployment `5941546097`), but **Vercel has no GitHub connection** for this
+  project — there is no push-to-deploy, and every deploy is a manual upload. The deployment record is
+  written by hand after the fact, so the deployed bundle is **asserted** to match a commit, not
+  **proven** to; the next merge to `main` will silently leave production behind.
 - `onemove-zonepilot.vercel.app` still serves the **legacy OneMove marketplace**, not ZonePilot.
 - A hosted Supabase project exists (ref `puygqvnhwsjkspoprfkb`, `ACTIVE_HEALTHY`, `ap-southeast-1`,
   JWKS serving `ES256`). It is provisioned, not integrated into a running ZonePilot deployment.
