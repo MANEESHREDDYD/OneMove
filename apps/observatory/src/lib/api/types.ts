@@ -64,6 +64,32 @@ export interface DataHealthResponse {
   evaluated_at: string;
 }
 
+export interface GoldReleaseIdentity {
+  dataset_id: string;
+  dataset_version: string;
+  schema_version: string;
+  artifact_sha256: string;
+  record_count: number;
+}
+
+export interface GraphReleaseIdentity {
+  graph_version: string;
+  topology_sha256: string;
+  bundle_sha256: string;
+}
+
+export interface ReleaseIdentity {
+  app_version: string;
+  git_sha: string;
+  schema_version: string;
+  gold: GoldReleaseIdentity;
+  graph: GraphReleaseIdentity;
+}
+
+export interface ReleaseIdentityResponse {
+  data: ReleaseIdentity;
+}
+
 export interface MapLayer extends Provenance {
   layer: "roads" | "intersections" | "pois";
   state: "AVAILABLE" | "UNAVAILABLE";
