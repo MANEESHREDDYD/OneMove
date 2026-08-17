@@ -18,6 +18,7 @@ dependencies = [
     "networkx>=3.3,<4",
     "shapely>=2.0.0,<3",
     "PyJWT[crypto]>=2.8.0",
+    "cryptography>=50.0.0",
     "osmium>=3.6.0",
     "pandas>=2.0.0",
     "requests>=2.30.0",
@@ -28,10 +29,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest==8.3.4",
-    "pytest-asyncio==0.23.6",
+    "pytest==9.0.3",
+    "pytest-asyncio==1.4.0",
     "pytest-cov==5.0.0",
-    "ruff==0.4.4"
+    "ruff==0.16.3"
 ]
 
 [build-system]
