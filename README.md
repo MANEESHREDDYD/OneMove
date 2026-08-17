@@ -22,8 +22,10 @@ hash-verified, and green in CI. Most of the product surface described in the arc
 or missing. This README documents only what has actually been executed. Everything else is listed
 under [Current Limitations](#current-limitations).
 
-- **Nothing is deployed.** No hosted backend exists.
-- **No temporal observations have ever been collected.** Every scheduled acquisition run has failed.
+- **No backend is deployed.** The Observatory frontend is live at
+  <https://zonepilot-observatory.vercel.app>, but there is no hosted ZonePilot API behind it.
+- **No temporal observations have ever been collected.** Every scheduled acquisition run failed, and
+  those workflows have since been removed from this public repository.
 - **No forecasting model exists.**
 
 Program-level tracking lives in [`docs/execution/ZONEPILOT_PROGRAM_STATE.md`](docs/execution/ZONEPILOT_PROGRAM_STATE.md).
@@ -33,8 +35,14 @@ Program-level tracking lives in [`docs/execution/ZONEPILOT_PROGRAM_STATE.md`](do
 This repository also still contains a **legacy application called "OneMove"** — a Next.js multi-sided
 marketplace demo (`app/`, `analytics/`, `python/`, `java/`, `c/`, and most of `docs/*_REPORT.md`).
 OneMove is being **progressively retired**. It is not part of ZonePilot, its documentation does not
-describe ZonePilot, and its claims should not be read as ZonePilot capabilities. The public URL
-`onemove-zonepilot.vercel.app` serves the **legacy OneMove marketplace**, not ZonePilot.
+describe ZonePilot, and its claims should not be read as ZonePilot capabilities.
+
+Two Vercel deployments exist and they are **not** the same application:
+
+| URL | Serves |
+| --- | --- |
+| <https://zonepilot-observatory.vercel.app> | The ZonePilot Observatory (`apps/observatory`), title `ZonePilot Observatory` |
+| `onemove-zonepilot.vercel.app` | The **legacy OneMove marketplace** |
 
 ---
 
@@ -78,14 +86,15 @@ layer-by-layer status (WORKING / PARTIAL / SCAFFOLD / MISSING).
 | Routing | `services/routing/osrm_pipeline.py` | Digest-pinned OSRM graph build + route/matrix smoke |
 | Evidence | `services/evidence/r1.py` | Re-hashes every R1 artifact and emits a sanitized evidence manifest |
 | Temporal contracts | `services/temporal/contracts.py` | Availability-aware feature/prediction/outcome contracts |
-| Observatory UI | `apps/observatory/` | Next.js client with 3 routes (`/`, `/capture`, `/qc`) |
+| Optimizer engine | `services/zonepilot/optimization/` | Deterministic OR-Tools CP-SAT robust facility optimizer — **not reachable from the API** |
+| Observatory UI | `apps/observatory/` | Next.js client with 4 routes (`/`, `/capture`, `/qc`, `/system-health`) |
 
 ---
 
 ## Verified capabilities
 
 Everything in this section is traceable to an executed CI run on `main` at commit
-**`502e20817d4319d6867090b7765fe35326973e67`**.
+**`666ade66f965df76097c557cdf419501b683db75`**.
 
 ### 1. R1 geospatial pipeline (executed, hash-verified)
 
@@ -103,16 +112,16 @@ That is roughly **68 km² of central Bengaluru** (HSR / Koramangala / Indiranaga
 ### 2. R1 evidence manifest
 
 Produced by `services/evidence/r1.py` in the `ZonePilot R1 Evidence` workflow. Values at
-`502e20817d4319d6867090b7765fe35326973e67`:
+`666ade66f965df76097c557cdf419501b683db75`:
 
 | Field | Value |
 | --- | --- |
-| `dataset_version` | `osm-b87981dd6e64.code-502e20817d43` |
-| `graph_version` | `1.1.0+fa711557c25b` |
+| `dataset_version` | `osm-bc92c2e263d3.code-666ade66f965` |
+| `graph_version` | `1.1.0+c0f22beaa7f2` |
 | `gold_schema_version` | `1.0.0` |
-| `osm_nodes` | 65,463 |
-| `osm_highway_ways` | 20,349 |
-| `pois` | 9,165 |
+| `osm_nodes` | 65,479 |
+| `osm_highway_ways` | 20,353 |
+| `pois` | 9,161 |
 | `h3_cells` | 94 (H3 resolution 8) |
 | `dq_status` | `PASS` |
 | OSRM image | pinned by digest `sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409` |
@@ -131,6 +140,11 @@ The evidence builder **re-hashes the artifacts itself** and refuses to emit a ma
 DQ status, or candidate code SHA fails to line up. See
 [`docs/EVIDENCE_MODEL.md`](docs/EVIDENCE_MODEL.md).
 
+> These counts and versions are **per-run, not fixed constants.** `dataset_version` embeds the source
+> extract hash and the candidate code SHA, `graph_version` embeds the derived graph topology hash, and
+> the OSM counts track whatever Geofabrik published that day. They change on every rebuild; only the
+> hash chain binding them together is invariant.
+
 ### 3. Authenticated read APIs
 
 Working, authenticated `GET` routes under `/api/v1` (`services/api/routers/observatory.py`):
@@ -142,6 +156,16 @@ Working, authenticated `GET` routes under `/api/v1` (`services/api/routers/obser
 - `/api/v1/datasets`
 - `/api/v1/data-health`
 - `/api/v1/evidence/{entity_type}/{entity_id}`
+
+Plus the release-identity gate in `services/api/routers/version.py`:
+
+- `/api/v1/version` — authenticated. Returns `200` **only** when the deployed application identity
+  (`ZONEPILOT_APP_VERSION`, a 40-hex `ZONEPILOT_GIT_SHA`, a semantic `ZONEPILOT_SCHEMA_VERSION`) is
+  tied to Gold and OSRM artifacts whose SHA-256 hashes it **recomputes and compares** on every
+  request. Placeholder, abbreviated, or floating identifiers are rejected. Every failure — missing
+  config, stale manifest, hash mismatch, failed DQ — is the same opaque, retryable `503
+  RELEASE_IDENTITY_UNAVAILABLE`, disclosing no path or value.
+  See [`docs/operations/RELEASE_IDENTITY.md`](docs/operations/RELEASE_IDENTITY.md).
 
 They serve the verified Gold/OSRM artifacts, not synthetic data. Full route reference, including the
 routes that deliberately return `501`, is in [`docs/API.md`](docs/API.md).
@@ -172,15 +196,34 @@ Details and known gaps: [`docs/SECURITY.md`](docs/SECURITY.md).
 covered by **9 tests** in `tests/temporal/test_temporal_foundations.py`. These are contracts only —
 no temporal data has ever been written through them.
 
-### 6. CI
+The same enum is the **single** evidence vocabulary in the system: `services/api/contracts/observatory.py`
+imports it rather than redefining it, and `apps/observatory/src/lib/api/types.ts` mirrors it as a
+closed TypeScript union. There is no second vocabulary anywhere in `services/api/`.
 
-All green on `main` at `502e2081`:
+### 6. Deterministic optimizer engine
+
+`services/zonepilot/optimization/` holds a deterministic OR-Tools CP-SAT robust facility-location
+solver (`contracts.py`, `_cp_sat.py`, `_worker.py`, `solver.py`). It runs CP-SAT in a subprocess
+worker, fails closed to a `SOLVER_ERROR` result rather than raising, and is covered by **23 tests** in
+`tests/optimization/test_facility_optimizer.py`, including brute-force optimality checks and a timeout
+path.
+
+**The engine is not wired to anything.** `POST /api/v1/optimizations` still returns `501
+NOT_IMPLEMENTED`, and no optimization has ever been executed through the product.
+
+### 7. CI
+
+All green on `main` at `666ade66`:
 
 `Node.js CI` · `Python CI` · `SQL Quality` · `Polyglot CI` · `ZonePilot Release Validation` ·
 `ZonePilot R1 Evidence` · `CodeQL`
 
-**116 pytest tests passing** on that commit. Security posture at the same point: **0 open CodeQL
-alerts, 0 secret-scanning alerts, 2 medium Dependabot alerts.**
+**176 pytest tests passing** (18 skipped, 1 deselected) on that commit. Security posture at the same
+point: **0 open CodeQL alerts, 0 secret-scanning alerts, 1 medium Dependabot alert.**
+
+`tests/execution/test_ci_contracts.py` additionally enforces the public-repository boundary as a test,
+not a convention: no public workflow may read a private provider secret, invoke an acquisition
+scheduler, hold `contents: write` or push while running on a schedule, or manage `data/rolling` state.
 
 ---
 
@@ -196,9 +239,10 @@ are explicitly non-usable for decisions:
 R1 artifacts are chained by SHA-256: source PBF -> clip -> roads/POIs -> Gold parquet -> OSRM graph
 bundle, with every link tied to the candidate code SHA.
 
-**Enforcement today is Python-only.** These classes are enforced by Pydantic contracts, not by
-database constraints. See [`docs/EVIDENCE_MODEL.md`](docs/EVIDENCE_MODEL.md) for the full model and
-the enforcement gaps.
+**Enforcement today is Python-only.** These classes are enforced by Pydantic contracts and by the
+API response types that import the same enum — but **not by any database constraint**. There is no
+`evidence_class` column, `CHECK`, enum type, or trigger in any merged migration. See
+[`docs/EVIDENCE_MODEL.md`](docs/EVIDENCE_MODEL.md) for the full model and the enforcement gaps.
 
 ---
 
@@ -270,18 +314,22 @@ npm run dev
 ## How to test
 
 ```bash
-# Full Python suite (116 passing on main @ 502e2081)
-python -m pytest -q
+# Full Python suite as CI runs it (176 passed, 18 skipped, 1 deselected on main @ 666ade66)
+python -m pytest -m "not r1_evidence" -q
 
 # Focused suites
 python -m pytest tests/temporal/ -q       # 9 temporal contract tests
 python -m pytest tests/api/ -q            # auth, JWT security, middleware, role attacks
 python -m pytest tests/evidence/ -q       # R1 evidence manifest validation
-python -m pytest tests/execution/ -q      # program-state and CI contract assertions
+python -m pytest tests/optimization/ -q   # 23 optimizer tests (needs ortools)
+python -m pytest tests/execution/ -q      # program state, CI boundary, dependency consistency
 
 # Lint
 python -m ruff check .
 ```
+
+The `r1_evidence` marker is deselected by default because those tests require Docker and a mounted
+artifact root; the `ZonePilot R1 Evidence` workflow is what runs them.
 
 Node-side checks (`npm run lint`, `npm run typecheck`, `npm test`) currently cover the **legacy
 OneMove** application. `apps/observatory` has **zero tests**.
@@ -293,8 +341,10 @@ OneMove** application. `apps/observatory` has **zero tests**.
 These are limitations, not roadmap items. Nothing here is partially working.
 
 **Data acquisition**
-- **No data acquisition has ever succeeded.** The scheduled acquisition workflows have failed
-  **113 out of 113 runs**.
+- **No data acquisition has ever succeeded. Zero temporal observations exist.** Every scheduled
+  acquisition run failed (113 of 113) before those four workflows were **removed from this public
+  repository** — the public repo no longer schedules private provider acquisition at all. Removing
+  them ended the failing runs; it did not produce any data.
 - **No traffic data and no weather data have been collected.** Collector modules exist
   (`services/collectors/traffic/tomtom`, `services/collectors/context/openmeteo.py`,
   `services/collectors/platforms/`) but have never produced a verified dataset.
@@ -304,26 +354,39 @@ These are limitations, not roadmap items. Nothing here is partially working.
 **Intelligence**
 - **No forecasting model.** Status: `ZONEPILOT_FORECAST_MODEL_NOT_TRAINED`.
 - **No uncertainty quantification and no conformal calibration.**
-- **Optimizer engine code exists, but `POST /api/v1/optimizations` returns `501 NOT_IMPLEMENTED`.**
-  No optimization has ever been run through the API.
+- **The optimizer engine is on `main` but unreachable from the product.**
+  `services/zonepilot/optimization/` is real, deterministic, and tested (23 tests), yet
+  `POST /api/v1/optimizations` still returns `501 NOT_IMPLEMENTED`. No optimization has ever been run
+  through the API. Shipping the engine did not ship the capability.
 - **No resilience engine, no counterfactual engine, no economics engine.**
 - **No decision ledger, no shadow operations, no experiment registry.**
 - **No LLM tool layer.**
 - Scenario routes are `501` / `404` stubs.
 
 **Deployment and durability**
-- **Nothing is deployed.** No ZonePilot backend is hosted anywhere.
-- `onemove-zonepilot.vercel.app` serves the **legacy OneMove marketplace**, not ZonePilot.
+- **No backend is deployed.** No ZonePilot API is hosted anywhere. The live Observatory has no API to
+  talk to.
+- The Observatory frontend **is** deployed at <https://zonepilot-observatory.vercel.app>, but
+  **Vercel has no GitHub connection** for this project — there is no push-to-deploy, and every deploy
+  is a manual upload. The deployed bundle is therefore not provably the current `main`.
+- `onemove-zonepilot.vercel.app` still serves the **legacy OneMove marketplace**, not ZonePilot.
+- A hosted Supabase project exists (ref `puygqvnhwsjkspoprfkb`, `ACTIVE_HEALTHY`, `ap-southeast-1`,
+  JWKS serving `ES256`). It is provisioned, not integrated into a running ZonePilot deployment.
+- A Sentry org (`onemove`) exists and a test event was proven received, but **the Observatory has zero
+  Sentry instrumentation** — no `@sentry/nextjs` dependency and no config — so **no real frontend
+  error will ever reach Sentry.** Only the FastAPI app has a Sentry path
+  (`services/api/core/telemetry.py`, gated on `SENTRY_DSN`), and that app is not deployed.
 - **No durable artifact storage.** R1 evidence lives only in **GitHub Actions artifacts with 30-day
   retention**. After 30 days the evidence for a given commit is gone unless it was regenerated.
 
 **Coverage and correctness gaps**
 - Pilot coverage is **~68 km² of central Bengaluru**, not a city and not multiple cities.
-- Observatory UI has only **3 routes** (`/`, `/capture`, `/qc`) and **zero tests**.
+- Observatory UI has only **4 routes** (`/`, `/capture`, `/qc`, `/system-health`) and **zero tests**.
 - **Role checks are inert** — `required_role` is only ever set in a test, never in application code.
-- **`workspace_id` exists in no migration**, so multi-tenant isolation is not enforceable at the API
-  layer. See [`docs/SECURITY.md`](docs/SECURITY.md).
-- Evidence classes are enforced by **Python contracts only, not by database constraints**.
+- **`workspace_id` exists in no merged migration**, so multi-tenant isolation is not enforceable at
+  the API layer. See [`docs/SECURITY.md`](docs/SECURITY.md).
+- Evidence classes are enforced by **Python and TypeScript contracts only, not by database
+  constraints**.
 
 ---
 
@@ -335,6 +398,8 @@ These are limitations, not roadmap items. Nothing here is partially working.
 | [`docs/EVIDENCE_MODEL.md`](docs/EVIDENCE_MODEL.md) | The 9 evidence classes, how they are enforced, and the R1 hash chain |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Auth model, JWKS verification, rate limiting, repo boundary, known gaps |
 | [`docs/API.md`](docs/API.md) | Route-by-route `/api/v1` reference, working vs `501` |
+| [`docs/operations/RELEASE_IDENTITY.md`](docs/operations/RELEASE_IDENTITY.md) | The `GET /api/v1/version` release gate and its required deployment configuration |
+| [`docs/operations/DEPLOYMENT_STATE.md`](docs/operations/DEPLOYMENT_STATE.md) | What is actually deployed, what is only provisioned, and what is not wired |
 | [`docs/execution/ZONEPILOT_PROGRAM_STATE.md`](docs/execution/ZONEPILOT_PROGRAM_STATE.md) | Live program state and blockers |
 
 Files matching `docs/*_REPORT.md` are **legacy OneMove** artifacts retained for history. They do not
