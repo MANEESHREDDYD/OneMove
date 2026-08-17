@@ -1,11 +1,12 @@
 "use client";
 
 import { GeoJSON, MapContainer, TileLayer } from "react-leaflet";
-import type { Feature, FeatureCollection, Polygon } from "geojson";
+import type { Feature, FeatureCollection, Polygon, Position } from "geojson";
 import { circleMarker } from "leaflet";
 import type { PathOptions } from "leaflet";
 
 import type { MapLayer, ZoneSummary } from "../../lib/api/types";
+import { MapLayerSummary } from "./layer-summary";
 
 interface NetworkMapProps {
   layers: MapLayer[];
@@ -41,10 +42,27 @@ const cellStyle: PathOptions = {
   weight: 1,
 };
 
-function zoneCollection(zones: ZoneSummary[]): FeatureCollection<Polygon> {
-  return {
-    type: "FeatureCollection",
-    features: zones.map((zone) => ({
+/**
+ * A GeoJSON linear ring needs at least three distinct vertices plus an explicit
+ * closing vertex. A zone whose boundary is empty or degenerate cannot be drawn,
+ * so it is dropped rather than emitting invalid geometry (or dereferencing a
+ * missing first vertex, which previously threw).
+ */
+function zoneRing(zone: ZoneSummary): Position[] | null {
+  const first = zone.boundary[0];
+  if (!first || zone.boundary.length < 3) return null;
+  // API coordinates are [latitude, longitude]; GeoJSON is [longitude, latitude].
+  const ring: Position[] = zone.boundary.map(([latitude, longitude]) => [longitude, latitude]);
+  ring.push([first[1], first[0]]);
+  return ring;
+}
+
+export function zoneCollection(zones: ZoneSummary[]): FeatureCollection<Polygon> {
+  const features: Feature<Polygon>[] = [];
+  for (const zone of zones) {
+    const ring = zoneRing(zone);
+    if (!ring) continue;
+    features.push({
       type: "Feature",
       properties: {
         zone_id: zone.zone_id,
@@ -54,16 +72,10 @@ function zoneCollection(zones: ZoneSummary[]): FeatureCollection<Polygon> {
         observed_at: zone.observed_at,
         availability: "AVAILABLE",
       },
-      geometry: {
-        type: "Polygon",
-        // API coordinates are [latitude, longitude]; GeoJSON is [longitude, latitude].
-        coordinates: [[
-          ...zone.boundary.map(([latitude, longitude]) => [longitude, latitude]),
-          [zone.boundary[0][1], zone.boundary[0][0]],
-        ]],
-      },
-    })),
-  };
+      geometry: { type: "Polygon", coordinates: [ring] },
+    });
+  }
+  return { type: "FeatureCollection", features };
 }
 
 function escapeHtml(value: unknown): string {
@@ -134,7 +146,8 @@ export default function NetworkMap({ layers, zones }: NetworkMapProps) {
         <GeoJSON
           data={zoneCollection(zones)}
           onEachFeature={(feature, layer) => {
-            const properties = feature.properties;
+            // GeoJSON `properties` is nullable by specification.
+            const properties = feature.properties ?? {};
             layer.bindPopup(
               `<strong>${escapeHtml(properties.zone_id)}</strong><br>` +
               `Source: ${escapeHtml(properties.source)}<br>` +
@@ -147,60 +160,7 @@ export default function NetworkMap({ layers, zones }: NetworkMapProps) {
           style={cellStyle}
         />
       </MapContainer>
-      <div className="grid gap-px border-t border-slate-300 bg-slate-300 sm:grid-cols-2 lg:grid-cols-3">
-        <LayerStatus availability="AVAILABLE" label="Pilot boundary" source="ZonePilot pilot BBOX" />
-        <LayerStatus availability="AVAILABLE" label="H3 R8 cells" source="Verified Gold Parquet" />
-        <EvidenceLayerStatus label="Road geometries" layer={layers.find((item) => item.layer === "roads")} />
-        <EvidenceLayerStatus label="Intersections" layer={layers.find((item) => item.layer === "intersections")} />
-        <EvidenceLayerStatus label="POIs" layer={layers.find((item) => item.layer === "pois")} />
-        <LayerStatus availability="UNAVAILABLE" label="Traffic" source="No zone-linked traffic artifact" />
-      </div>
-    </div>
-  );
-}
-
-function EvidenceLayerStatus({ label, layer }: { label: string; layer?: MapLayer }) {
-  const availability = layer?.state ?? "UNAVAILABLE";
-  const count = layer
-    ? `${layer.returned_feature_count.toLocaleString()} of ${layer.total_feature_count.toLocaleString()} features`
-    : "No mounted artifact";
-  // An UNAVAILABLE layer has no observation, so evidence_class is null.
-  // Interpolating it directly would render the literal string "null".
-  const evidence =
-    layer?.state === "AVAILABLE" && layer.evidence_class
-      ? layer.evidence_class
-      : "no evidence class";
-  const provenance = layer
-    ? `${layer.source} · ${layer.source_version ?? "unversioned"} · ${layer.observed_at ?? "timestamp unavailable"} · ${evidence}`
-    : "Layer metadata unavailable";
-  return (
-    <LayerStatus
-      availability={availability}
-      label={label}
-      source={`${count}. ${provenance}`}
-    />
-  );
-}
-
-function LayerStatus({
-  availability,
-  label,
-  source,
-}: {
-  availability: "AVAILABLE" | "UNAVAILABLE";
-  label: string;
-  source: string;
-}) {
-  const available = availability === "AVAILABLE";
-  return (
-    <div className="bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold">{label}</p>
-        <span className={`rounded-full px-2 py-1 text-[0.65rem] font-bold ${available ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>
-          {availability}
-        </span>
-      </div>
-      <p className="mt-2 text-xs leading-5 text-slate-500">{source}</p>
+      <MapLayerSummary layers={layers} zones={zones} />
     </div>
   );
 }
