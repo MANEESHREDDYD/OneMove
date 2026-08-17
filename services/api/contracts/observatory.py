@@ -1,8 +1,41 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictFloat, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictFloat, StrictInt, StrictStr, model_validator
+
+# The evidence taxonomy is owned by the temporal contracts module. The API layer
+# must never define a second vocabulary; it re-exports the canonical enum so
+# that a non-canonical string cannot be serialised out of an API response.
+from services.temporal.contracts import EvidenceClass
+
+__all__ = [
+    "DQResult",
+    "DataHealthResponse",
+    "DatasetAvailability",
+    "DatasetListResponse",
+    "DatasetRecord",
+    "EvidenceClass",
+    "EvidenceRecord",
+    "EvidenceResponse",
+    "FieldEvidence",
+    "MapLayer",
+    "MapLayerListResponse",
+    "NetworkMetrics",
+    "NetworkSnapshot",
+    "NetworkSnapshotListResponse",
+    "NetworkSnapshotResponse",
+    "Provenance",
+    "ProviderHealth",
+    "ProviderState",
+    "StrictContract",
+    "UnavailableLayer",
+    "ZoneListResponse",
+    "ZoneState",
+    "ZoneStateResponse",
+    "ZoneStaticState",
+    "ZoneSummary",
+]
 
 
 class StrictContract(BaseModel):
@@ -30,7 +63,7 @@ class DQResult(str, Enum):
 
 
 class Provenance(StrictContract):
-    evidence_class: StrictStr
+    evidence_class: EvidenceClass
     source: StrictStr
     source_version: StrictStr | None
     observed_at: datetime | None
@@ -78,10 +111,18 @@ class ZoneStaticState(StrictContract):
 
 
 class UnavailableLayer(StrictContract):
+    """A layer that carries no data yet.
+
+    ``state`` — not ``evidence_class`` — is the availability vocabulary. There
+    is no evidence to classify when there is no observation, so
+    ``evidence_class`` is explicitly absent (``null``) rather than borrowing a
+    value that is not a member of :class:`EvidenceClass`.
+    """
+
     layer: StrictStr
     state: Literal["UNAVAILABLE"] = "UNAVAILABLE"
     reason: StrictStr
-    evidence_class: Literal["UNAVAILABLE"] = "UNAVAILABLE"
+    evidence_class: None = None
 
 
 class ZoneState(Provenance):
@@ -121,13 +162,30 @@ class NetworkSnapshotResponse(StrictContract):
 
 
 class MapLayer(Provenance):
+    """A map layer, which may or may not have a mounted artifact behind it.
+
+    ``state`` is the availability vocabulary. ``evidence_class`` narrows to
+    ``None`` exactly when the layer is ``UNAVAILABLE``: an unmounted artifact
+    produces no evidence, so it gets no evidence class instead of a made-up
+    one.
+    """
+
     layer: Literal["roads", "intersections", "pois"]
     state: Literal["AVAILABLE", "UNAVAILABLE"]
+    evidence_class: EvidenceClass | None
     complete: StrictBool
     total_feature_count: StrictInt
     returned_feature_count: StrictInt
     selection_policy: StrictStr
     geojson: dict[str, Any]
+
+    @model_validator(mode="after")
+    def _availability_matches_evidence(self) -> Self:
+        if self.state == "UNAVAILABLE" and self.evidence_class is not None:
+            raise ValueError("An UNAVAILABLE map layer must not claim an evidence class")
+        if self.state == "AVAILABLE" and self.evidence_class is None:
+            raise ValueError("An AVAILABLE map layer must declare its evidence class")
+        return self
 
 
 class MapLayerListResponse(StrictContract):
