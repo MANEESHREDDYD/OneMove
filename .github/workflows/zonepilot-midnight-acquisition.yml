@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout private execution repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Resolve SHA to pin
         id: resolve-sha
@@ -32,7 +32,7 @@ jobs:
           echo "Expected SHA: $PINNED_SHA"
 
       - name: Checkout public ZonePilot code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: MANEESHREDDYD/OneMove
           ref: ${{ env.PINNED_SHA }}
@@ -50,7 +50,7 @@ jobs:
           fi
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -74,7 +74,7 @@ jobs:
         run: python -m services.collectors.bundle_daily
 
       - name: Upload Daily Reconciled Bundles (365-day retention)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: zp-daily-bundle-${{ github.run_id }}
           path: zonepilot-code/data_root/private/official/bundles/
