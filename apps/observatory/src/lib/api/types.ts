@@ -3,8 +3,21 @@ import type { FeatureCollection } from "geojson";
 export type ProviderState = "FRESH" | "DEGRADED" | "STALE" | "UNAVAILABLE";
 export type DatasetAvailability = "AVAILABLE" | "EMPTY" | "FAILED" | "UNAVAILABLE";
 
+/** Canonical taxonomy. Mirrors services.temporal.contracts.EvidenceClass. */
+export type EvidenceClass =
+  | "OBSERVED"
+  | "PUBLIC_OFFICIAL"
+  | "PUBLIC_GEOGRAPHIC"
+  | "PROVIDER_ESTIMATED"
+  | "DERIVED"
+  | "SIMULATED"
+  | "ASSUMPTION"
+  | "STAGING_DO_NOT_USE"
+  | "TEST_ONLY";
+
 export interface Provenance {
-  evidence_class: string;
+  /** Null when there is no observation to classify. Availability lives in `state`. */
+  evidence_class: EvidenceClass | null;
   source: string;
   source_version: string | null;
   observed_at: string | null;
