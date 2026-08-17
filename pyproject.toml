@@ -24,7 +24,8 @@ dependencies = [
     "requests>=2.30.0",
     "supabase>=2.3.0",
     "python-dotenv>=1.0.0",
-    "sentry-sdk[fastapi]>=2.0.0,<3"
+    "sentry-sdk[fastapi]>=2.0.0,<3",
+    "ortools>=9.15.6755,<10"
 ]
 
 [project.optional-dependencies]
