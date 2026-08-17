@@ -178,7 +178,7 @@ export default function ObserverHome() {
                   <h2 className="text-xl font-semibold" id="provider-health-title">Provider data health</h2>
                   <p className="mt-1 text-sm text-slate-600">Calculated from collection manifests and configured freshness SLAs.</p>
                 </div>
-                <p className="text-xs text-slate-500">Evaluated {formatTimestamp(data.evaluatedAt)}</p>
+                <p className="text-xs text-slate-600">Evaluated {formatTimestamp(data.evaluatedAt)}</p>
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {data.providers.map((provider) => (
@@ -215,13 +215,15 @@ export default function ObserverHome() {
                     <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" key={zone.zone_id}>
                       <div className="flex items-start justify-between gap-3">
                         <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-900">H3-R{zone.resolution}</span>
-                        <span className="text-xs text-slate-500">{zone.evidence_class}</span>
+                        {/* Null by contract when there is no observation to classify. */}
+                        <span className="text-xs text-slate-600">{zone.evidence_class ?? "No evidence class"}</span>
                       </div>
                       <h3 className="mt-4 break-all font-mono text-base font-semibold">{zone.zone_id}</h3>
-                      <p className="mt-2 text-xs leading-5 text-slate-500">
+                      <p className="mt-2 text-xs leading-5 text-slate-600">
                         Source {zone.source} / {zone.boundary.length} boundary vertices
                       </p>
                       <Link
+                        aria-label={`Capture evidence for zone ${zone.zone_id}`}
                         className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-blue-700 px-3 text-sm font-semibold text-blue-800 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                         href={`/capture?zone_id=${encodeURIComponent(zone.zone_id)}`}
                       >
@@ -231,7 +233,7 @@ export default function ObserverHome() {
                   ))}
                 </div>
               )}
-              {data.zones.length > 24 && <p className="mt-4 text-center text-sm text-slate-500">Showing 24 of {data.zones.length} verified cells.</p>}
+              {data.zones.length > 24 && <p className="mt-4 text-center text-sm text-slate-600">Showing 24 of {data.zones.length} verified cells.</p>}
             </section>
           </>
         )}
