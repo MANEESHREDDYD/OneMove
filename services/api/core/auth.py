@@ -1,9 +1,13 @@
 import os
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum
 from functools import lru_cache
 from urllib.parse import urljoin
 
 import jwt
-from fastapi import HTTPException, Request, Security
+from fastapi import Depends, HTTPException, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from supabase import Client, create_client
@@ -116,25 +120,230 @@ def verify_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+# ---------------------------------------------------------------------------
+# Workspace tenancy
+# ---------------------------------------------------------------------------
+
+
+class WorkspaceRole(str, Enum):
+    """Mirrors the zonepilot_workspace_role enum created by migration
+    20260817000000_zonepilot_temporal_and_tenancy.sql."""
+
+    OWNER = "OWNER"
+    ADMIN = "ADMIN"
+    RESEARCHER = "RESEARCHER"
+    VIEWER = "VIEWER"
+    INTEGRATION_USER = "INTEGRATION_USER"
+    COLLECTOR = "COLLECTOR"
+
+
+#: Roles that may administer a workspace: change its metadata or its membership.
+WORKSPACE_ADMIN_ROLES: frozenset[WorkspaceRole] = frozenset(
+    {WorkspaceRole.OWNER, WorkspaceRole.ADMIN}
+)
+
+#: Roles that may read the workspace evidence corpus. COLLECTOR is deliberately
+#: excluded: it is a write-only acquisition identity, so it must not be able to
+#: read the corpus or the workspace's user directory. The same split is encoded
+#: in the RLS policies, so the two layers agree.
+WORKSPACE_READ_ROLES: frozenset[WorkspaceRole] = frozenset(
+    {
+        WorkspaceRole.OWNER,
+        WorkspaceRole.ADMIN,
+        WorkspaceRole.RESEARCHER,
+        WorkspaceRole.VIEWER,
+        WorkspaceRole.INTEGRATION_USER,
+    }
+)
+
+
+@dataclass(frozen=True)
+class WorkspacePrincipal:
+    """A trusted (user, workspace, role) triple.
+
+    Every field is resolved server-side from the verified session subject and
+    the workspace_members table. Nothing here is taken from a request header or
+    from an unverified token claim.
+    """
+
+    user_id: str
+    workspace_id: str
+    role: WorkspaceRole
+
+    @property
+    def is_workspace_admin(self) -> bool:
+        return self.role in WORKSPACE_ADMIN_ROLES
+
+
+@lru_cache(maxsize=4)
+def _membership_client(url: str, service_key: str) -> Client:
+    return create_client(url, service_key)
+
+
+def service_client() -> Client:
+    """RLS-bypassing client for server-side tenancy work.
+
+    Membership has to be read with an identity that is not itself subject to
+    the workspace policies, otherwise the answer to "is this user a member"
+    would depend on the very membership being determined.
+
+    Because this client bypasses RLS, every call site must scope its query by a
+    workspace id that came out of :func:`resolve_workspace_principal` and never
+    by a value taken from the request.
+    """
+
+    url = os.environ.get("SUPABASE_URL")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not service_key:
+        raise _membership_unavailable()
+    try:
+        return _membership_client(url, service_key)
+    except Exception as exc:
+        raise _membership_unavailable() from exc
+
+
+def _membership_unavailable() -> HTTPException:
+    # Fail closed. A membership lookup that cannot be completed is not a reason
+    # to serve workspace data; it is a reason to refuse.
+    return HTTPException(status_code=403, detail="Workspace membership could not be verified")
+
+
+def workspace_memberships(user_id: str) -> tuple[WorkspacePrincipal, ...]:
+    """Return every workspace the verified subject provably belongs to."""
+
+    client = service_client()
+    try:
+        response = (
+            client.table("workspace_members")
+            .select("workspace_id, role")
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as exc:
+        raise _membership_unavailable() from exc
+
+    memberships: list[WorkspacePrincipal] = []
+    for row in response.data or []:
+        try:
+            role = WorkspaceRole(row["role"])
+        except (KeyError, ValueError):
+            # An unknown role is not a role. Skip rather than widen access.
+            continue
+        memberships.append(
+            WorkspacePrincipal(user_id=user_id, workspace_id=str(row["workspace_id"]), role=role)
+        )
+    return tuple(memberships)
+
+
+def _requested_workspace_id(request: Request, payload: dict) -> str | None:
+    """Read the *selector* for which workspace the caller wants to act in.
+
+    A header or a token claim can only ever select among workspaces the caller
+    already belongs to; membership is verified separately and server-side. A
+    value that is not even a UUID is rejected here so a malformed selector can
+    never reach the database.
+    """
+
+    candidate = request.headers.get("x-workspace-id") or payload.get("workspace_id")
+    if not isinstance(candidate, str) or not candidate.strip():
+        return None
+    try:
+        return str(uuid.UUID(candidate.strip()))
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid workspace selector")
+
+
+def resolve_workspace_principal(request: Request, payload: dict) -> WorkspacePrincipal:
+    """Resolve the trusted workspace context for a verified session.
+
+    Fails closed on every ambiguous or unproven case: no membership, a selector
+    naming a workspace the caller does not belong to, or several memberships
+    with nothing selecting between them.
+    """
+
+    user_id = payload.get("sub")
+    if not isinstance(user_id, str) or not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token: missing sub")
+
+    requested = _requested_workspace_id(request, payload)
+    memberships = workspace_memberships(user_id)
+
+    if requested is not None:
+        for membership in memberships:
+            if membership.workspace_id == requested:
+                return membership
+        raise HTTPException(status_code=403, detail="Not a member of the requested workspace")
+
+    if len(memberships) == 1:
+        return memberships[0]
+    if not memberships:
+        raise HTTPException(status_code=403, detail="No workspace membership")
+    raise HTTPException(status_code=403, detail="Workspace selection required")
+
+
 def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Security(security)) -> dict:
+    """Verify the session and, when a workspace is selected, prove membership.
+
+    The previous implementation compared a client header against an unverified
+    token claim and skipped the check whenever either was absent, and consulted
+    a ``request.state.required_role`` that no production code ever set. Both
+    branches were unreachable in production. They are gone: the only workspace
+    decision made here is a server-side membership lookup, and role checks live
+    in :func:`require_workspace_role`, which real routes depend on.
+    """
+
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    """Extracts payload and asserts Workspace and Role access if required by headers."""
     payload = verify_token(credentials.credentials)
-    
-    # Assert Workspace boundaries if passed
-    req_workspace = request.headers.get("x-workspace-id")
-    token_workspace = payload.get("workspace_id")
-    if req_workspace and token_workspace and req_workspace != token_workspace:
-        raise HTTPException(status_code=403, detail="Invalid token: wrong workspace")
 
-    # Assert Role boundaries
-    token_role = payload.get("role", "anon")
-    req_role = getattr(request.state, "required_role", None)
-    if req_role and token_role != req_role:
-        raise HTTPException(status_code=403, detail="Invalid token: wrong role")
+    # Only pay for the membership lookup when the caller actually selected a
+    # workspace. Routes that need a workspace unconditionally depend on
+    # get_workspace_principal instead.
+    if request.headers.get("x-workspace-id") or payload.get("workspace_id"):
+        principal = resolve_workspace_principal(request, payload)
+        request.state.workspace_principal = principal
+        return {
+            **payload,
+            "workspace_id": principal.workspace_id,
+            "workspace_role": principal.role.value,
+        }
 
     return payload
+
+
+def get_workspace_principal(
+    request: Request, credentials: HTTPAuthorizationCredentials = Security(security)
+) -> WorkspacePrincipal:
+    """Dependency for any route whose data belongs to exactly one workspace."""
+
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    payload = verify_token(credentials.credentials)
+    principal = resolve_workspace_principal(request, payload)
+    request.state.workspace_principal = principal
+    return principal
+
+
+def require_workspace_role(
+    *allowed: WorkspaceRole,
+) -> Callable[[WorkspacePrincipal], WorkspacePrincipal]:
+    """Build a dependency that admits only the listed workspace roles."""
+
+    permitted = frozenset(allowed)
+    if not permitted:
+        raise ValueError("require_workspace_role needs at least one role")
+
+    def dependency(
+        principal: WorkspacePrincipal = Depends(get_workspace_principal),
+    ) -> WorkspacePrincipal:
+        if principal.role not in permitted:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Role {principal.role.value} is not permitted for this operation",
+            )
+        return principal
+
+    return dependency
 
 
 def get_participant_id(credentials: HTTPAuthorizationCredentials = Security(security)) -> str:
