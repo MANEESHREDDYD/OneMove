@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ComponentType } from "react";
-import { Activity, Database, MapPin, RefreshCw, Search, TriangleAlert } from "lucide-react";
+import { Activity, Database, MapPin, RefreshCw, Search, ServerCog, TriangleAlert } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 
@@ -104,6 +104,9 @@ export default function ObserverHome() {
             </p>
           </div>
           <nav aria-label="Observatory actions" className="flex flex-wrap gap-2">
+            <Link className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" href="/system-health">
+              <ServerCog aria-hidden="true" className="h-4 w-4" /> System health
+            </Link>
             {role === "OWNER" && (
               <Link className="min-h-11 rounded-lg border border-slate-400 bg-white px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" href="/qc">
                 Study QC

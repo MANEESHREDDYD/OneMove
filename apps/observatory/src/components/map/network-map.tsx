@@ -164,8 +164,14 @@ function EvidenceLayerStatus({ label, layer }: { label: string; layer?: MapLayer
   const count = layer
     ? `${layer.returned_feature_count.toLocaleString()} of ${layer.total_feature_count.toLocaleString()} features`
     : "No mounted artifact";
+  // An UNAVAILABLE layer has no observation, so evidence_class is null.
+  // Interpolating it directly would render the literal string "null".
+  const evidence =
+    layer?.state === "AVAILABLE" && layer.evidence_class
+      ? layer.evidence_class
+      : "no evidence class";
   const provenance = layer
-    ? `${layer.source} · ${layer.source_version ?? "unversioned"} · ${layer.observed_at ?? "timestamp unavailable"} · ${layer.evidence_class}`
+    ? `${layer.source} · ${layer.source_version ?? "unversioned"} · ${layer.observed_at ?? "timestamp unavailable"} · ${evidence}`
     : "Layer metadata unavailable";
   return (
     <LayerStatus
