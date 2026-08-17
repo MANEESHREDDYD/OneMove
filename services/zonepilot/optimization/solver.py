@@ -17,6 +17,12 @@ from services.zonepilot.optimization.contracts import (
     ScenarioInputLineage,
     problem_fingerprint,
 )
+from services.zonepilot.optimization.telemetry import SolveTelemetry
+
+# Imported lazily-safe: `_worker` only pulls in OR-Tools under ``__main__``
+# execution, so naming its flag here does not drag the native runtime into the
+# API process.
+LEGACY_TIE_BREAK_FLAG = "--legacy-tie-break"
 
 _WORKER_STARTUP_GRACE_SECONDS = 10.0
 
@@ -69,12 +75,31 @@ def optimize_facilities(problem: OptimizationProblem) -> OptimizationResult:
     timeout become a typed fail-closed response instead of taking down the host.
     """
 
+    return optimize_facilities_with_telemetry(problem)[0]
+
+
+def optimize_facilities_with_telemetry(
+    problem: OptimizationProblem,
+    *,
+    legacy_tie_break: bool = False,
+) -> tuple[OptimizationResult, SolveTelemetry | None]:
+    """Solve in isolation and also surface the worker's measured run cost.
+
+    Telemetry is ``None`` whenever no trustworthy measurement exists — a crashed
+    or timed-out worker cannot report its own cost. The decision path is
+    unchanged: a missing or malformed telemetry document never upgrades or
+    downgrades the fail-closed result.
+    """
+
     environment = os.environ.copy()
     environment["PYTHONHASHSEED"] = "0"
     timeout = problem.solver_settings.max_time_seconds + _WORKER_STARTUP_GRACE_SECONDS
+    command = [sys.executable, "-m", "services.zonepilot.optimization._worker"]
+    if legacy_tie_break:
+        command.append(LEGACY_TIE_BREAK_FLAG)
     try:
         completed = subprocess.run(
-            [sys.executable, "-m", "services.zonepilot.optimization._worker"],
+            command,
             input=problem.model_dump_json(),
             capture_output=True,
             text=True,
@@ -87,13 +112,13 @@ def optimize_facilities(problem: OptimizationProblem) -> OptimizationResult:
             problem,
             status=OptimizationStatus.TIME_LIMIT,
             message="The isolated solver exceeded its hard process deadline; no decision is returned.",
-        )
+        ), None
     if completed.returncode != 0:
         return _closed_result(
             problem,
             status=OptimizationStatus.SOLVER_ERROR,
             message="The isolated solver process failed; no decision is returned.",
-        )
+        ), None
     try:
         result = OptimizationResult.model_validate_json(completed.stdout)
     except ValidationError:
@@ -101,12 +126,21 @@ def optimize_facilities(problem: OptimizationProblem) -> OptimizationResult:
             problem,
             status=OptimizationStatus.SOLVER_ERROR,
             message="The isolated solver returned an invalid result contract; no decision is returned.",
-        )
+        ), None
     expected_fingerprint = problem_fingerprint(problem)
     if result.problem_id != problem.problem_id or result.problem_fingerprint != expected_fingerprint:
         return _closed_result(
             problem,
             status=OptimizationStatus.SOLVER_ERROR,
             message="The isolated solver result did not match the requested problem lineage.",
-        )
-    return result
+        ), None
+    return result, _parse_telemetry(completed.stderr)
+
+
+def _parse_telemetry(raw: str | None) -> SolveTelemetry | None:
+    if not raw:
+        return None
+    try:
+        return SolveTelemetry.model_validate_json(raw.strip())
+    except ValidationError:
+        return None
