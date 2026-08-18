@@ -28,7 +28,7 @@ interface ObservatoryData {
 }
 
 const NetworkMap = dynamic(() => import("../components/map/network-map"), {
-  loading: () => <div className="h-[32rem] animate-pulse rounded-xl border border-slate-300 bg-slate-200" aria-label="Loading network map" />,
+  loading: () => <div className="h-[32rem] animate-pulse motion-reduce:animate-none rounded-xl border border-slate-300 bg-slate-200" aria-label="Loading network map" />,
   ssr: false,
 });
 
@@ -121,7 +121,7 @@ export default function ObserverHome() {
         {loading && (
           <section aria-live="polite" className="mt-8 grid gap-4 sm:grid-cols-3">
             {["zones", "datasets", "providers"].map((item) => (
-              <div className="h-28 animate-pulse rounded-xl border border-slate-200 bg-white" key={item}>
+              <div className="h-28 animate-pulse motion-reduce:animate-none rounded-xl border border-slate-200 bg-white" key={item}>
                 <span className="sr-only">Loading {item}</span>
               </div>
             ))}

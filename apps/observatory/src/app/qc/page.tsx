@@ -1,99 +1,116 @@
-import React from "react";
-import { Activity, AlertTriangle, CheckCircle, Clock, Copy, ListX } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, TriangleAlert } from "lucide-react";
 
-interface StatCardProps {
-  title: string;
-  value: number;
-  icon: React.ComponentType<{ className?: string }>;
-  colorClass: string;
-}
+export const metadata = {
+  title: "Study operations QC · ZonePilot Observatory",
+};
 
-function StatCard({ title, value, icon: Icon, colorClass }: StatCardProps) {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col items-center justify-center text-center">
-      <Icon className={`w-8 h-8 mb-2 ${colorClass}`} />
-      <div className="text-2xl font-bold text-gray-800">{value}</div>
-      <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mt-1">{title}</div>
-    </div>
-  );
-}
+/**
+ * Study operations QC.
+ *
+ * This screen previously rendered hardcoded counts (expected/received/missing,
+ * per-participant completion, collector status) as though they were live
+ * telemetry. No QC endpoint exists: the ZonePilot API exposes zones, network
+ * snapshots, map layers, datasets, data-health, evidence and version, and
+ * nothing that reports study operations. Displaying invented numbers on a page
+ * captioned "real-time" is worse than displaying nothing, because a reader
+ * cannot tell the difference between a fabricated 142 and a measured one.
+ *
+ * Until a QC endpoint exists this route states, explicitly, that the capability
+ * is not available. It renders no counts at all.
+ */
+
+const UNAVAILABLE_MEASURES = [
+  {
+    group: "Probe collection",
+    measures: ["Expected", "Received", "Missing", "Late", "Duplicates", "Rejected", "Superseded"],
+  },
+  { group: "Inter-rater reliability", measures: ["Paired assignments", "Agreement"] },
+  { group: "Participant completion", measures: ["Per-participant completion rate"] },
+  { group: "Environmental collectors", measures: ["Per-provider run status and recency"] },
+];
 
 export default function OwnerQCScreen() {
-  const stats = {
-    expected: 150,
-    received: 142,
-    missing: 8,
-    late: 12,
-    duplicates: 2,
-    rejected: 4,
-    superseded: 6,
-    interRaterPairs: 15
-  };
-
-  const participantCompletion = [
-    { id: "P-101", completion: "100%" },
-    { id: "P-102", completion: "92%" },
-    { id: "P-103", completion: "45%" }
-  ];
-
-  const collectorHealth = [
-    { provider: "Open-Meteo", status: "HEALTHY", lastRun: "2 mins ago" },
-    { provider: "TomTom (Disabled)", status: "OFFLINE", lastRun: "N/A" }
-  ];
-
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold">Study Operations QC</h1>
-        <p className="text-sm text-gray-600">Real-time observational telemetry</p>
-      </header>
+    <main className="min-h-screen bg-slate-100 px-4 py-6 text-slate-950 sm:px-6 lg:px-8" id="main-content">
+      <div className="mx-auto max-w-4xl">
+        <header className="border-b border-slate-300 pb-6">
+          <Link
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-blue-800 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+            href="/"
+          >
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" /> Observatory
+          </Link>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Study operations QC</h1>
+          <p className="mt-2 text-sm text-slate-700">
+            Collection completeness and inter-rater reliability for the pilot study.
+          </p>
+        </header>
 
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4 text-gray-800">Probe Collection Status</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard title="Expected" value={stats.expected} icon={Activity} colorClass="text-blue-500" />
-          <StatCard title="Received" value={stats.received} icon={CheckCircle} colorClass="text-green-500" />
-          <StatCard title="Missing" value={stats.missing} icon={ListX} colorClass="text-red-500" />
-          <StatCard title="Late" value={stats.late} icon={Clock} colorClass="text-orange-500" />
-          <StatCard title="Duplicates" value={stats.duplicates} icon={Copy} colorClass="text-purple-500" />
-          <StatCard title="Rejected" value={stats.rejected} icon={AlertTriangle} colorClass="text-red-600" />
-          <StatCard title="Superseded" value={stats.superseded} icon={Clock} colorClass="text-gray-500" />
-          <StatCard title="IRR Pairs" value={stats.interRaterPairs} icon={Activity} colorClass="text-teal-500" />
-        </div>
-      </section>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <section className="bg-white rounded-xl shadow-sm border p-4">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800">Participant Completion</h2>
-          <div className="space-y-3">
-            {participantCompletion.map(p => (
-              <div key={p.id} className="flex justify-between items-center border-b pb-2 last:border-0">
-                <span className="font-medium">{p.id}</span>
-                <span className="bg-blue-50 text-blue-800 text-sm font-semibold px-2.5 py-0.5 rounded">
-                  {p.completion}
-                </span>
+        <section aria-labelledby="qc-status-title" className="mt-8">
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-950" role="status">
+            <div className="flex items-start gap-3">
+              <TriangleAlert aria-hidden="true" className="mt-0.5 h-6 w-6 shrink-0" />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide">QC telemetry unavailable</p>
+                <h2 className="mt-1 text-lg font-semibold" id="qc-status-title">
+                  No study operations data is being reported
+                </h2>
+                <p className="mt-2 text-sm leading-6">
+                  The ZonePilot API does not yet expose a study operations endpoint, so there are no
+                  measured QC counts to display. This screen intentionally shows no figures rather
+                  than placeholder ones: every number here would be invented, and an invented count
+                  is indistinguishable from a real one once it is on the page.
+                </p>
               </div>
-            ))}
+            </div>
           </div>
         </section>
 
-        <section className="bg-white rounded-xl shadow-sm border p-4">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800">Environmental Collectors</h2>
-          <div className="space-y-3">
-            {collectorHealth.map(c => (
-              <div key={c.provider} className="flex flex-col border-b pb-2 last:border-0">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-medium">{c.provider}</span>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded ${c.status === 'HEALTHY' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                    {c.status}
-                  </span>
-                </div>
-                <span className="text-xs text-gray-500">Last run: {c.lastRun}</span>
-              </div>
-            ))}
+        <section aria-labelledby="qc-pending-title" className="mt-10">
+          <h2 className="text-xl font-semibold" id="qc-pending-title">
+            Measures this screen will report
+          </h2>
+          <p className="mt-1 text-sm text-slate-700">
+            Listed so the gap is legible. None of these are currently measured.
+          </p>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[32rem] border-collapse text-left">
+              <caption className="sr-only">
+                Planned study operations QC measures, all currently unavailable.
+              </caption>
+              <thead>
+                <tr className="border-b border-slate-300 bg-slate-50">
+                  <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700" scope="col">
+                    Group
+                  </th>
+                  <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700" scope="col">
+                    Measures
+                  </th>
+                  <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700" scope="col">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {UNAVAILABLE_MEASURES.map((row) => (
+                  <tr className="border-b border-slate-200 bg-white last:border-0" key={row.group}>
+                    <th className="px-4 py-3 text-sm font-semibold" scope="row">
+                      {row.group}
+                    </th>
+                    <td className="px-4 py-3 text-sm text-slate-700">{row.measures.join(", ")}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-block whitespace-nowrap rounded-full bg-slate-200 px-2 py-1 text-[0.65rem] font-bold text-slate-800">
+                        NOT MEASURED
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
       </div>
-    </div>
+    </main>
   );
 }
