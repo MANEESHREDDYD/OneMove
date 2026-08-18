@@ -241,6 +241,55 @@ describe("authentication handling", () => {
     expect(new Headers(retry.headers).get("authorization")).toBe("Bearer access-token-2");
   });
 
+  /**
+   * 403 is an authorization verdict, not a stale credential. Refreshing and
+   * retrying would be pointless load against a decision that will not change,
+   * so the client must surface it on the first response.
+   */
+  it("surfaces a 403 without refreshing or retrying", async () => {
+    const refreshSession = vi.fn(async () => ({ data: { session: testSession() } }));
+    installClient({
+      auth: {
+        getSession: async () => ({ data: { session: testSession() }, error: null }),
+        refreshSession,
+      },
+    });
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        errorEnvelope("WORKSPACE_FORBIDDEN", "This workspace is not yours to read.", "req-403"),
+        { status: 403 },
+      ),
+    );
+
+    const error = (await getApiJson("zones").catch((caught: unknown) => caught)) as ApiError;
+
+    expect(error.status).toBe(403);
+    expect(error.code).toBe("WORKSPACE_FORBIDDEN");
+    expect(error.message).toBe("This workspace is not yours to read.");
+    expect(error.requestId).toBe("req-403");
+    expect(refreshSession).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("distinguishes a 403 from a 401 by code and status", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(errorEnvelope("FORBIDDEN", "Insufficient role."), { status: 403 }),
+    );
+    const forbidden = (await getApiJson("datasets").catch((c: unknown) => c)) as ApiError;
+
+    installClient({
+      auth: {
+        getSession: async () => ({ data: { session: null }, error: null }),
+        refreshSession: async () => ({ data: { session: null } }),
+      },
+    });
+    const unauthorized = (await getApiJson("datasets").catch((c: unknown) => c)) as ApiError;
+
+    expect(forbidden.status).toBe(403);
+    expect(unauthorized.status).toBe(401);
+    expect(forbidden.code).not.toBe(unauthorized.code);
+  });
+
   it("surfaces the 401 when the refresh yields no session", async () => {
     installClient({
       auth: {
