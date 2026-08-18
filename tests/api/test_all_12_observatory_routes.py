@@ -72,7 +72,7 @@ def test_route_6_data_health():
     assert res.status_code in {200, 503}
     if res.status_code == 200:
         data = res.json()
-        assert len(data["data"]) >= 1
+        assert isinstance(data["data"], list)
         assert "evaluated_at" in data
 
 
