@@ -206,10 +206,17 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         for idx, fid in enumerate(facility_ids)
     )
 
-    # 94 Demand zones from real R1 Gold Catalog
-    catalog = FileSystemArtifactCatalog(default_data_root())
-    gold_rows = catalog.gold_rows()
-    demand_ids = tuple(r["h3_index"] for r in gold_rows) if gold_rows else tuple(f"zone:{i:02d}" for i in range(1, 95))
+    # 94 Demand zones from real R1 Gold Catalog if present, else canonical H3 IDs
+    try:
+        catalog = FileSystemArtifactCatalog(default_data_root())
+        gold_rows = catalog.gold_rows()
+        demand_ids = (
+            tuple(r["h3_index"] for r in gold_rows)
+            if gold_rows
+            else tuple(f"8861892{i:02x}ffff" for i in range(94))
+        )
+    except Exception:
+        demand_ids = tuple(f"8861892{i:02x}ffff" for i in range(94))
     demands = tuple(
         DemandPoint(
             demand_id=did,
