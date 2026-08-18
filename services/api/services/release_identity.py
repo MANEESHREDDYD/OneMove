@@ -111,7 +111,7 @@ class ReleaseIdentityService:
         except ArtifactCatalogError as exc:
             raise ReleaseIdentityUnavailable("Artifact identity could not be verified") from exc
 
-        gold_code_sha = _manifest_value(gold_manifest, "code_sha", FULL_SHA, "Gold")
+        _manifest_value(gold_manifest, "code_sha", FULL_SHA, "Gold")
         gold_schema_version = _manifest_value(
             gold_manifest,
             "schema_version",
@@ -128,8 +128,8 @@ class ReleaseIdentityService:
             raise ReleaseIdentityUnavailable("Gold identity is incomplete")
         gold_pbf_sha = _manifest_value(gold_inputs, "roads_pbf_sha256", SHA256, "Gold")
 
-        graph_build_code_sha = _manifest_value(osrm_build_manifest, "code_sha", FULL_SHA, "Graph")
-        graph_smoke_code_sha = _manifest_value(osrm_manifest, "code_sha", FULL_SHA, "Graph")
+        _manifest_value(osrm_build_manifest, "code_sha", FULL_SHA, "Graph")
+        _manifest_value(osrm_manifest, "code_sha", FULL_SHA, "Graph")
         expected_build_graph_sha = _manifest_value(
             osrm_build_manifest,
             "graph_bundle_sha256",

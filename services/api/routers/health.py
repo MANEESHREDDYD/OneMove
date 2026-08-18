@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from fastapi.responses import PlainTextResponse
 
 from services.api.core.telemetry import metrics
+from services.common.db_dsn import get_database_dsn
 
 router = APIRouter(tags=["observability"])
 logger = logging.getLogger("zonepilot.health")
@@ -15,9 +16,6 @@ logger = logging.getLogger("zonepilot.health")
 def liveness_probe():
     """Basic liveness probe for orchestration platforms"""
     return {"status": "ok"}
-
-
-from services.common.db_dsn import get_database_dsn
 
 
 @router.get("/readyz")

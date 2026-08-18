@@ -7,7 +7,6 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-
 from services.zonepilot.release import current_release_sha
 
 

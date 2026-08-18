@@ -13,7 +13,6 @@ from services.zonepilot.decisions.contracts import (
     DecisionRecord,
     ShadowEvaluation,
 )
-from services.zonepilot.release import current_release_sha
 
 
 class DecisionRepository:

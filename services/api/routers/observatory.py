@@ -44,6 +44,7 @@ from services.zonepilot.optimization.contracts import (
 from services.zonepilot.optimization.r1_catalog import FileSystemArtifactCatalog, default_data_root
 from services.zonepilot.optimization.repository import OptimizationRepository
 from services.zonepilot.optimization.service import OptimizationService
+from services.zonepilot.release import current_release_sha
 from services.zonepilot.resilience.repository import ResilienceRepository
 from services.zonepilot.resilience.service import ResilienceService
 
@@ -83,9 +84,6 @@ def _translate_artifact_error(exc: Exception) -> None:
     if isinstance(exc, ValueError):
         standard_error("INVALID_ARGUMENT", str(exc), 422)
     raise exc
-
-
-from services.zonepilot.release import current_release_sha
 
 
 def _resolve_user_context(user: dict) -> tuple[str, str]:
@@ -210,13 +208,18 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         base_durations = matrix_doc["base_durations_seconds"]
         graph_version = matrix_doc.get("graph_version", "1.1.0+bad320dd48da")
         router = matrix_doc.get("router", "osrm-routed-table")
-        router_version = matrix_doc.get("router_version", "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409")
+        router_version = matrix_doc.get(
+            "router_version",
+            "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409",
+        )
     else:
         # Load from Gold rows catalog directly
         catalog = FileSystemArtifactCatalog(default_data_root())
         gold_rows = sorted(catalog.gold_rows(), key=lambda r: str(r["h3_index"]))
         demand_ids = tuple(f"zone:{r['h3_index']}" for r in gold_rows)
-        ranked = sorted(range(len(gold_rows)), key=lambda idx: (-gold_rows[idx]["commercial_poi_count"], gold_rows[idx]["h3_index"]))
+        ranked = sorted(
+            range(len(gold_rows)), key=lambda idx: (-gold_rows[idx]["commercial_poi_count"], gold_rows[idx]["h3_index"])
+        )
         fac_indices = sorted(ranked[:12])
         facility_ids = tuple(f"fac:{gold_rows[i]['h3_index']}" for i in fac_indices)
         base_durations = [[600 for _ in demand_ids] for _ in facility_ids]
@@ -249,8 +252,7 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         prob = 6000 if s_idx == 0 else (3000 if s_idx == 1 else 1000)
 
         durations = tuple(
-            tuple(int(math.ceil(math_ceil_dur * mult)) for math_ceil_dur in row)
-            for row in base_durations
+            tuple(int(math.ceil(math_ceil_dur * mult)) for math_ceil_dur in row) for row in base_durations
         )
 
         mat = TravelMatrix(
