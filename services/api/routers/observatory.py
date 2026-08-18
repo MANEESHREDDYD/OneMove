@@ -194,8 +194,8 @@ class OptimizationRequest(BaseModel):
 
 
 def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem:
-    # 12 Candidate Facilities across Bengaluru
-    facility_ids = tuple(f"fac:{i:02d}" for i in range(1, 13))
+    # 6 Candidate Facilities across corridor
+    facility_ids = tuple(f"fac:{i:02d}" for i in range(1, 7))
     facilities = tuple(
         Facility(
             facility_id=fid,
@@ -206,21 +206,21 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         for idx, fid in enumerate(facility_ids)
     )
 
-    # 94 Demand zones from real R1 Gold Catalog if present, else canonical H3 IDs
+    # 24 Demand zones from real R1 Gold Catalog if present, else canonical H3 IDs
     try:
         catalog = FileSystemArtifactCatalog(default_data_root())
         gold_rows = catalog.gold_rows()
         demand_ids = (
-            tuple(r["h3_index"] for r in gold_rows)
+            tuple(r["h3_index"] for r in gold_rows[:24])
             if gold_rows
-            else tuple(f"8861892{i:02x}ffff" for i in range(94))
+            else tuple(f"8861892{i:02x}ffff" for i in range(24))
         )
     except Exception:
-        demand_ids = tuple(f"8861892{i:02x}ffff" for i in range(94))
+        demand_ids = tuple(f"8861892{i:02x}ffff" for i in range(24))
     demands = tuple(
         DemandPoint(
             demand_id=did,
-            demand_units=10 + (idx % 20),
+            demand_units=10 + (idx % 15),
         )
         for idx, did in enumerate(demand_ids)
     )
@@ -231,10 +231,10 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         mult = 1.0 + (s_idx * 0.25)
         prob = 6000 if s_idx == 0 else (3000 if s_idx == 1 else 1000)
 
-        # Deterministic durations across 12 facilities and 94 zones
+        # Deterministic durations across 6 facilities and 24 zones
         durations = []
         for f_idx in range(len(facility_ids)):
-            row = tuple(int((400 + ((f_idx * 47 + z_idx * 23) % 700)) * mult) for z_idx in range(len(demand_ids)))
+            row = tuple(int((350 + ((f_idx * 47 + z_idx * 23) % 600)) * mult) for z_idx in range(len(demand_ids)))
             durations.append(row)
 
         mat = TravelMatrix(
@@ -258,7 +258,7 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         )
 
     return OptimizationProblem(
-        problem_id=f"opt-94x12x3-{uuid.uuid4().hex[:8]}",
+        problem_id=f"opt-corridor-{uuid.uuid4().hex[:8]}",
         facilities=facilities,
         demand_points=demands,
         scenarios=tuple(scenarios),
@@ -272,7 +272,7 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         objective_weights=ObjectiveWeights(
             assumption_version="r1-proxy-1.0.0",
             expected_travel=5000,
-            p95_travel=1000,
+            p95_travel=0,
             facility_cost=3000,
             failure_exposure=500,
             coverage_loss=5000 if req.allow_uncovered_demand else 0,

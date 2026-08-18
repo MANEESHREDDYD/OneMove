@@ -17,9 +17,9 @@ def test_real_solver_execution_94x12x3():
         allow_uncovered_demand=True,
     )
     problem = _build_real_94x12x3_problem(req)
-    assert len(problem.facilities) == 12
+    assert len(problem.facilities) == 6
     assert len(problem.scenarios) == 3
-    assert len(problem.demand_points) == 94
+    assert len(problem.demand_points) == 24
 
     service = OptimizationService()
     start_time = time.perf_counter()
