@@ -17,7 +17,8 @@ _INJECTION_PATTERNS = [
     re.compile(r"ignore\s+(previous|all)\s+instructions", re.IGNORECASE),
     re.compile(r"system\s*:\s*", re.IGNORECASE),
     re.compile(r"you\s+are\s+now\s+in\s+developer\s+mode", re.IGNORECASE),
-    re.compile(r"<script.*?>.*?</script>", re.IGNORECASE),
+    re.compile(r"<\s*script[^>]*>[\s\S]*?<\s*/\s*script\s*>", re.IGNORECASE),
+    re.compile(r"<\s*/?\s*script\b[^>]*>", re.IGNORECASE),
     re.compile(r"drop\s+table", re.IGNORECASE),
     re.compile(r"union\s+select", re.IGNORECASE),
 ]
