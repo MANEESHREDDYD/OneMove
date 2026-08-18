@@ -1,5 +1,6 @@
 import os
 import time
+from pathlib import Path
 
 import jwt
 import pytest
@@ -8,7 +9,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from services.api.core import auth
-from services.api.core.auth import get_current_user, verify_token
+from services.api.core.auth import verify_token
 from services.api.main import app
 
 client = TestClient(app)
@@ -120,25 +121,130 @@ def test_wrong_workspace():
     )
     assert response.status_code == 403
 
-def test_wrong_role():
-    from fastapi import Depends, FastAPI, Request
-    from fastapi.testclient import TestClient
-    
+WORKSPACE_A = "11111111-1111-4111-8111-111111111111"
+WORKSPACE_B = "22222222-2222-4222-8222-222222222222"
+
+
+def _admin_only_app():
+    """A route guarded the way production routes are: by stored workspace role.
+
+    The old test here set ``request.state.required_role`` and asserted a 403.
+    Nothing outside that test ever set the attribute, so it proved only that the
+    test could reach its own middleware. The dependency below is the real
+    enforcement path, so this asserts against something that actually ships.
+    """
+
+    from fastapi import Depends, FastAPI
+
     app_test = FastAPI()
-    
-    @app_test.middleware("http")
-    async def set_role(request: Request, call_next):
-        request.state.required_role = "admin"
-        return await call_next(request)
-        
-    @app_test.get("/test_admin_only")
-    def admin_only(user=Depends(get_current_user)):
-        return {"ok": True}
-        
-    client_test = TestClient(app_test)
-    token = create_token({"role": "viewer"})
-    response = client_test.get("/test_admin_only", headers={"Authorization": f"Bearer {token}"})
+
+    @app_test.get("/admin_only")
+    def admin_only(
+        principal=Depends(auth.require_workspace_role(auth.WorkspaceRole.OWNER, auth.WorkspaceRole.ADMIN)),
+    ):
+        return {"workspace_id": principal.workspace_id, "role": principal.role.value}
+
+    return TestClient(app_test)
+
+
+def _stub_memberships(monkeypatch, *pairs):
+    """Pin the *stored* membership state the server will trust."""
+
+    def fake(user_id: str):
+        return tuple(
+            auth.WorkspacePrincipal(user_id=user_id, workspace_id=ws, role=role) for ws, role in pairs
+        )
+
+    monkeypatch.setattr(auth, "workspace_memberships", fake)
+
+
+def test_researcher_cannot_administer(monkeypatch):
+    _stub_memberships(monkeypatch, (WORKSPACE_A, auth.WorkspaceRole.RESEARCHER))
+    token = create_token({})
+    response = _admin_only_app().get(
+        "/admin_only",
+        headers={"Authorization": f"Bearer {token}", "x-workspace-id": WORKSPACE_A},
+    )
     assert response.status_code == 403
+    assert "RESEARCHER" in response.json()["detail"]
+
+
+def test_viewer_cannot_administer(monkeypatch):
+    _stub_memberships(monkeypatch, (WORKSPACE_A, auth.WorkspaceRole.VIEWER))
+    token = create_token({})
+    response = _admin_only_app().get(
+        "/admin_only",
+        headers={"Authorization": f"Bearer {token}", "x-workspace-id": WORKSPACE_A},
+    )
+    assert response.status_code == 403
+
+
+def test_owner_may_administer_own_workspace(monkeypatch):
+    _stub_memberships(monkeypatch, (WORKSPACE_A, auth.WorkspaceRole.OWNER))
+    token = create_token({})
+    response = _admin_only_app().get(
+        "/admin_only",
+        headers={"Authorization": f"Bearer {token}", "x-workspace-id": WORKSPACE_A},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"workspace_id": WORKSPACE_A, "role": "OWNER"}
+
+
+def test_role_forgery_in_token_is_ignored(monkeypatch):
+    """A token may claim any role it likes; only stored membership decides."""
+
+    _stub_memberships(monkeypatch, (WORKSPACE_A, auth.WorkspaceRole.VIEWER))
+    token = create_token({"role": "OWNER", "workspace_role": "OWNER", "user_role": "ADMIN"})
+    response = _admin_only_app().get(
+        "/admin_only",
+        headers={"Authorization": f"Bearer {token}", "x-workspace-id": WORKSPACE_A},
+    )
+    assert response.status_code == 403
+    assert "VIEWER" in response.json()["detail"]
+
+
+def test_workspace_forgery_is_denied(monkeypatch):
+    """A header may select only among workspaces the subject provably joined."""
+
+    _stub_memberships(monkeypatch, (WORKSPACE_A, auth.WorkspaceRole.OWNER))
+    token = create_token({"workspace_id": WORKSPACE_B})
+    response = _admin_only_app().get(
+        "/admin_only",
+        headers={"Authorization": f"Bearer {token}", "x-workspace-id": WORKSPACE_B},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Not a member of the requested workspace"
+
+
+def test_no_membership_is_denied(monkeypatch):
+    _stub_memberships(monkeypatch)
+    token = create_token({})
+    response = _admin_only_app().get(
+        "/admin_only",
+        headers={"Authorization": f"Bearer {token}", "x-workspace-id": WORKSPACE_A},
+    )
+    assert response.status_code == 403
+
+
+def test_ambiguous_workspace_selection_fails_closed(monkeypatch):
+    """Two memberships and no selector is ambiguous, so it must not guess."""
+
+    _stub_memberships(
+        monkeypatch,
+        (WORKSPACE_A, auth.WorkspaceRole.OWNER),
+        (WORKSPACE_B, auth.WorkspaceRole.VIEWER),
+    )
+    token = create_token({})
+    response = _admin_only_app().get("/admin_only", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Workspace selection required"
+
+
+def test_required_role_attribute_is_gone():
+    """Regression guard: the inert authorization path must not come back."""
+
+    source = Path(auth.__file__).read_text(encoding="utf-8")
+    assert "required_role" not in source
 
 def test_oversized_payload():
     large_payload = "A" * 1024 * 1024 * 5 # 5MB payload
