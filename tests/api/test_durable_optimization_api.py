@@ -1,11 +1,13 @@
 """Integration tests proving Optimization API is durable in PostgreSQL with zero in-memory mock."""
 
 import uuid
+
 import pytest
 from fastapi.testclient import TestClient
-from services.api.main import app
-from services.api.core.auth import get_current_user
+
 import services.api.routers.observatory as obs_module
+from services.api.core.auth import get_current_user
+from services.api.main import app
 
 
 def mock_user_auth():

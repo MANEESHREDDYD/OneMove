@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from typing import Any
-import uuid
 
 import psycopg
 from psycopg.rows import dict_row

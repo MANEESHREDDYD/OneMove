@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import Any
 import uuid
+from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row

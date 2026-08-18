@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 import statistics
+from datetime import datetime
 from typing import Any, Sequence
 
 from services.zonepilot.forecast.contracts import BaselineModelType

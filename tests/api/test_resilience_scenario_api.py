@@ -2,8 +2,9 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from services.api.main import app
+
 from services.api.core.auth import get_current_user
+from services.api.main import app
 
 
 def mock_user_auth():

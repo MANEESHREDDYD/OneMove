@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import hashlib
 from typing import Any
-import uuid
 
 from services.zonepilot.optimization.contracts import MatrixEvidenceClass, TravelMatrix
 from services.zonepilot.resilience.contracts import (
-    ResilienceEvaluationResult,
     ResilienceScenario,
     ScenarioType,
 )
@@ -89,7 +87,11 @@ class ResilienceService:
 
         # 2. Execute resilience engine
         base_mat = baseline_matrix or _mock_or_real_baseline_matrix(graph_version)
-        st = ScenarioType(scenario_type) if scenario_type in ScenarioType._value2member_map_ else ScenarioType.ROAD_CLOSURE
+        st = (
+            ScenarioType(scenario_type)
+            if scenario_type in ScenarioType._value2member_map_
+            else ScenarioType.ROAD_CLOSURE
+        )
         res_scen = ResilienceScenario(
             scenario_id=scenario_id,
             scenario_type=st,

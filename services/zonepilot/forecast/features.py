@@ -25,8 +25,5 @@ def extract_point_in_time_features(
 
 def compute_feature_snapshot_hash(features: Sequence[dict[str, Any]]) -> str:
     """Compute deterministic hash of valid features."""
-    serialized = "".join(
-        f"{f.get('zone_id')}:{f.get('observation_time')}:{f.get('value')}"
-        for f in features
-    )
+    serialized = "".join(f"{f.get('zone_id')}:{f.get('observation_time')}:{f.get('value')}" for f in features)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:16]

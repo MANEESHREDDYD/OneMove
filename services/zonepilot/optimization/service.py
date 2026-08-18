@@ -5,16 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from typing import Any
 import uuid
+from typing import Any
 
 from services.zonepilot.optimization.contracts import (
     OptimizationProblem,
-    OptimizationResult,
-    OptimizationStatus,
-    problem_fingerprint,
 )
-from services.zonepilot.optimization.r1_catalog import FileSystemArtifactCatalog, default_data_root
+from services.zonepilot.optimization.r1_catalog import default_data_root
 from services.zonepilot.optimization.repository import OptimizationRepository
 from services.zonepilot.optimization.solver import optimize_facilities
 

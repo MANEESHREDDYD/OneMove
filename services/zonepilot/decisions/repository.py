@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import os
-from datetime import datetime, timezone
-import json
+from datetime import datetime
 from typing import Any, Sequence
-import uuid
 
 import psycopg
 from psycopg.rows import dict_row
@@ -14,9 +11,7 @@ from psycopg.rows import dict_row
 from services.common.db_dsn import get_database_dsn
 from services.zonepilot.decisions.contracts import (
     DecisionRecord,
-    DecisionReplayResult,
     ShadowEvaluation,
-    ShadowState,
 )
 
 

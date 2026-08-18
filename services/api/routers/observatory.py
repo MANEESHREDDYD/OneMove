@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from services.api.contracts.observatory import (
@@ -23,11 +23,9 @@ from services.api.repositories.artifact_catalog import ArtifactCorrupt, Artifact
 from services.api.services.observatory import ObservatoryService, get_observatory_service
 from services.zonepilot.assistant.contracts import AssistantToolCall, ToolName
 from services.zonepilot.assistant.tools import create_default_registry
-from services.zonepilot.decisions.contracts import DecisionRecord, ShadowState
 from services.zonepilot.decisions.ledger import DecisionLedger
 from services.zonepilot.decisions.repository import DecisionRepository
 from services.zonepilot.economics.registry import CANONICAL_EXPERIMENTS
-from services.zonepilot.forecast.baselines import BaselineForecaster
 from services.zonepilot.forecast.contracts import BaselineModelType, ForecastTarget, PredictionRecord
 from services.zonepilot.forecast.repository import ForecastRepository
 from services.zonepilot.optimization.contracts import (
@@ -35,10 +33,8 @@ from services.zonepilot.optimization.contracts import (
     Facility,
     MatrixEvidenceClass,
     ObjectiveWeights,
-    OptimizationAction,
     OptimizationConstraints,
     OptimizationProblem,
-    OptimizationStatus,
     SolverSettings,
     TravelMatrix,
     UncertaintyScenario,
@@ -46,7 +42,6 @@ from services.zonepilot.optimization.contracts import (
 from services.zonepilot.optimization.r1_catalog import FileSystemArtifactCatalog, default_data_root
 from services.zonepilot.optimization.repository import OptimizationRepository
 from services.zonepilot.optimization.service import OptimizationService
-from services.zonepilot.resilience.contracts import ScenarioType
 from services.zonepilot.resilience.repository import ResilienceRepository
 from services.zonepilot.resilience.service import ResilienceService
 
@@ -232,10 +227,7 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         # Deterministic durations across 12 facilities and 94 zones
         durations = []
         for f_idx in range(len(facility_ids)):
-            row = tuple(
-                int((400 + ((f_idx * 47 + z_idx * 23) % 700)) * mult)
-                for z_idx in range(len(demand_ids))
-            )
+            row = tuple(int((400 + ((f_idx * 47 + z_idx * 23) % 700)) * mult) for z_idx in range(len(demand_ids)))
             durations.append(row)
 
         mat = TravelMatrix(
@@ -317,14 +309,16 @@ def list_optimizations(
     jobs = _opt_service.repository.list_jobs(ws_id)
     items = []
     for j in jobs:
-        items.append({
-            "job_id": str(j["id"]),
-            "status": j["status"],
-            "solver_status": j.get("solver_status"),
-            "fail_closed": j.get("fail_closed", False),
-            "created_at": str(j.get("created_at")),
-            "finished_at": str(j.get("finished_at")),
-        })
+        items.append(
+            {
+                "job_id": str(j["id"]),
+                "status": j["status"],
+                "solver_status": j.get("solver_status"),
+                "fail_closed": j.get("fail_closed", False),
+                "created_at": str(j.get("created_at")),
+                "finished_at": str(j.get("finished_at")),
+            }
+        )
     return {"data": items, "optimizations": items}
 
 
@@ -344,7 +338,9 @@ def get_optimization(
         "job_id": str(job["id"]),
         "status": job["status"],
         "solver_status": job.get("solver_status") or res_doc.get("status"),
-        "fail_closed": job.get("fail_closed") if job.get("fail_closed") is not None else res_doc.get("fail_closed", False),
+        "fail_closed": job.get("fail_closed")
+        if job.get("fail_closed") is not None
+        else res_doc.get("fail_closed", False),
         "opened_facilities": res_doc.get("opened_facility_ids") or res_doc.get("opened_facilities", []),
         "expected_travel_seconds": res_doc.get("expected_travel_seconds") or 620,
         "p95_travel_seconds": res_doc.get("p95_travel_seconds") or 780,

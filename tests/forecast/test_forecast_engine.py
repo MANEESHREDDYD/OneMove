@@ -1,20 +1,35 @@
 """Unit and Integration tests for R2 Forecast subsystem."""
 
-from datetime import datetime, timezone, timedelta
-import pytest
+from datetime import datetime, timedelta, timezone
+
 from services.zonepilot.forecast.baselines import BaselineForecaster
 from services.zonepilot.forecast.contracts import BaselineModelType, ForecastTarget
 from services.zonepilot.forecast.evaluator import evaluate_chronological
-from services.zonepilot.forecast.features import extract_point_in_time_features, compute_feature_snapshot_hash
+from services.zonepilot.forecast.features import compute_feature_snapshot_hash, extract_point_in_time_features
 
 
 def test_point_in_time_feature_filtering():
     base_time = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
     observations = [
-        {"observation_time": base_time - timedelta(hours=2), "information_available_at": base_time - timedelta(hours=2), "value": 10.0, "zone_id": "z1"},
-        {"observation_time": base_time - timedelta(hours=1), "information_available_at": base_time - timedelta(hours=1), "value": 15.0, "zone_id": "z1"},
+        {
+            "observation_time": base_time - timedelta(hours=2),
+            "information_available_at": base_time - timedelta(hours=2),
+            "value": 10.0,
+            "zone_id": "z1",
+        },
+        {
+            "observation_time": base_time - timedelta(hours=1),
+            "information_available_at": base_time - timedelta(hours=1),
+            "value": 15.0,
+            "zone_id": "z1",
+        },
         # Future observation that leaked
-        {"observation_time": base_time + timedelta(hours=1), "information_available_at": base_time + timedelta(hours=1), "value": 25.0, "zone_id": "z1"},
+        {
+            "observation_time": base_time + timedelta(hours=1),
+            "information_available_at": base_time + timedelta(hours=1),
+            "value": 25.0,
+            "zone_id": "z1",
+        },
     ]
 
     valid = extract_point_in_time_features(observations, base_time)
@@ -46,10 +61,7 @@ def test_chronological_evaluation_no_leakage():
     observations = [
         {"observation_time": split_time - timedelta(hours=i), "value": float(10 + (i % 5))}
         for i in reversed(range(1, 48))
-    ] + [
-        {"observation_time": split_time + timedelta(hours=i), "value": float(12 + (i % 3))}
-        for i in range(1, 24)
-    ]
+    ] + [{"observation_time": split_time + timedelta(hours=i), "value": float(12 + (i % 3))} for i in range(1, 24)]
 
     res = evaluate_chronological(
         observations,

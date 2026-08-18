@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
-from urllib.parse import quote
 
 
 def get_database_dsn() -> str:

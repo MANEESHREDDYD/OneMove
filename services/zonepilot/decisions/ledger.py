@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
-from typing import Any, Sequence
+from typing import Sequence
 
 from services.temporal.contracts import OutcomeStatus
 from services.zonepilot.decisions.contracts import (
@@ -197,9 +197,7 @@ class DecisionLedger:
         if f_time <= f_decision_time:
             raise ValueError("future_observation_time must be strictly after frozen_decision_time")
 
-        h = hashlib.sha256(
-            f"{dec_id}:{f_decision_time.isoformat()}:{f_time.isoformat()}".encode()
-        ).hexdigest()[:16]
+        h = hashlib.sha256(f"{dec_id}:{f_decision_time.isoformat()}:{f_time.isoformat()}".encode()).hexdigest()[:16]
         shadow_id = f"shd-{h}"
 
         shadow = ShadowEvaluation(

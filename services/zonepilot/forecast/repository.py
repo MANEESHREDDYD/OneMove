@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 import psycopg
 from psycopg.rows import dict_row
 
@@ -57,7 +58,9 @@ class ForecastRepository:
                 )
             conn.commit()
 
-    def get_zone_forecasts(self, zone_id: str, workspace_id: str | None = None, limit: int = 24) -> list[dict[str, Any]]:
+    def get_zone_forecasts(
+        self, zone_id: str, workspace_id: str | None = None, limit: int = 24
+    ) -> list[dict[str, Any]]:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 query = "SELECT * FROM public.forecast_records WHERE zone_id = %s"

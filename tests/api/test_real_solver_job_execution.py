@@ -2,9 +2,9 @@
 
 import time
 import uuid
-import pytest
+
+from services.api.routers.observatory import OptimizationRequest, _build_real_94x12x3_problem
 from services.zonepilot.optimization.service import OptimizationService
-from services.api.routers.observatory import _build_real_94x12x3_problem, OptimizationRequest
 
 
 def test_real_solver_execution_94x12x3():
