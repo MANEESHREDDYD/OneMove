@@ -42,14 +42,23 @@ async function parseError(response: Response): Promise<ApiError> {
   );
 }
 
-async function authenticatedFetch(path: string, session: Session, signal?: AbortSignal): Promise<Response> {
-  const headers = new Headers({ Authorization: `Bearer ${session.access_token}` });
+async function authenticatedFetch(
+  path: string,
+  session: Session,
+  options?: { method?: string; body?: unknown; signal?: AbortSignal },
+): Promise<Response> {
+  const headers = new Headers({
+    Authorization: `Bearer ${session.access_token}`,
+    "Content-Type": "application/json",
+  });
   const workspaceId = workspaceFromSession(session);
   if (workspaceId) headers.set("x-workspace-id", workspaceId);
   return fetch(`/api/zonepilot/${path.replace(/^\/+/, "")}`, {
+    method: options?.method ?? "GET",
     cache: "no-store",
     headers,
-    signal,
+    body: options?.body ? JSON.stringify(options.body) : undefined,
+    signal: options?.signal,
   });
 }
 
@@ -58,15 +67,49 @@ export async function getApiJson<T>(path: string, signal?: AbortSignal): Promise
   if (!client) throw new ApiError("Supabase authentication is not configured.", 500, "AUTH_NOT_CONFIGURED", null);
 
   const { data, error } = await client.auth.getSession();
-  if (error || !data.session) throw new ApiError("Your session has expired. Sign in again.", 401, "UNAUTHORIZED", null);
+  if (error || !data.session) {
+    throw new ApiError("A valid user session is required.", 401, "UNAUTHORIZED", null);
+  }
 
-  let response = await authenticatedFetch(path, data.session, signal);
+  let session = data.session;
+  let response = await authenticatedFetch(path, session, { signal });
+
   if (response.status === 401) {
-    const refreshed = await client.auth.refreshSession();
-    if (refreshed.data.session) {
-      response = await authenticatedFetch(path, refreshed.data.session, signal);
+    const refresh = await client.auth.refreshSession();
+    if (refresh.data.session) {
+      session = refresh.data.session;
+      response = await authenticatedFetch(path, session, { signal });
     }
   }
-  if (!response.ok) throw await parseError(response);
+
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  return (await response.json()) as T;
+}
+
+export async function postApiJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  const client = getSupabaseBrowserClient();
+  if (!client) throw new ApiError("Supabase authentication is not configured.", 500, "AUTH_NOT_CONFIGURED", null);
+
+  const { data, error } = await client.auth.getSession();
+  if (error || !data.session) {
+    throw new ApiError("A valid user session is required.", 401, "UNAUTHORIZED", null);
+  }
+
+  let session = data.session;
+  let response = await authenticatedFetch(path, session, { method: "POST", body, signal });
+
+  if (response.status === 401) {
+    const refresh = await client.auth.refreshSession();
+    if (refresh.data.session) {
+      session = refresh.data.session;
+      response = await authenticatedFetch(path, session, { method: "POST", body, signal });
+    }
+  }
+
+  if (!response.ok) {
+    throw await parseError(response);
+  }
   return (await response.json()) as T;
 }

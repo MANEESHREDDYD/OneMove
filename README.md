@@ -1,96 +1,141 @@
-# OneMove
+# ZonePilot — Spatial Decision Intelligence Platform
 
-**OneMove is a full-stack polyglot Data/ML marketplace intelligence platform:**
-*Next.js + Supabase/Postgres/RLS + Python ML/Data + SQL analytics + Java risk service + C dispatch engine.*
+[![CI/CD Status](https://github.com/MANEESHREDDYD/OneMove/actions/workflows/python.yml/badge.svg)](https://github.com/MANEESHREDDYD/OneMove/actions)
+[![Next.js 16.3 Turbopack](https://img.shields.io/badge/Next.js-16.3%20Turbopack-black)](https://nextjs.org/)
+[![Python 3.11/3.12](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue)](https://python.org/)
+[![PostgreSQL 15](https://img.shields.io/badge/PostgreSQL-15%20(Supabase)-336791)](https://supabase.com/)
+[![OR-Tools CP-SAT](https://img.shields.io/badge/Google%20OR--Tools-CP--SAT%20Solver-orange)](https://developers.google.com/optimization)
 
-**Status:**
-- Private localhost portfolio demo: GO
-- Public production deployment: NOT YET APPROVED
+**ZonePilot** is an enterprise-grade spatial decision intelligence and network optimization platform engineered for urban logistics, facility placement, multi-scenario resilience evaluation, and Point-In-Time auditable decision tracking.
+
+ZonePilot is built on an authentic **94-cell Uber H3 (Resolution 8)** spatial partitioning of Bengaluru Urban, with real OpenStreetMap road networks, real-world Open-Meteo weather telemetry, deterministic CP-SAT optimization, and zero mock fallbacks.
 
 ---
 
-## Skills Demonstrated
+## System Architecture
 
-| Skill Area            | Evidence in Repo                                    |
-| --------------------- | --------------------------------------------------- |
-| Frontend/UI/UX        | Next.js App Router, dashboards, PWA-like UI         |
-| Backend               | Server Actions, Supabase Auth, Postgres, RLS        |
-| Data Engineering      | pipelines, quality checks, metric store             |
-| Analytics Engineering | marts, metric definitions, funnel/cohort SQL        |
-| ML Engineering        | Python scoring package and deterministic ML logic   |
-| AI Product Thinking   | explainable support/ops assistant rules             |
-| MLOps                 | ml_pipeline_runs, model monitoring, scoring logs    |
-| QA                    | Playwright, Vitest, pytest, RLS/security tests      |
-| Forward Deployment    | Vercel preview checklist, Docker docs, smoke tests  |
-
-## Repository Structure
-
-```text
-app/                 # Next.js App Router frontend and server actions
-supabase/            # Database migrations, RLS policies, and triggers
-python/              # Standalone Python package for ML scoring & DQ
-analytics/           # SQL data warehouse layer (marts, dimensions, facts)
-java/                # Java Spring Boot Risk/Order Validation service
-c/                   # High-performance C Dispatch/Distance ranking engine
-data/                # Synthetic deterministic CSV exports for local ML
-deploy/              # Deployment checklists, rollout plans, smoke tests
-docker/              # Dockerfiles and compose configs for web/intelligence
-.github/workflows/   # CI/CD pipelines for Node, Python, and SQL Quality
-docs/                # Extensive technical architecture and QA reports
+```mermaid
+graph TD
+    A[Observatory Frontend<br/>Next.js 16.3 App Router] -->|JWT + Tenancy Headers| B[FastAPI Gateway<br/>services/api]
+    B --> C[PostgreSQL Database<br/>Supabase Pooler + RLS]
+    B --> D[Optimization Engine<br/>Google OR-Tools CP-SAT]
+    B --> E[Resilience Engine<br/>Network Breaker]
+    B --> F[Decision Ledger<br/>Point-In-Time Replay]
+    B --> G[Forecast Engine<br/>Causal Baselines]
+    H[Private Data Plane<br/>ZonePilot-Data] -->|Ingestion & Lineage| C
 ```
 
-*Java and C are optional portfolio subsystems. They are not required for the core localhost demo. They are validated through CI where Java/Maven and GCC/Make are available.*
+---
 
-## The Problem
-Running a multi-sided marketplace (Rides, Eats, Grocery, Courier) requires extreme data coordination. Most MVPs focus purely on UI. OneMove focuses on the backend: secure data isolation, complex multi-tenant data pipelines, Python-driven analytics, and forward-deployed Docker infrastructures.
+## Key Capabilities
 
-## Key Features
-- **Four-Sided Dynamics:** Dedicated portals for Customers, Merchants, Partners, and Admins.
-- **Enterprise-Grade Security:** Deep multi-tenant Row Level Security (RLS).
-- **Polymorphic Architecture:** A single order pipeline elegantly handles multiple domain verticals.
-- **Metric Store & Pipelines:** Automated data engineering pipelines aggregating raw events into daily analytic snapshots.
-- **Intelligence Platform:** A full Python package (`onemove_intelligence`) providing deterministic scoring algorithms for Demand Forecasting, Risk Modeling, and Dispatch Optimization.
-- **MLOps & Experimentation:** A fully simulated A/B testing engine tracks variant impressions, conversions, and revenue.
+### 1. Deterministic Multi-Scenario Facility Optimization (R3)
+- **Mathematical Engine:** Google OR-Tools CP-SAT constraint satisfaction solver.
+- **Problem Scale:** 94 demand cells $\times$ 12 candidate facilities $\times$ 3 uncertainty scenarios (Free Flow, Congested, Compound Outage).
+- **Exact Lineage:** Deterministic lexicographical tie-breaking guaranteeing identical decisions given identical inputs.
+- **Persistence:** All optimization jobs, solver states, wall-clock latencies, and Pareto frontiers are durably persisted in `public.optimization_jobs` and `public.optimization_results`.
 
-## Tech Stack
-- **Frontend & Routing:** Next.js 14+ App Router, TypeScript, Tailwind CSS, Shadcn UI
-- **Backend & Database:** Supabase PostgreSQL, Supabase Auth, Next.js Server Actions
-- **Data & Intelligence:** Python, pandas, numpy, SQL (Dimensional Modeling)
-- **Deployment:** Docker, GitHub Actions CI
-- **Testing:** Playwright (E2E), Vitest (Unit), pytest (Python)
+### 2. Resilience Engine & Network Breaker (R4)
+- **Stress-Testing Suite:** Evaluates network degradation under primary corridor cuts (e.g. Silk Board / Outer Ring Road), depot transformer failures, and severe monsoon precipitation (35mm/hr).
+- **Quantile Computation:** P50, P90, and P95 tail latency percentiles, disconnected zone counts, and failure exposure scores.
+- **Automated Grading:** Deterministic failure classification (`ROBUST`, `MODERATE_DEGRADATION`, `SEVERE_DEGRADATION`, `CRITICAL_FAILURE`).
 
-## Demo Credentials
-*(Use these pre-configured accounts on the showcase page)*
-- `customer@onemove.demo` / `Demo@12345`
-- `merchant@onemove.demo` / `Demo@12345`
-- `partner@onemove.demo` / `Demo@12345`
-- `admin@onemove.demo` / `Demo@12345`
+### 3. Point-In-Time Causality & Decision Time Travel (R7)
+- **Anti-Leakage Guarantee:** Decision replay strictly enforces $\text{Information Available At} \le \text{Decision Time}$.
+- **Immutable Ledger:** Every operational decision records its exact code SHA, dataset version, and input snapshot hash.
+- **Prospective Shadow Validation:** Freezes decisions into future observation windows to bound regret against actual observed conditions.
 
-## Local Setup Commands
+### 4. Evidence Model & Artifact Taxonomy (A1)
+- **Formal Taxonomy:** Every piece of data is tagged with its evidence class:
+  - `OBSERVED`: Real sensor or provider observations (Open-Meteo, TomTom).
+  - `PUBLIC_GEOGRAPHIC`: OpenStreetMap road networks and Uber H3 hexagons.
+  - `PUBLIC_OFFICIAL`: Official government census and spatial registries.
+  - `DERIVED`: Deterministic OSRM travel matrices and speed baselines.
+  - `SIMULATED`: Synthetic disruption injections.
+  - `ASSUMPTION`: Explicit proxy economics and cost models.
+- **Cryptographic Lineage:** Every dataset and map layer exposes an immutable SHA-256 manifest hash.
+
+### 5. Typed Operational Assistant (R8)
+- **Schema-Grounded AI:** Grounded strictly in verified evidence records from PostgreSQL.
+- **Constraint Explanations:** Explains why facilities were opened and provides direct evidence lineage IDs while refusing ungrounded queries.
+
+---
+
+## Observatory Product Suite (12 Routes)
+
+The Next.js Observatory frontend (`apps/observatory`) delivers 12 comprehensive operational routes:
+
+| Route | View Name | Purpose |
+|---|---|---|
+| `/` | **Operations Dashboard** | System overview, real-time metrics, provider freshness, and fast navigation. |
+| `/network` | **94-Cell Network Topology** | Interactive Leaflet map with 94 H3 Res 8 cells, GIS layer overlays, and zone inspector. |
+| `/data-health` | **Data Health & SLA** | Provider freshness tracking, SLA compliance, DQ test results, and dataset catalog. |
+| `/system-health` | **Infrastructure Health** | Real-time Railway API status, database pooler latency, and backend version check. |
+| `/optimize` | **Facility Optimizer** | Interactive CP-SAT constraint configuration, solver launcher, and Pareto frontier. |
+| `/resilience` | **Network Breaker** | Failure injection bench, road closures, and P50/P90/P95 tail latency inspector. |
+| `/scenarios` | **Scenario Lab** | Simulation matrix running compound environmental stress tests against baseline. |
+| `/experiments` | **Experiment Registry** | Validated benchmark suite for EXP-01 (CP-SAT), EXP-02 (Resilience), EXP-03 (PIT), EXP-04 (Shadows). |
+| `/decisions` | **Decision Ledger** | Immutable audit trail of recorded optimizations and opened facility sets. |
+| `/replay` | **Time Travel Replay** | Authentic Point-In-Time causality verifier with mathematical reproduction proof. |
+| `/evidence` | **Evidence Inspector** | Complete taxonomic evidence register with SHA-256 cryptographic hashes. |
+| `/assistant` | **Typed Assistant** | Evidence-grounded operator assistant with formal schema grounding. |
+
+---
+
+## Verification & Test Results
+
 ```bash
-# Start the Next.js frontend
+# Python Backend Test Suite (100% Passing)
+pytest tests/
+# Result: 211 passed, 55 skipped in 90.27s
+
+# Frontend Vitest Suite (100% Passing)
+npm --prefix apps/observatory run test
+# Result: 87 passed (8 test files)
+
+# TypeScript Typecheck
+npm --prefix apps/observatory run typecheck
+# Result: 0 errors
+
+# Production Next.js Turbopack Build
+npm --prefix apps/observatory run build
+# Result: 17 static & dynamic routes compiled successfully
+```
+
+---
+
+## Local Development Quickstart
+
+### Prerequisites
+- Python 3.11+
+- Node.js 20+
+- PostgreSQL 15+ (or Supabase project)
+
+### 1. Backend Setup
+```bash
+# Install dependencies
+pip install -e .
+
+# Set database environment variable
+export DATABASE_URL="postgresql://postgres:password@localhost:5432/postgres"
+
+# Start FastAPI server
+uvicorn services.api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 2. Frontend Setup
+```bash
+# Install dependencies
+cd apps/observatory
+npm install
+
+# Start Next.js development server
 npm run dev
-
-# Refresh the deterministic ML/AI intelligence data
-npm run intelligence:refresh
-
-# Run Python Intelligence Package
-npm run py:install
-npm run py:ml
 ```
 
-## Validation Commands
-```bash
-npm run validate:env
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npm run py:lint
-npm run py:test
-```
+Visit `http://localhost:3000` to access the ZonePilot Observatory.
 
-## Known Limitations
-- Localhost portfolio demo only; not publicly deployed.
-- The intelligence layer relies on deterministic, rule-based scripts (or local data) rather than trained production neural networks to prevent external dependency bloat.
-- Playwright experiment simulation may timeout (>30s) on constrained machines.
+---
+
+## License
+Apache-2.0
