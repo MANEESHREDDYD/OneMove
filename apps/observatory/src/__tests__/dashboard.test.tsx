@@ -162,6 +162,36 @@ describe("error state", () => {
     expect(within(alert).getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
 
+  /**
+   * A 403 is actionable by a human (ask for access) but not by a retry, so the
+   * message has to be specific enough to act on rather than a generic failure.
+   */
+  it("renders a usable message when the workspace is forbidden", async () => {
+    respond({
+      ...HAPPY_ROUTES,
+      zones: new ApiError("This workspace is not yours to read.", 403, "WORKSPACE_FORBIDDEN", "req-403"),
+    });
+    render(<ObserverHome />);
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText(/not yours to read/i)).toBeInTheDocument();
+    expect(within(alert).getByText(/Request req-403\./)).toBeInTheDocument();
+    // The failing surface must not be papered over with an empty dashboard.
+    expect(screen.queryByTestId("network-map")).not.toBeInTheDocument();
+  });
+
+  it("does not present a 401 as a permission problem", async () => {
+    respond({
+      ...HAPPY_ROUTES,
+      zones: new ApiError("Your session has expired. Sign in again.", 401, "UNAUTHORIZED", null),
+    });
+    render(<ObserverHome />);
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText(/session has expired/i)).toBeInTheDocument();
+    expect(alert.textContent).not.toMatch(/forbidden|permission/i);
+  });
+
   it("hides the dashboard body while the error is showing", async () => {
     respond({ ...HAPPY_ROUTES, zones: new ApiError("Upstream down.", 502, "API_UNAVAILABLE", null) });
     render(<ObserverHome />);
