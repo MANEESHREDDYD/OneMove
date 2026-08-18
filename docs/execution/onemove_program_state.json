@@ -1,0 +1,32 @@
+{
+  "product_name": "OneMove",
+  "internal_engine_namespace": "zonepilot",
+  "program_phase": "CTO_READINESS",
+  "gcp_staging_project": "zonepilot-stg-9a4285",
+  "gcp_production_project": "zonepilot-prod-9a4285",
+  "protected_unrelated_project": "signit-502902",
+  "streams": {
+    "A0": {"name": "Real Data Execution / ETL", "status": "COMPLETE"},
+    "A1": {"name": "GIS / H3 / OSM / OSRM", "status": "COMPLETE"},
+    "A2": {"name": "Temporal / Forecasting / ML", "status": "COMPLETE"},
+    "A3": {"name": "Optimization / Decision Science", "status": "COMPLETE"},
+    "A4": {"name": "Resilience / Counterfactuals", "status": "COMPLETE"},
+    "A5": {"name": "Economics / Experiments", "status": "COMPLETE"},
+    "A6": {"name": "GCP / Platform / SRE", "status": "IN_PROGRESS"},
+    "A7": {"name": "Decision Ledger / Replay", "status": "COMPLETE"},
+    "A8": {"name": "LLM / Assistant / AI Safety", "status": "COMPLETE"},
+    "A9": {"name": "Frontend / Visualization / UX", "status": "COMPLETE"},
+    "H1": {"name": "Principal Architecture / Contracts", "status": "COMPLETE"},
+    "H2": {"name": "Product Journey / E2E Integration", "status": "IN_PROGRESS"},
+    "H3": {"name": "Independent QA / Verification", "status": "ACTIVE"},
+    "H4": {"name": "Security / IAM / Threat Modeling", "status": "COMPLETE"},
+    "H5": {"name": "Data Quality / Governance", "status": "COMPLETE"},
+    "X1": {"name": "Adversarial Destroyer / Red Team", "status": "ACTIVE"},
+    "X2": {"name": "Hard Remediation Engineer", "status": "ACTIVE"}
+  },
+  "open_failures": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0
+  }
+}

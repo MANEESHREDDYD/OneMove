@@ -13,7 +13,11 @@ from services.api.routers import events, health, observatory, version
 configure_logging()
 initialize_error_tracking()
 
-app = FastAPI(title="ZonePilot API", version="1.5.1")
+app = FastAPI(
+    title="OneMove Decision Engine API",
+    description="OneMove Physical Commerce Network Intelligence & Decision Optimization API (internal engine namespace: zonepilot)",
+    version="1.5.1",
+)
 app.add_middleware(RequestIdMiddleware)
 allowed_origins = [
     origin.strip()
