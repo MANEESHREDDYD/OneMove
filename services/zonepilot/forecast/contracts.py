@@ -8,6 +8,9 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
+from services.zonepilot.release import current_release_sha
+
+
 class ForecastTarget(str, Enum):
     WEATHER_TRAVEL_INFLATION_PERCENT = "WEATHER_TRAVEL_INFLATION_PERCENT"
     HOURLY_PRECIPITATION_MM = "HOURLY_PRECIPITATION_MM"
@@ -38,7 +41,7 @@ class PredictionRecord(BaseModel):
     feature_snapshot_hash: str
     dataset_version: str = "1.0.0"
     graph_version: str = "1.1"
-    code_sha: str = "c7e24e8d378db6a2f19048993bb3803e76f125c2"
+    code_sha: str = Field(default_factory=current_release_sha)
     evidence_ids: tuple[str, ...] = Field(default_factory=tuple)
 
 

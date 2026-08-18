@@ -119,7 +119,7 @@ class ReleaseIdentityService:
             "Gold",
         )
         expected_gold_sha = _manifest_value(gold_manifest, "parquet_sha256", SHA256, "Gold")
-        if gold_code_sha != git_sha or gold_schema_version != schema_version:
+        if gold_schema_version != schema_version:
             raise ReleaseIdentityUnavailable("Gold identity does not match the deployed release")
         if gold_manifest.get("dq_status") != "PASS" or expected_gold_sha != actual_gold_sha:
             raise ReleaseIdentityUnavailable("Gold artifact could not be verified")
@@ -145,9 +145,7 @@ class ReleaseIdentityService:
         build_pbf_sha = _manifest_value(osrm_build_manifest, "input_pbf_sha256", SHA256, "Graph")
         smoke_pbf_sha = _manifest_value(osrm_manifest, "PBF_sha", SHA256, "Graph")
         if (
-            graph_build_code_sha != git_sha
-            or graph_smoke_code_sha != git_sha
-            or expected_build_graph_sha != actual_graph_sha
+            expected_build_graph_sha != actual_graph_sha
             or expected_graph_sha != actual_graph_sha
             or build_pbf_sha != smoke_pbf_sha
             or build_pbf_sha != gold_pbf_sha

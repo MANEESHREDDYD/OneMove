@@ -13,6 +13,7 @@ from services.zonepilot.decisions.contracts import (
     DecisionRecord,
     ShadowEvaluation,
 )
+from services.zonepilot.release import current_release_sha
 
 
 class DecisionRepository:
@@ -21,6 +22,24 @@ class DecisionRepository:
 
     def _connect(self) -> psycopg.Connection:
         return psycopg.connect(self.dsn, row_factory=dict_row, connect_timeout=15)
+
+    def verify_snapshot_pit(self, snapshot_hash: str, decision_time: datetime) -> bool:
+        """Query temporal records/manifests to prove information_available_at <= decision_time."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                # Check temporal feature_records if present
+                cur.execute(
+                    """
+                    SELECT COUNT(*) as cnt FROM zonepilot_temporal.feature_records
+                    WHERE information_available_at > %s
+                      AND feature_values->>'snapshot_hash' = %s
+                    """,
+                    (decision_time, snapshot_hash),
+                )
+                row = cur.fetchone()
+                if row and row.get("cnt", 0) > 0:
+                    return False
+        return True
 
     def record_decision(
         self,

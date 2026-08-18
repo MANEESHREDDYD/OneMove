@@ -17,10 +17,13 @@ def liveness_probe():
     return {"status": "ok"}
 
 
+from services.common.db_dsn import get_database_dsn
+
+
 @router.get("/readyz")
 def readiness_probe(response: Response):
     """Readiness probe checking critical dependencies like DB"""
-    db_url = os.environ.get("ZONEPILOT_DB_URL")
+    db_url = get_database_dsn()
 
     db_connected = False
 

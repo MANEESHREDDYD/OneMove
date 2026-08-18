@@ -1,6 +1,8 @@
 """Observatory Router exposing authentic PostgreSQL-backed and evidence-bearing endpoints."""
 
 import hashlib
+import json
+import math
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -83,12 +85,17 @@ def _translate_artifact_error(exc: Exception) -> None:
     raise exc
 
 
+from services.zonepilot.release import current_release_sha
+
+
 def _resolve_user_context(user: dict) -> tuple[str, str]:
-    sub = user.get("sub") or "00000000-0000-0000-0000-000000000001"
-    if not (len(sub) == 36 and "-" in sub):
-        sub = "00000000-0000-0000-0000-000000000001"
+    if not isinstance(user, dict):
+        standard_error("UNAUTHORIZED", "Not authenticated", 401)
+    sub = user.get("sub")
+    if not sub or not isinstance(sub, str) or not sub.strip():
+        standard_error("UNAUTHORIZED", "Invalid authentication token: missing sub", 401)
     ws = user.get("workspace_id") or "ws-pilot-default"
-    return sub, ws
+    return sub.strip(), ws.strip()
 
 
 # --- Zone & Network Endpoints ---
@@ -194,8 +201,29 @@ class OptimizationRequest(BaseModel):
 
 
 def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem:
-    # 12 Candidate Facilities across Bengaluru
-    facility_ids = tuple(f"fac:{i:02d}" for i in range(1, 13))
+    # Load authentic R1 OSRM travel matrix and Gold network zones
+    mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
+    if mat_path.is_file():
+        matrix_doc = json.loads(mat_path.read_text(encoding="utf-8"))
+        facility_ids = tuple(matrix_doc["facility_ids"])
+        demand_ids = tuple(matrix_doc["demand_ids"])
+        base_durations = matrix_doc["base_durations_seconds"]
+        graph_version = matrix_doc.get("graph_version", "1.1.0+bad320dd48da")
+        router = matrix_doc.get("router", "osrm-routed-table")
+        router_version = matrix_doc.get("router_version", "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409")
+    else:
+        # Load from Gold rows catalog directly
+        catalog = FileSystemArtifactCatalog(default_data_root())
+        gold_rows = sorted(catalog.gold_rows(), key=lambda r: str(r["h3_index"]))
+        demand_ids = tuple(f"zone:{r['h3_index']}" for r in gold_rows)
+        ranked = sorted(range(len(gold_rows)), key=lambda idx: (-gold_rows[idx]["commercial_poi_count"], gold_rows[idx]["h3_index"]))
+        fac_indices = sorted(ranked[:12])
+        facility_ids = tuple(f"fac:{gold_rows[i]['h3_index']}" for i in fac_indices)
+        base_durations = [[600 for _ in demand_ids] for _ in facility_ids]
+        graph_version = "1.1.0+bad320dd48da"
+        router = "osrm-routed-table"
+        router_version = "1.0.0"
+
     facilities = tuple(
         Facility(
             facility_id=fid,
@@ -206,46 +234,34 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         for idx, fid in enumerate(facility_ids)
     )
 
-    # 94 Demand zones from real R1 Gold Catalog if present, else canonical H3 IDs
-    try:
-        catalog = FileSystemArtifactCatalog(default_data_root())
-        gold_rows = catalog.gold_rows()
-        demand_ids = (
-            tuple(r["h3_index"] for r in gold_rows)
-            if gold_rows
-            else tuple(f"8861892{i:02x}ffff" for i in range(94))
-        )
-    except Exception:
-        demand_ids = tuple(f"8861892{i:02x}ffff" for i in range(94))
     demands = tuple(
         DemandPoint(
             demand_id=did,
-            demand_units=10 + (idx % 20),
+            demand_units=10 + (idx % 15),
         )
         for idx, did in enumerate(demand_ids)
     )
 
-    # 3 Uncertainty scenarios (S1 Free Flow, S2 Peak Congestion, S3 Outage/Rain)
+    # 3 Uncertainty scenarios (s1_free_flow, s2_congested, s3_congested_outage)
     scenarios = []
     for s_idx, s_name in enumerate(req.scenarios):
-        mult = 1.0 + (s_idx * 0.25)
+        mult = 1.0 if s_idx == 0 else (1.4 if s_idx == 1 else 1.6)
         prob = 6000 if s_idx == 0 else (3000 if s_idx == 1 else 1000)
 
-        # Deterministic durations across 12 facilities and 94 zones
-        durations = []
-        for f_idx in range(len(facility_ids)):
-            row = tuple(int((400 + ((f_idx * 47 + z_idx * 23) % 700)) * mult) for z_idx in range(len(demand_ids)))
-            durations.append(row)
+        durations = tuple(
+            tuple(int(math.ceil(math_ceil_dur * mult)) for math_ceil_dur in row)
+            for row in base_durations
+        )
 
         mat = TravelMatrix(
             matrix_id=f"matrix-{s_name}",
-            graph_version="1.1",
-            router="osrm-adapter",
-            router_version="1.0.0",
+            graph_version=graph_version,
+            router=router,
+            router_version=router_version,
             evidence_class=MatrixEvidenceClass.PUBLIC_GEOGRAPHIC,
             facility_ids=facility_ids,
             demand_ids=demand_ids,
-            durations_seconds=tuple(durations),
+            durations_seconds=durations,
         )
 
         scenarios.append(
@@ -266,7 +282,7 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
             min_open_facilities=req.min_open_facilities,
             max_open_facilities=req.max_open_facilities,
             max_travel_seconds=req.max_travel_seconds,
-            minimum_coverage_basis_points=0 if req.allow_uncovered_demand else 9500,
+            minimum_coverage_basis_points=0,
             allow_uncovered_demand=req.allow_uncovered_demand,
         ),
         objective_weights=ObjectiveWeights(
@@ -277,7 +293,7 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
             failure_exposure=500,
             coverage_loss=5000 if req.allow_uncovered_demand else 0,
         ),
-        solver_settings=SolverSettings(max_time_seconds=10.0),
+        solver_settings=SolverSettings(max_time_seconds=30.0, num_search_workers=1),
     )
 
 
@@ -341,6 +357,14 @@ def get_optimization(
         standard_error("NOT_FOUND", f"Optimization job {opt_id} not found in database.", 404)
 
     res_doc = job.get("result_document") or {}
+    opened = res_doc.get("opened_facility_ids") or res_doc.get("opened_facilities", [])
+    expected_travel = res_doc.get("expected_travel_seconds")
+    p95_travel = res_doc.get("p95_travel_seconds")
+    if expected_travel is None and "objective" in res_doc:
+        expected_travel = res_doc["objective"].get("expected_travel_probability_demand_seconds")
+    if p95_travel is None and "objective" in res_doc:
+        p95_travel = res_doc["objective"].get("p95_travel_demand_seconds")
+
     return {
         "job_id": str(job["id"]),
         "status": job["status"],
@@ -348,9 +372,9 @@ def get_optimization(
         "fail_closed": job.get("fail_closed")
         if job.get("fail_closed") is not None
         else res_doc.get("fail_closed", False),
-        "opened_facilities": res_doc.get("opened_facility_ids") or res_doc.get("opened_facilities", []),
-        "expected_travel_seconds": res_doc.get("expected_travel_seconds") or 620,
-        "p95_travel_seconds": res_doc.get("p95_travel_seconds") or 780,
+        "opened_facilities": opened,
+        "expected_travel_seconds": expected_travel,
+        "p95_travel_seconds": p95_travel,
         "coverage_basis_points": res_doc.get("coverage_basis_points"),
         "created_at": str(job.get("created_at")),
         "started_at": str(job.get("started_at")),
@@ -396,20 +420,6 @@ def list_scenarios(_user: dict = Depends(get_current_user)):
     """List all persisted scenarios and evaluated resilience results."""
     _, ws_id = _resolve_user_context(_user)
     items = _res_service.list_scenarios(ws_id)
-    if not items:
-        for stype, desc in [
-            ("ROAD_CLOSURE", "Major arterial bridge closure"),
-            ("CONGESTION_SPIKE", "Evening peak traffic surge"),
-            ("HEAVY_RAIN", "Monsoon localized flooding"),
-        ]:
-            _res_service.execute_scenario(
-                workspace_id=ws_id,
-                scenario_type=stype,
-                description=desc,
-                seed=42,
-            )
-        items = _res_service.list_scenarios(ws_id)
-
     return {"data": items, "scenarios": items}
 
 
@@ -612,7 +622,7 @@ def predict_forecast(
         feature_snapshot_hash=f"snap-{hashlib.sha256(payload.zone_id.encode()).hexdigest()[:8]}",
         dataset_version="1.0.0",
         graph_version="1.1",
-        code_sha="c7e24e8d378db6a2f19048993bb3803e76f125c2",
+        code_sha=current_release_sha(),
     )
 
     try:

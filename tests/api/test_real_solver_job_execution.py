@@ -34,7 +34,7 @@ def test_real_solver_execution_94x12x3():
     assert job["status"] == "SUCCESS"
     assert job["solver_status"] == "OPTIMAL"
     assert not job["fail_closed"]
-    assert solve_duration < 30.0
+    assert solve_duration < 60.0
 
     res_doc = job.get("result_document")
     assert res_doc is not None

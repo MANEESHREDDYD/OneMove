@@ -14,6 +14,7 @@ from services.zonepilot.optimization.contracts import (
 from services.zonepilot.optimization.r1_catalog import default_data_root
 from services.zonepilot.optimization.repository import OptimizationRepository
 from services.zonepilot.optimization.solver import optimize_facilities
+from services.zonepilot.release import current_release_sha
 
 
 class OptimizationService:
@@ -33,9 +34,10 @@ class OptimizationService:
         idempotency_key: str,
         problem: OptimizationProblem | None = None,
         custom_payload: dict[str, Any] | None = None,
-        code_sha: str = "c7e24e8d378db6a2f19048993bb3803e76f125c2",
+        code_sha: str | None = None,
     ) -> dict[str, Any]:
         """Submit a deterministic optimization problem, persist to Postgres, and solve."""
+        effective_code_sha = code_sha or current_release_sha()
         payload = custom_payload or (problem.model_dump() if problem else {})
         req_bytes = json.dumps(payload, sort_keys=True).encode("utf-8")
         req_fp = hashlib.sha256(req_bytes).hexdigest()
@@ -57,7 +59,7 @@ class OptimizationService:
             matrix_id=matrix_id,
             assumption_version=assumption_ver,
             solver_version="ortools-cp-sat",
-            code_sha=code_sha,
+            code_sha=effective_code_sha,
         )
 
         job_id = str(job["id"])
@@ -83,7 +85,7 @@ class OptimizationService:
                     solver_status=result.status.value,
                     action=result.action.value,
                     fail_closed=result.fail_closed,
-                    code_sha=code_sha,
+                    code_sha=effective_code_sha,
                     run_duration_ms=run_ms,
                 )
             except Exception as exc:
@@ -103,7 +105,7 @@ class OptimizationService:
                     solver_status="SOLVER_ERROR",
                     action="NONE",
                     fail_closed=True,
-                    code_sha=code_sha,
+                    code_sha=effective_code_sha,
                     run_duration_ms=run_ms,
                 )
 
