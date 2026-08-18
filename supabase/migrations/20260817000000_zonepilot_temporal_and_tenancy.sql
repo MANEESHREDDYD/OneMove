@@ -12,10 +12,6 @@
 -- 2. workspace_id appeared in no migration, so the API's workspace check was
 --    unreachable: it is skipped whenever the token carries no workspace claim,
 --    and no token could carry one. Authorization was inert.
---
--- Safe as a forward-only migration with NOT NULL columns and no backfill:
--- weather_observations and traffic_observations are both empty. No acquisition
--- run has ever completed.
 
 BEGIN;
 
@@ -26,6 +22,9 @@ BEGIN;
 -- This is not a second vocabulary. It is the same nine values as the canonical
 -- EvidenceClass enum in services/temporal/contracts.py, projected into the
 -- database so the constraint can be enforced where the row actually lands.
+--
+-- Availability is a *state*, not an evidence class, and deliberately does not
+-- appear here.
 
 CREATE TYPE zonepilot_evidence_class AS ENUM (
   'OBSERVED',
@@ -57,8 +56,8 @@ CREATE TYPE zonepilot_workspace_role AS ENUM (
 COMMENT ON TYPE zonepilot_workspace_role IS
   'OWNER/ADMIN administer membership. RESEARCHER/VIEWER/INTEGRATION_USER read '
   'workspace evidence but never administer. COLLECTOR is a write-only '
-  'acquisition identity: it may not read the evidence corpus and may not read '
-  'other members.';
+  'acquisition identity: it may append evidence to its own workspace but may '
+  'not read the evidence corpus and may not read other members.';
 
 -- ---------------------------------------------------------------------------
 -- Workspaces
@@ -102,11 +101,11 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS $fn$
   SELECT workspace_id
   FROM public.workspace_members
   WHERE user_id = auth.uid();
-$$;
+$fn$;
 
 CREATE OR REPLACE FUNCTION public.zonepilot_current_workspace_role(target_workspace UUID)
 RETURNS zonepilot_workspace_role
@@ -114,12 +113,12 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS $fn$
   SELECT role
   FROM public.workspace_members
   WHERE user_id = auth.uid()
     AND workspace_id = target_workspace;
-$$;
+$fn$;
 
 COMMENT ON FUNCTION public.zonepilot_current_workspace_role(UUID) IS
   'Returns the calling session''s role in one workspace, or NULL when the '
@@ -194,12 +193,44 @@ GRANT ALL PRIVILEGES                 ON TABLE workspaces        TO service_role;
 GRANT ALL PRIVILEGES                 ON TABLE workspace_members TO service_role;
 
 -- ---------------------------------------------------------------------------
+-- Refuse to fabricate provenance for pre-tenancy rows
+-- ---------------------------------------------------------------------------
+--
+-- The temporal columns below are NOT NULL and carry no default, because there
+-- is no honest default for them. A row already sitting in an observation table
+-- has no recorded event_time, issued_at or information_available_at, and
+-- inventing one would place an unfalsifiable timestamp into the evidence
+-- corpus -- exactly the failure this migration exists to prevent.
+--
+-- So the migration refuses, loudly, rather than backfilling a lie. Both tables
+-- are empty today (no acquisition run has ever completed). If that changes,
+-- the operator must quarantine those rows deliberately before re-running.
+
+DO $guard$
+DECLARE
+  weather_rows BIGINT;
+  traffic_rows BIGINT;
+BEGIN
+  SELECT count(*) INTO weather_rows FROM weather_observations;
+  SELECT count(*) INTO traffic_rows FROM traffic_observations;
+  IF weather_rows > 0 OR traffic_rows > 0 THEN
+    RAISE EXCEPTION
+      'Refusing to add NOT NULL temporal provenance over % pre-tenancy weather row(s) and % pre-tenancy traffic row(s). These rows have no recorded provenance and none may be invented. Quarantine or delete them, then re-run this migration.',
+      weather_rows, traffic_rows;
+  END IF;
+END
+$guard$;
+
+-- ---------------------------------------------------------------------------
 -- Temporal columns on the authoritative observation tables
 -- ---------------------------------------------------------------------------
 --
 -- run_id already exists on both tables as a nullable FK to collector_runs and
 -- is restated here only so the full temporal column contract is legible in one
 -- place. It is left nullable: the execution plane owns run lifecycle.
+--
+-- This column set is a published contract that the acquisition plane writes
+-- against. Do not reorder, rename or retype these columns without coordinating.
 
 ALTER TABLE collector_runs
   ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE;
@@ -239,10 +270,10 @@ ALTER TABLE traffic_observations
 -- These mirror TemporalFeatureRecord.validate_availability_timeline so a row
 -- that Postgres accepts is a row the Python contract can also accept:
 --
---   information_available_at >= event_time  an event is not knowable before it happens
---   information_available_at >= issued_at   a payload is not knowable before its provider issued it
+--   information_available_at >= event_time    an event is not knowable before it happens
+--   information_available_at >= issued_at     a payload is not knowable before its provider issued it
 --   information_available_at <= retrieved_at  we did not know it before we fetched it
---   retrieved_at             >= issued_at   nothing is retrieved before it exists
+--   retrieved_at             >= issued_at     nothing is retrieved before it exists
 --
 -- Deliberately ABSENT: any relation between valid_at and
 -- information_available_at. A weather forecast issued at T for a valid_at
@@ -250,7 +281,7 @@ ALTER TABLE traffic_observations
 -- separating the two columns. The leakage rule is about *decision_time*, not
 -- about valid_at:
 --
---   safe to use at decision time D  <=>  information_available_at <= D
+--   safe to use at decision time D          <=>  information_available_at <= D
 --   it is a forecast rather than a nowcast  <=>  valid_at > D
 --
 -- A constraint of the form `valid_at <= information_available_at` would reject
@@ -284,6 +315,12 @@ ALTER TABLE traffic_observations
 -- ---------------------------------------------------------------------------
 -- Idempotency: a provider re-run must not duplicate an observation
 -- ---------------------------------------------------------------------------
+--
+-- Identity is (workspace, provider, zone, event_time, valid_at, issued_at).
+-- retrieved_at and information_available_at are deliberately NOT part of the
+-- identity: re-fetching the same provider payload later yields the same
+-- observation, only re-retrieved. That is what makes an acquisition re-run
+-- safely repeatable through ON CONFLICT DO NOTHING.
 
 CREATE UNIQUE INDEX weather_observation_identity
   ON weather_observations (workspace_id, provider, zone_id, event_time, valid_at, issued_at);
@@ -305,8 +342,12 @@ CREATE INDEX traffic_point_in_time
 --
 -- RLS was already enabled on these three tables by 00002_zonepilot_v151.sql
 -- with no policy attached, which denied everything. These policies are the
--- first read path, and they agree with the API layer in services/api/core/auth.py:
--- membership is resolved from the session, never from a client-supplied header.
+-- first read path, and they agree with the API layer in
+-- services/api/core/auth.py: membership is resolved from the session, never
+-- from a client-supplied header.
+--
+-- COLLECTOR is absent from every read policy on purpose. It is an acquisition
+-- identity, so it appends evidence and can never read the corpus back.
 
 CREATE POLICY weather_workspace_read ON weather_observations
   FOR SELECT TO authenticated
@@ -329,10 +370,22 @@ CREATE POLICY collector_runs_workspace_read ON collector_runs
       IN ('OWNER', 'ADMIN', 'RESEARCHER', 'VIEWER', 'INTEGRATION_USER')
   );
 
--- Writes to the evidence corpus are performed by the private execution plane
--- under a dedicated role, never by an end-user session. No INSERT, UPDATE or
--- DELETE policy is granted to authenticated, so RLS denies all mutation by
--- default for every role including OWNER.
+-- The only end-user write path into the evidence corpus: a COLLECTOR appending
+-- to the one workspace it belongs to. There is no UPDATE and no DELETE policy
+-- for any role, so evidence is append-only for every authenticated session
+-- including OWNER; corrections are a service-role operation.
+
+CREATE POLICY weather_collector_append ON weather_observations
+  FOR INSERT TO authenticated
+  WITH CHECK (public.zonepilot_current_workspace_role(workspace_id) = 'COLLECTOR');
+
+CREATE POLICY traffic_collector_append ON traffic_observations
+  FOR INSERT TO authenticated
+  WITH CHECK (public.zonepilot_current_workspace_role(workspace_id) = 'COLLECTOR');
+
+CREATE POLICY collector_runs_collector_append ON collector_runs
+  FOR INSERT TO authenticated
+  WITH CHECK (public.zonepilot_current_workspace_role(workspace_id) = 'COLLECTOR');
 
 COMMENT ON COLUMN weather_observations.information_available_at IS
   'Hard leakage boundary. A feature build for decision time D may only read '
