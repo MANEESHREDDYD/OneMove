@@ -24,7 +24,7 @@ export default function ExecutiveDashboard() {
         <div className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
           <h2 className="text-sm uppercase tracking-wider text-neutral-400 mb-1">Data Freshness</h2>
           <div className="text-2xl font-semibold text-yellow-400">DEGRADED</div>
-          <div className="text-xs text-neutral-500 mt-2">Source: ZonePilot Ops Ledger</div>
+          <div className="text-xs text-neutral-500 mt-2">Source: OneMove Ops Ledger</div>
         </div>
       </div>
 

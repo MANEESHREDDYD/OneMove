@@ -7,8 +7,8 @@ import { Toaster } from "@/components/ui/sonner"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "OneMove",
-  description: "One city app for rides, food, groceries and local delivery.",
+  title: "OneMove — Physical Commerce Network Intelligence & Decision Platform",
+  description: "Enterprise spatial network intelligence, multi-scenario resilience evaluation, and auditable decision optimization platform.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

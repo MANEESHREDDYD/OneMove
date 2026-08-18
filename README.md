@@ -1,14 +1,17 @@
-# ZonePilot — Spatial Decision Intelligence Platform
+# OneMove — Physical Commerce Network Intelligence & Decision Platform
 
 [![CI/CD Status](https://github.com/MANEESHREDDYD/OneMove/actions/workflows/python.yml/badge.svg)](https://github.com/MANEESHREDDYD/OneMove/actions)
+[![Terraform CI](https://github.com/MANEESHREDDYD/OneMove/actions/workflows/terraform-ci.yml/badge.svg)](https://github.com/MANEESHREDDYD/OneMove/actions)
 [![Next.js 16.3 Turbopack](https://img.shields.io/badge/Next.js-16.3%20Turbopack-black)](https://nextjs.org/)
 [![Python 3.11/3.12](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue)](https://python.org/)
-[![PostgreSQL 15](https://img.shields.io/badge/PostgreSQL-15%20(Supabase)-336791)](https://supabase.com/)
+[![PostgreSQL 15](https://img.shields.io/badge/PostgreSQL-15-336791)](https://supabase.com/)
 [![OR-Tools CP-SAT](https://img.shields.io/badge/Google%20OR--Tools-CP--SAT%20Solver-orange)](https://developers.google.com/optimization)
 
-**ZonePilot** is an enterprise-grade spatial decision intelligence and network optimization platform engineered for urban logistics, facility placement, multi-scenario resilience evaluation, and Point-In-Time auditable decision tracking.
+**OneMove** is an enterprise-grade physical commerce network intelligence, resilience evaluation, and decision-optimization platform engineered for urban logistics, facility placement, multi-scenario stress-testing, and Point-In-Time auditable decision tracking.
 
-ZonePilot is built on an authentic **94-cell Uber H3 (Resolution 8)** spatial partitioning of Bengaluru Urban, with real OpenStreetMap road networks, real-world Open-Meteo weather telemetry, deterministic CP-SAT optimization, and zero mock fallbacks.
+> **Note on Architecture & Namespace**: The canonical public product name is **OneMove**. The internal engine and Python package namespace is retained as `zonepilot` to preserve stability and avoid unnecessary migration risk.
+
+OneMove is built on an authentic **94-cell Uber H3 (Resolution 8)** spatial partitioning of Bengaluru Urban, with real OpenStreetMap road networks, authentic OSRM travel duration matrices, real-world Open-Meteo weather telemetry, deterministic CP-SAT optimization, and zero mock fallbacks.
 
 ---
 
@@ -16,38 +19,40 @@ ZonePilot is built on an authentic **94-cell Uber H3 (Resolution 8)** spatial pa
 
 ```mermaid
 graph TD
-    A[Observatory Frontend<br/>Next.js 16.3 App Router] -->|JWT + Tenancy Headers| B[FastAPI Gateway<br/>services/api]
-    B --> C[PostgreSQL Database<br/>Supabase Pooler + RLS]
-    B --> D[Optimization Engine<br/>Google OR-Tools CP-SAT]
-    B --> E[Resilience Engine<br/>Network Breaker]
-    B --> F[Decision Ledger<br/>Point-In-Time Replay]
-    B --> G[Forecast Engine<br/>Causal Baselines]
-    H[Private Data Plane<br/>ZonePilot-Data] -->|Ingestion & Lineage| C
+    A[OneMove Observatory Frontend<br/>Next.js 16.3 App Router] -->|JWT + Tenancy Headers| B[OneMove FastAPI Gateway<br/>services/api]
+    B --> C[PostgreSQL Database<br/>Durable Ledger & RLS]
+    B -->|Enqueue Job| D[Google Cloud Pub/Sub<br/>zonepilot-opt-jobs]
+    D -->|Pull & Lease| E[Optimization Worker<br/>Google OR-Tools CP-SAT]
+    E -->|Persist Results| C
+    B --> F[Resilience Engine<br/>Network Breaker]
+    B --> G[Decision Ledger<br/>Point-In-Time Replay]
+    B --> H[Forecast Engine<br/>Causal Baselines]
+    I[Real Data Plane<br/>Open-Meteo & OSRM] -->|Ingestion & Lineage| C
 ```
 
 ---
 
 ## Key Capabilities
 
-### 1. Deterministic Multi-Scenario Facility Optimization (R3)
+### 1. Deterministic Multi-Scenario Facility Optimization
 - **Mathematical Engine:** Google OR-Tools CP-SAT constraint satisfaction solver.
 - **Problem Scale:** 94 demand cells $\times$ 12 candidate facilities $\times$ 3 uncertainty scenarios (Free Flow, Congested, Compound Outage).
 - **Exact Lineage:** Deterministic lexicographical tie-breaking guaranteeing identical decisions given identical inputs.
 - **Persistence:** All optimization jobs, solver states, wall-clock latencies, and Pareto frontiers are durably persisted in `public.optimization_jobs` and `public.optimization_results`.
 
-### 2. Resilience Engine & Network Breaker (R4)
+### 2. Resilience Engine & Network Breaker
 - **Stress-Testing Suite:** Evaluates network degradation under primary corridor cuts (e.g. Silk Board / Outer Ring Road), depot transformer failures, and severe monsoon precipitation (35mm/hr).
 - **Quantile Computation:** P50, P90, and P95 tail latency percentiles, disconnected zone counts, and failure exposure scores.
 - **Automated Grading:** Deterministic failure classification (`ROBUST`, `MODERATE_DEGRADATION`, `SEVERE_DEGRADATION`, `CRITICAL_FAILURE`).
 
-### 3. Point-In-Time Causality & Decision Time Travel (R7)
+### 3. Point-In-Time Causality & Decision Time Travel
 - **Anti-Leakage Guarantee:** Decision replay strictly enforces $\text{Information Available At} \le \text{Decision Time}$.
 - **Immutable Ledger:** Every operational decision records its exact code SHA, dataset version, and input snapshot hash.
 - **Prospective Shadow Validation:** Freezes decisions into future observation windows to bound regret against actual observed conditions.
 
-### 4. Evidence Model & Artifact Taxonomy (A1)
+### 4. Evidence Model & Artifact Taxonomy
 - **Formal Taxonomy:** Every piece of data is tagged with its evidence class:
-  - `OBSERVED`: Real sensor or provider observations (Open-Meteo, TomTom).
+  - `OBSERVED`: Real sensor or provider observations (Open-Meteo).
   - `PUBLIC_GEOGRAPHIC`: OpenStreetMap road networks and Uber H3 hexagons.
   - `PUBLIC_OFFICIAL`: Official government census and spatial registries.
   - `DERIVED`: Deterministic OSRM travel matrices and speed baselines.
@@ -55,87 +60,52 @@ graph TD
   - `ASSUMPTION`: Explicit proxy economics and cost models.
 - **Cryptographic Lineage:** Every dataset and map layer exposes an immutable SHA-256 manifest hash.
 
-### 5. Typed Operational Assistant (R8)
+### 5. Schema-Grounded Operational Assistant
 - **Schema-Grounded AI:** Grounded strictly in verified evidence records from PostgreSQL.
 - **Constraint Explanations:** Explains why facilities were opened and provides direct evidence lineage IDs while refusing ungrounded queries.
 
 ---
 
-## Observatory Product Suite (12 Routes)
+## Cloud Infrastructure (Google Cloud Platform)
 
-The Next.js Observatory frontend (`apps/observatory`) delivers 12 comprehensive operational routes:
+OneMove is fully productionized on Google Cloud Platform with dedicated environments managed by Terraform:
 
-| Route | View Name | Purpose |
-|---|---|---|
-| `/` | **Operations Dashboard** | System overview, real-time metrics, provider freshness, and fast navigation. |
-| `/network` | **94-Cell Network Topology** | Interactive Leaflet map with 94 H3 Res 8 cells, GIS layer overlays, and zone inspector. |
-| `/data-health` | **Data Health & SLA** | Provider freshness tracking, SLA compliance, DQ test results, and dataset catalog. |
-| `/system-health` | **Infrastructure Health** | Real-time Railway API status, database pooler latency, and backend version check. |
-| `/optimize` | **Facility Optimizer** | Interactive CP-SAT constraint configuration, solver launcher, and Pareto frontier. |
-| `/resilience` | **Network Breaker** | Failure injection bench, road closures, and P50/P90/P95 tail latency inspector. |
-| `/scenarios` | **Scenario Lab** | Simulation matrix running compound environmental stress tests against baseline. |
-| `/experiments` | **Experiment Registry** | Validated benchmark suite for EXP-01 (CP-SAT), EXP-02 (Resilience), EXP-03 (PIT), EXP-04 (Shadows). |
-| `/decisions` | **Decision Ledger** | Immutable audit trail of recorded optimizations and opened facility sets. |
-| `/replay` | **Time Travel Replay** | Authentic Point-In-Time causality verifier with mathematical reproduction proof. |
-| `/evidence` | **Evidence Inspector** | Complete taxonomic evidence register with SHA-256 cryptographic hashes. |
-| `/assistant` | **Typed Assistant** | Evidence-grounded operator assistant with formal schema grounding. |
+- **Staging Project**: `zonepilot-stg-9a4285`
+- **Production Project**: `zonepilot-prod-9a4285`
+- **Container Registry**: Artifact Registry Docker repository in `asia-south1`
+- **Compute**: Auto-scaling Cloud Run v2 services (`onemove-api` & `onemove-worker`)
+- **Async Queue**: Google Cloud Pub/Sub with Dead-Letter Queues and exponential backoff
+- **Storage**: Versioned Cloud Storage buckets with uniform bucket-level access
+- **Security & CI/CD**: Workload Identity Federation tied to `MANEESHREDDYD/OneMove`
 
 ---
 
-## Verification & Test Results
-
-```bash
-# Python Backend Test Suite (100% Passing)
-pytest tests/
-# Result: 211 passed, 55 skipped in 90.27s
-
-# Frontend Vitest Suite (100% Passing)
-npm --prefix apps/observatory run test
-# Result: 87 passed (8 test files)
-
-# TypeScript Typecheck
-npm --prefix apps/observatory run typecheck
-# Result: 0 errors
-
-# Production Next.js Turbopack Build
-npm --prefix apps/observatory run build
-# Result: 17 static & dynamic routes compiled successfully
-```
-
----
-
-## Local Development Quickstart
+## Local Development & Testing
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 20+
-- PostgreSQL 15+ (or Supabase project)
+- Terraform 1.5+
 
-### 1. Backend Setup
+### Running Tests
 ```bash
-# Install dependencies
-pip install -e .
+# Run full Python backend test suite (275+ tests)
+pytest tests/ -v
 
-# Set database environment variable
-export DATABASE_URL="postgresql://postgres:password@localhost:5432/postgres"
+# Run Observatory routes contract verification
+pytest tests/api/test_all_12_observatory_routes.py -v
 
-# Start FastAPI server
+# Validate Terraform configurations
+terraform -chdir=infra/gcp/environments/staging validate
+terraform -chdir=infra/gcp/environments/production validate
+```
+
+### Running the API Locally
+```bash
 uvicorn services.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 2. Frontend Setup
-```bash
-# Install dependencies
-cd apps/observatory
-npm install
-
-# Start Next.js development server
-npm run dev
-```
-
-Visit `http://localhost:3000` to access the ZonePilot Observatory.
-
 ---
 
-## License
-Apache-2.0
+## 17-Agent Engineering Architecture
+OneMove is maintained and governed by 17 independent parallel ownership streams. See [OWNERSHIP.md](docs/architecture/OWNERSHIP.md) and [DEPENDENCY_GRAPH.md](docs/architecture/DEPENDENCY_GRAPH.md) for detailed contracts and acceptance gates.
