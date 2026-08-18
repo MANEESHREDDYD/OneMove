@@ -228,15 +228,11 @@ def test_protected_routes_return_contracts(observatory_service: ObservatoryServi
 
             health = client.get("/api/v1/data-health")
             assert health.status_code == 200
-            assert {item["state"] for item in health.json()["data"]} <= {
-                "FRESH", "DEGRADED", "STALE", "UNAVAILABLE"
-            }
+            assert {item["state"] for item in health.json()["data"]} <= {"FRESH", "DEGRADED", "STALE", "UNAVAILABLE"}
 
             map_layers = client.get("/api/v1/network/map-layers")
             assert map_layers.status_code == 200
-            assert {item["layer"] for item in map_layers.json()["data"]} == {
-                "roads", "intersections", "pois"
-            }
+            assert {item["layer"] for item in map_layers.json()["data"]} == {"roads", "intersections", "pois"}
     finally:
         app.dependency_overrides.clear()
 
@@ -299,9 +295,7 @@ def test_served_evidence_classes_are_all_canonical(observatory_service: Observat
 
     zone = observatory_service.get_zone_state(ZONE_ID).data
     emitted.append(zone.evidence_class)
-    emitted.extend(
-        getattr(zone.static, name).evidence_class for name in type(zone.static).model_fields
-    )
+    emitted.extend(getattr(zone.static, name).evidence_class for name in type(zone.static).model_fields)
     emitted.extend(layer.evidence_class for layer in zone.unavailable_dynamic_layers)
 
     assert emitted, "fixture produced no evidence-bearing records"
@@ -406,8 +400,7 @@ def test_gold_schema_version_is_schema_identity_not_graph_version(
     again, because the fixture gives them deliberately different values.
     """
     gold = next(
-        item for item in observatory_service.list_datasets().data
-        if item.dataset_id == "gold_network_bengaluru"
+        item for item in observatory_service.list_datasets().data if item.dataset_id == "gold_network_bengaluru"
     )
     snapshot = observatory_service.list_network_snapshots().data[0]
 
@@ -425,7 +418,6 @@ def test_gold_schema_version_absent_when_manifest_omits_it(
     write_json(manifest_path, manifest)
 
     gold = next(
-        item for item in observatory_service.list_datasets().data
-        if item.dataset_id == "gold_network_bengaluru"
+        item for item in observatory_service.list_datasets().data if item.dataset_id == "gold_network_bengaluru"
     )
     assert gold.schema_version is None

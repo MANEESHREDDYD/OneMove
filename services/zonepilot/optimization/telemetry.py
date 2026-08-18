@@ -86,9 +86,7 @@ def peak_memory_bytes() -> tuple[int, MemoryMeasurement]:
             ]
             counters = _ProcessMemoryCounters()
             counters.cb = ctypes.sizeof(_ProcessMemoryCounters)
-            if not psapi.GetProcessMemoryInfo(
-                kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb
-            ):
+            if not psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
                 return 0, MemoryMeasurement.UNAVAILABLE
             return int(counters.PeakWorkingSetSize), MemoryMeasurement.WINDOWS_PEAK_WORKING_SET
         except Exception:

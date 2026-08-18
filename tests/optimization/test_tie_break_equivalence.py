@@ -91,9 +91,7 @@ def _random_problem(
         )
         for facility_id in facility_ids
     )
-    demands = tuple(
-        DemandPoint(demand_id=demand_id, demand_units=generator.randint(1, 3)) for demand_id in demand_ids
-    )
+    demands = tuple(DemandPoint(demand_id=demand_id, demand_units=generator.randint(1, 3)) for demand_id in demand_ids)
 
     # Scenario probabilities must sum to exactly BASIS_POINTS.
     probabilities = [10_000 // scenario_count] * scenario_count
@@ -101,9 +99,7 @@ def _random_problem(
 
     scenarios = []
     for scenario_index in range(scenario_count):
-        durations = tuple(
-            tuple(generator.randint(1, 900) for _ in demand_ids) for _ in facility_ids
-        )
+        durations = tuple(tuple(generator.randint(1, 900) for _ in demand_ids) for _ in facility_ids)
         adjustments: tuple[FacilityCapacityAdjustment, ...] = ()
         if scenario_index and facility_count > 1:
             # Derate one facility so capacity recourse differs across scenarios.
@@ -117,9 +113,7 @@ def _random_problem(
             UncertaintyScenario(
                 scenario_id=f"s{scenario_index}",
                 probability_basis_points=probabilities[scenario_index],
-                travel_matrix=_matrix(
-                    f"m{seed}-{scenario_index}", facility_ids, demand_ids, durations
-                ),
+                travel_matrix=_matrix(f"m{seed}-{scenario_index}", facility_ids, demand_ids, durations),
                 capacity_adjustments=adjustments,
             )
         )

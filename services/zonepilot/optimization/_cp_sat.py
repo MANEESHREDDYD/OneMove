@@ -354,8 +354,7 @@ def _canonical_solution(
                 candidates = [
                     facility_id
                     for facility_id in problem_facility_ids
-                    if open_values[facility_id]
-                    and _duration(scenario, facility_id, demand_id) <= max_travel_seconds
+                    if open_values[facility_id] and _duration(scenario, facility_id, demand_id) <= max_travel_seconds
                 ]
                 counters.implied_skips += len(problem_facility_ids) - len(candidates)
             else:

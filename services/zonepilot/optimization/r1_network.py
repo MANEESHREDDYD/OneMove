@@ -364,9 +364,7 @@ def build_r1_problem(
             for row in baseline
         )
         is_baseline = spec.travel_inflation_basis_points == BASIS_POINTS and spec.degraded_facility_count == 0
-        evidence_class = (
-            MatrixEvidenceClass.PUBLIC_GEOGRAPHIC if is_baseline else MatrixEvidenceClass.SIMULATED_FAILURE
-        )
+        evidence_class = MatrixEvidenceClass.PUBLIC_GEOGRAPHIC if is_baseline else MatrixEvidenceClass.SIMULATED_FAILURE
         matrix = TravelMatrix(
             matrix_id=_matrix_id(
                 scenario_id=spec.scenario_id,

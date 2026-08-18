@@ -16,18 +16,20 @@ client = TestClient(app)
 
 SECRET = os.environ["SUPABASE_JWT_SECRET"]
 
+
 @pytest.fixture(autouse=True)
 def setup_env(monkeypatch):
     monkeypatch.setenv("SUPABASE_JWT_SECRET", SECRET)
     monkeypatch.setenv("SUPABASE_JWT_AUDIENCE", "authenticated")
     monkeypatch.setenv("SUPABASE_JWT_ISSUER", "zonepilot_issuer")
 
+
 def create_token(payload: dict, secret: str = SECRET) -> str:
     default_payload = {
         "sub": "user-123",
         "aud": "authenticated",
         "iss": "zonepilot_issuer",
-        "exp": int(time.time()) + 3600
+        "exp": int(time.time()) + 3600,
     }
     default_payload.update(payload)
     return jwt.encode(default_payload, secret, algorithm="HS256")
@@ -39,9 +41,11 @@ def test_unauthenticated_rejection():
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "UNAUTHORIZED"
 
+
 def test_malformed_bearer():
     response = client.get("/api/v1/zones", headers={"Authorization": "Bearer malformed.token.here"})
     assert response.status_code == 401
+
 
 def test_invalid_signature():
     token = create_token({}, secret=f"wrong-{SECRET}")
@@ -94,32 +98,33 @@ def test_unapproved_jwt_algorithm_is_rejected(monkeypatch):
 
     assert exc_info.value.status_code == 401
 
+
 def test_expired_token():
     token = create_token({"exp": int(time.time()) - 3600})
     response = client.get("/api/v1/zones", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
+
 
 def test_wrong_issuer():
     token = create_token({"iss": "wrong_issuer"})
     response = client.get("/api/v1/zones", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
 
+
 def test_wrong_audience():
     token = create_token({"aud": "public"})
     response = client.get("/api/v1/zones", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
 
+
 def test_wrong_workspace():
     # Setup token for workspace A, but request workspace B
     token = create_token({"workspace_id": "workspace-A"})
     response = client.get(
-        "/api/v1/zones",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "x-workspace-id": "workspace-B"
-        }
+        "/api/v1/zones", headers={"Authorization": f"Bearer {token}", "x-workspace-id": "workspace-B"}
     )
     assert response.status_code == 403
+
 
 WORKSPACE_A = "11111111-1111-4111-8111-111111111111"
 WORKSPACE_B = "22222222-2222-4222-8222-222222222222"
@@ -151,9 +156,7 @@ def _stub_memberships(monkeypatch, *pairs):
     """Pin the *stored* membership state the server will trust."""
 
     def fake(user_id: str):
-        return tuple(
-            auth.WorkspacePrincipal(user_id=user_id, workspace_id=ws, role=role) for ws, role in pairs
-        )
+        return tuple(auth.WorkspacePrincipal(user_id=user_id, workspace_id=ws, role=role) for ws, role in pairs)
 
     monkeypatch.setattr(auth, "workspace_memberships", fake)
 
@@ -246,8 +249,9 @@ def test_required_role_attribute_is_gone():
     source = Path(auth.__file__).read_text(encoding="utf-8")
     assert "required_role" not in source
 
+
 def test_oversized_payload():
-    large_payload = "A" * 1024 * 1024 * 5 # 5MB payload
+    large_payload = "A" * 1024 * 1024 * 5  # 5MB payload
     response = client.post("/api/v1/scenarios", json={"data": large_payload})
     assert response.status_code == 413
     assert response.json()["error"]["code"] == "PAYLOAD_TOO_LARGE"

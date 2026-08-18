@@ -39,9 +39,7 @@ def evidence_tree(root: Path) -> None:
         "gold_parquet_sha256": _write(gold / "gold_network_h3_8.parquet", b"gold"),
         "osrm_graph_file_sha256": _write(osrm / "pilot_roads.osrm", b"graph"),
     }
-    hashes["osrm_graph_bundle_sha256"] = sha256_file_set(
-        [osrm / "pilot_roads.osrm"], relative_to=osrm
-    )
+    hashes["osrm_graph_bundle_sha256"] = sha256_file_set([osrm / "pilot_roads.osrm"], relative_to=osrm)
     _write_json(
         osm / "manifest.json",
         {

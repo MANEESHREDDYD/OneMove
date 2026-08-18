@@ -83,6 +83,7 @@ def _verification_key(token: str, algorithm: str):
     except jwt.PyJWKClientError as exc:
         raise HTTPException(status_code=401, detail="Invalid token") from exc
 
+
 def verify_token(token: str) -> dict:
     expected_issuer = _expected_issuer()
     expected_audience = os.environ.get("SUPABASE_JWT_AUDIENCE", "authenticated")
@@ -100,12 +101,8 @@ def verify_token(token: str) -> dict:
         if expected_issuer:
             decode_kwargs["issuer"] = expected_issuer
 
-        payload = jwt.decode(
-            token,
-            verification_key,
-            **decode_kwargs
-        )
-        
+        payload = jwt.decode(token, verification_key, **decode_kwargs)
+
         if "sub" not in payload:
             raise HTTPException(status_code=401, detail="Invalid token: missing sub")
 
@@ -138,9 +135,7 @@ class WorkspaceRole(str, Enum):
 
 
 #: Roles that may administer a workspace: change its metadata or its membership.
-WORKSPACE_ADMIN_ROLES: frozenset[WorkspaceRole] = frozenset(
-    {WorkspaceRole.OWNER, WorkspaceRole.ADMIN}
-)
+WORKSPACE_ADMIN_ROLES: frozenset[WorkspaceRole] = frozenset({WorkspaceRole.OWNER, WorkspaceRole.ADMIN})
 
 #: Roles that may read the workspace evidence corpus. COLLECTOR is deliberately
 #: excluded: it is a write-only acquisition identity, so it must not be able to
@@ -213,12 +208,7 @@ def workspace_memberships(user_id: str) -> tuple[WorkspacePrincipal, ...]:
 
     client = service_client()
     try:
-        response = (
-            client.table("workspace_members")
-            .select("workspace_id, role")
-            .eq("user_id", user_id)
-            .execute()
-        )
+        response = client.table("workspace_members").select("workspace_id, role").eq("user_id", user_id).execute()
     except Exception as exc:
         raise _membership_unavailable() from exc
 
@@ -229,9 +219,7 @@ def workspace_memberships(user_id: str) -> tuple[WorkspacePrincipal, ...]:
         except (KeyError, ValueError):
             # An unknown role is not a role. Skip rather than widen access.
             continue
-        memberships.append(
-            WorkspacePrincipal(user_id=user_id, workspace_id=str(row["workspace_id"]), role=role)
-        )
+        memberships.append(WorkspacePrincipal(user_id=user_id, workspace_id=str(row["workspace_id"]), role=role))
     return tuple(memberships)
 
 
@@ -357,14 +345,14 @@ def get_participant_id(credentials: HTTPAuthorizationCredentials = Security(secu
 def get_supabase(credentials: HTTPAuthorizationCredentials = Security(security)) -> Client:
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_ANON_KEY")
-    
+
     if not url or not key:
         raise HTTPException(status_code=500, detail="Supabase environment variables missing")
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = credentials.credentials
     verify_token(token)
-    
+
     try:
         client = create_client(url, key)
         client.postgrest.auth(token)

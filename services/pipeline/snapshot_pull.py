@@ -6,5 +6,6 @@ def main():
     parser.parse_args()
     print("Snapshot pull simulated. (Using fixtures)")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

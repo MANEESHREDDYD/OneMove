@@ -12,16 +12,17 @@ OSM_DIR = os.path.join(DATA_ROOT, "private", "official", "raw", "osm")
 GEOFABRIK_URL = "https://download.geofabrik.de/asia/india/southern-zone-latest.osm.pbf"
 OSMIUM_IMAGE = "stefda/osmium-tool@sha256:d2321d0e926f77ead7547b4b35f5cf98d9fd74043673cecc4fc2bb7cce06ff63"
 
+
 def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
+
 
 def run_osmium(command_args):
     """Run osmium via docker"""
     # Fix paths for docker volume mount: mount OSM_DIR to /data
-    cmd = [
-        "docker", "run", "--rm", "-v", f"{OSM_DIR}:/data", OSMIUM_IMAGE, "osmium"
-    ] + command_args
+    cmd = ["docker", "run", "--rm", "-v", f"{OSM_DIR}:/data", OSMIUM_IMAGE, "osmium"] + command_args
     subprocess.run(cmd, check=True)
+
 
 def run_osm_midnight():
     """
@@ -30,10 +31,10 @@ def run_osm_midnight():
     """
     print("Starting OSM Geofabrik Pipeline (Subagent 3)...")
     ensure_dir(OSM_DIR)
-    
+
     pbf_path = os.path.join(OSM_DIR, "southern-zone-latest.osm.pbf")
     md5_path = os.path.join(OSM_DIR, "southern-zone-latest.osm.pbf.md5")
-    
+
     # Download PBF and MD5
     print(f"Downloading {GEOFABRIK_URL}...")
     if not os.path.exists(pbf_path):
@@ -46,11 +47,11 @@ def run_osm_midnight():
             ["curl", "--fail", "--show-error", "--location", "--retry", "3", "-o", md5_path, GEOFABRIK_URL + ".md5"],
             check=True,
         )
-    
+
     # Verify MD5
     with open(md5_path, "r") as f:
         expected_md5 = f.read().split()[0]
-        
+
     print("Hashing PBF...")
     file_hash = hashlib.md5()
     with open(pbf_path, "rb") as f:
@@ -59,42 +60,68 @@ def run_osm_midnight():
             file_hash.update(chunk)
             chunk = f.read(8192)
     actual_md5 = file_hash.hexdigest()
-    
+
     if expected_md5 != actual_md5:
         raise ValueError(f"Geofabrik checksum mismatch: expected {expected_md5}, got {actual_md5}")
     print(f"PBF Checksum Verified: {actual_md5}")
-    
+
     # Pilot Corridor Bounding Box (HSR, Koramangala, Indiranagar approx)
     BBOX = "77.58,12.90,77.65,12.98"
     pilot_pbf_name = "pilot_corridor.osm.pbf"
     pilot_pbf_path = os.path.join(OSM_DIR, pilot_pbf_name)
-    
+
     print(f"Clipping to Pilot BBOX ({BBOX}) using osmium...")
-    run_osmium(["extract", "-b", BBOX, "/data/southern-zone-latest.osm.pbf", "-o", f"/data/{pilot_pbf_name}", "--overwrite"])
+    run_osmium(
+        ["extract", "-b", BBOX, "/data/southern-zone-latest.osm.pbf", "-o", f"/data/{pilot_pbf_name}", "--overwrite"]
+    )
     print("Pilot clip successful.")
-    
+
     # Extract Roads (highways)
     roads_pbf_name = "pilot_roads.osm.pbf"
     print("Extracting road network...")
     run_osmium(["tags-filter", f"/data/{pilot_pbf_name}", "w/highway", "-o", f"/data/{roads_pbf_name}", "--overwrite"])
-    
+
     # Extract POIs (amenities, shops, crafts)
     pois_pbf_name = "pilot_pois.osm.pbf"
     print("Extracting POIs...")
-    run_osmium(["tags-filter", f"/data/{pilot_pbf_name}", "n/amenity", "n/shop", "n/craft", "-o", f"/data/{pois_pbf_name}", "--overwrite"])
-    
+    run_osmium(
+        [
+            "tags-filter",
+            f"/data/{pilot_pbf_name}",
+            "n/amenity",
+            "n/shop",
+            "n/craft",
+            "-o",
+            f"/data/{pois_pbf_name}",
+            "--overwrite",
+        ]
+    )
+
     # Export POIs to GeoJSON
     silver_pois_name = "silver_pois.geojson"
     print("Exporting POIs to GeoJSON...")
     run_osmium(["export", f"/data/{pois_pbf_name}", "-o", f"/data/{silver_pois_name}", "--overwrite"])
-    
+
     # Run osmium fileinfo to get node and edge counts
     print("Getting road graph statistics...")
-    info_proc = subprocess.run([
-        "docker", "run", "--rm", "-v", f"{OSM_DIR}:/data", OSMIUM_IMAGE,
-        "osmium", "fileinfo", "-e", f"/data/{roads_pbf_name}"
-    ], capture_output=True, text=True, check=True)
-    
+    info_proc = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{OSM_DIR}:/data",
+            OSMIUM_IMAGE,
+            "osmium",
+            "fileinfo",
+            "-e",
+            f"/data/{roads_pbf_name}",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
     nodes_count = 0
     ways_count = 0
     for line in info_proc.stdout.splitlines():
@@ -102,13 +129,26 @@ def run_osm_midnight():
             nodes_count = int(line.split()[-1])
         if "Number of ways:" in line:
             ways_count = int(line.split()[-1])
-            
+
     print("Getting POI statistics...")
-    poi_info_proc = subprocess.run([
-        "docker", "run", "--rm", "-v", f"{OSM_DIR}:/data", OSMIUM_IMAGE,
-        "osmium", "fileinfo", "-e", f"/data/{pois_pbf_name}"
-    ], capture_output=True, text=True, check=True)
-    
+    poi_info_proc = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{OSM_DIR}:/data",
+            OSMIUM_IMAGE,
+            "osmium",
+            "fileinfo",
+            "-e",
+            f"/data/{pois_pbf_name}",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
     pois_count = 0
     for line in poi_info_proc.stdout.splitlines():
         if "Number of nodes:" in line:
@@ -116,10 +156,9 @@ def run_osm_midnight():
 
     if nodes_count <= 0 or ways_count <= 0 or pois_count <= 0:
         raise ValueError(
-            "Pilot extraction failed data quality: "
-            f"nodes={nodes_count}, highway_ways={ways_count}, pois={pois_count}"
+            f"Pilot extraction failed data quality: nodes={nodes_count}, highway_ways={ways_count}, pois={pois_count}"
         )
-            
+
     # Write Manifest
     retrieved_at = datetime.now(timezone.utc).isoformat()
     manifest = {
@@ -158,10 +197,11 @@ def run_osm_midnight():
     }
     with open(os.path.join(OSM_DIR, "manifest.json"), "w") as f:
         json.dump(manifest, f, indent=2)
-        
+
     print("OSM Pipeline Executed Successfully:")
     print(json.dumps(manifest, indent=2))
     return manifest
+
 
 if __name__ == "__main__":
     run_osm_midnight()

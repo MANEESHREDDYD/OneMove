@@ -10,7 +10,6 @@ from services.zonepilot.economics.contracts import (
     ExperimentDefinition,
     ExperimentEvaluation,
     ExperimentStatus,
-    FrontierPoint,
     ProxyEconomicsMetric,
 )
 
@@ -64,16 +63,15 @@ def compute_proxy_economics(
     baseline_p95_seconds: int = 1200,
     baseline_coverage_bps: int = 9500,
 ) -> ProxyEconomicsMetric:
-    total_travel_s = sum(d * w for d, w in zip(durations, demands)) if durations and demands else 0
-    total_demand = sum(demands) if demands else 1
+    total_travel_s = sum(d * w for d, w in zip(durations, demands, strict=False)) if durations and demands else 0
     weighted_p95 = sorted(durations)[int(0.95 * len(durations)) - 1] if durations else 0
 
     # Proxy variable cost: 0.05 currency units per demand-second of travel
     var_cost = (total_travel_s / 60.0) * 0.05
-    
+
     # Cost per coverage point (basis points)
-    cost_per_cov = (fixed_costs / max(1, baseline_coverage_bps))
-    
+    cost_per_cov = fixed_costs / max(1, baseline_coverage_bps)
+
     # Cost per minute of P95 reduction
     p95_min_reduced = max(0.1, (baseline_p95_seconds - weighted_p95) / 60.0)
     cost_per_p95_min = fixed_costs / p95_min_reduced

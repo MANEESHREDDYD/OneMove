@@ -1,24 +1,14 @@
 def evaluate_forecast():
-    return {
-        "horizon_hours": 24,
-        "mae": 15.2,
-        "rmse": 18.5,
-        "mape_pct": 12.0
-    }
+    return {"horizon_hours": 24, "mae": 15.2, "rmse": 18.5, "mape_pct": 12.0}
+
 
 def evaluate_recommendations():
-    return {
-        "coverage_pct": 85.0,
-        "covered_customers": 850,
-        "customers": 1000
-    }
+    return {"coverage_pct": 85.0, "covered_customers": 850, "customers": 1000}
+
 
 def evaluate_segments():
-    return {
-        "power_users": 50,
-        "casual_users": 100,
-        "churn_risk": 51
-    }
+    return {"power_users": 50, "casual_users": 100, "churn_risk": 51}
+
 
 def evaluate_models():
     return {
@@ -28,13 +18,15 @@ def evaluate_models():
         "recommendations": evaluate_recommendations(),
         "segments": evaluate_segments(),
         "merchant_reliability": {"score": 90.0},
-        "partner_trust": {"score": 95.0}
+        "partner_trust": {"score": 95.0},
     }
+
 
 def run_evaluation():
     print("Running Model Evaluation Suite...")
     print("Evaluation Complete.")
     return True
 
+
 def print_report():
-    print('Report printed.')
+    print("Report printed.")

@@ -13,21 +13,21 @@ from services.collectors.traffic.tomtom.client import run_tomtom_traffic_collect
 def run_all_collectors():
     """Execute all active, keyless, and keyed (if ready) collectors."""
     print("Starting ZonePilot Master Collection Scheduler...")
-    
+
     # 1. Open-Meteo (ACTIVE_REAL)
     print("Executing Open-Meteo Collector...")
     try:
         run_openmeteo_collection()
     except Exception as e:
         print(f"Open-Meteo Collector Failed: {e}")
-        
+
     # 2. ONDC (ACTIVE_REAL)
     print("Executing ONDC Collector...")
     try:
         run_ondc_collection()
     except Exception as e:
         print(f"ONDC Collector Failed: {e}")
-        
+
     # 3. Swiggy Food (READY_NEEDS_SWIGGY_OAUTH_OR_PRODUCTION_ACCESS)
     print("Executing Swiggy Food Collector...")
     try:
@@ -41,17 +41,18 @@ def run_all_collectors():
         run_zomato_pos_collection()
     except Exception as e:
         print(f"Zomato Collector Skipped/Failed: {e}")
-        
+
     # 5. TomTom (READY_NEEDS_API_KEY)
     print("Executing TomTom Collector...")
     try:
         run_tomtom_traffic_collection()
     except Exception as e:
         print(f"TomTom Collector Skipped/Failed: {e}")
-        
+
     # Finalize logical day manifest
-    logical_date = datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')
+    logical_date = datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d")
     generate_daily_manifest(logical_date)
+
 
 if __name__ == "__main__":
     run_all_collectors()

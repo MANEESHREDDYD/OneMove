@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-import hashlib
-import math
 from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
 from services.temporal.contracts import EvidenceClass
 
 

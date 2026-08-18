@@ -14,8 +14,9 @@ from supabase import Client, create_client
 router = APIRouter()
 logger = logging.getLogger("zonepilot.events")
 
+
 class OrderEventCreate(BaseModel):
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra="forbid")
     order_id: str
     event_type: str
     occurred_at: datetime
@@ -24,19 +25,26 @@ class OrderEventCreate(BaseModel):
     correction_reason: Optional[str] = None
     payload: Optional[Any] = None
 
+
 @router.post("/v1/events")
 async def create_event(req: Request, event: OrderEventCreate, supabase: Client = Depends(get_supabase)):
     try:
-        res = supabase.table("volunteer_order_events").insert({
-            "order_id": event.order_id,
-            "event_type": event.event_type,
-            "occurred_at": event.occurred_at.isoformat(),
-            "provenance": "OBSERVED",
-            "client_event_id": event.client_event_id,
-            "supersedes_id": event.supersedes_id,
-            "correction_reason": event.correction_reason,
-            "payload": event.payload
-        }).execute()
+        res = (
+            supabase.table("volunteer_order_events")
+            .insert(
+                {
+                    "order_id": event.order_id,
+                    "event_type": event.event_type,
+                    "occurred_at": event.occurred_at.isoformat(),
+                    "provenance": "OBSERVED",
+                    "client_event_id": event.client_event_id,
+                    "supersedes_id": event.supersedes_id,
+                    "correction_reason": event.correction_reason,
+                    "payload": event.payload,
+                }
+            )
+            .execute()
+        )
         return res.data
     except Exception as exc:
         logger.exception(
@@ -47,8 +55,9 @@ async def create_event(req: Request, event: OrderEventCreate, supabase: Client =
             raise HTTPException(status_code=409, detail="Duplicate client event identifier") from exc
         raise HTTPException(status_code=400, detail="Unable to persist event") from exc
 
+
 class ProbeObservationCreate(BaseModel):
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra="forbid")
     assignment_id: str
     client_event_id: str
     observed_at_device: datetime
@@ -62,6 +71,7 @@ class ProbeObservationCreate(BaseModel):
     supersedes_id: Optional[str] = None
     correction_reason: Optional[str] = None
 
+
 def _get_service_client() -> Client:
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -69,31 +79,33 @@ def _get_service_client() -> Client:
         raise HTTPException(status_code=500, detail="Service Role Key missing")
     return create_client(url, key)
 
+
 @router.post("/v1/probes")
 async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Client = Depends(get_supabase)):
     auth_header = req.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth token")
     token = auth_header.split(" ")[1]
-    
+
     # Cryptographic JWT verification
     from services.api.core.auth import verify_token
+
     payload = verify_token(token)
     participant_id = payload["sub"]
-    
+
     service_client = _get_service_client()
-    
+
     # Load Assignment and verify ownership
     assign_res = service_client.table("assignments").select("*").eq("id", probe.assignment_id).execute()
     if not assign_res.data or len(assign_res.data) == 0:
         raise HTTPException(status_code=404, detail="Assignment not found")
-        
+
     assignment = assign_res.data[0]
     if assignment["participant_id"] != participant_id:
         raise HTTPException(status_code=403, detail="Assignment does not belong to participant")
     if assignment["status"] != "ACTIVE":
         raise HTTPException(status_code=403, detail="Assignment is not ACTIVE")
-        
+
     # Validation for Correction
     if probe.supersedes_id:
         orig_res = service_client.table("probe_observations").select("*").eq("id", probe.supersedes_id).execute()
@@ -117,7 +129,7 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
     protocol = assignment["protocol"]
     scheduled_for = assignment.get("scheduled_for")
     protocol_version = assignment["protocol_version"]
-    
+
     # Calculate deterministic semantic hash (using server-resolved structural fields!)
     semantic_dict = {
         "assignment_id": probe.assignment_id,
@@ -130,21 +142,21 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
         "observed_at_device": probe.observed_at_device.isoformat(),
         "zone_cluster": zone_cluster,
         "platform": platform,
-        "intent": intent
+        "intent": intent,
     }
     canonical_payload = json.dumps(semantic_dict, sort_keys=True)
-    client_payload_hash = hashlib.sha256(canonical_payload.encode('utf-8')).hexdigest()
-    
+    client_payload_hash = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+
     # Server controlled fields
     provenance = "OBSERVED"
     received_at_server = datetime.now(timezone.utc).isoformat()
-    
+
     # Timing derivation
     timing_valid = False
     timing_deviation_seconds = 0
     if scheduled_for:
         try:
-            sched_dt = datetime.fromisoformat(scheduled_for.replace('Z', '+00:00'))
+            sched_dt = datetime.fromisoformat(scheduled_for.replace("Z", "+00:00"))
             obs_dt = probe.observed_at_device
             if obs_dt.tzinfo is None:
                 obs_dt = obs_dt.replace(tzinfo=datetime.timezone.utc)
@@ -159,7 +171,7 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
                     "error_code": "INVALID_ASSIGNMENT_SCHEDULE",
                 },
             )
-    
+
     insert_data = {
         "study_id": study_id,
         "assignment_id": probe.assignment_id,
@@ -187,7 +199,7 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
         "correction_reason": probe.correction_reason,
         "client_payload_hash": client_payload_hash,
     }
-    
+
     try:
         # Use user-scoped client so RLS applies
         res = supabase.table("probe_observations").insert(insert_data).execute()
@@ -196,15 +208,23 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
         err_str = str(e).lower()
         if "duplicate key" in err_str or "uq_probe_participant_client_event" in err_str:
             # Semantic Idempotency Check using Service Role
-            existing = service_client.table("probe_observations").select("client_payload_hash").eq("participant_id", participant_id).eq("client_event_id", probe.client_event_id).execute()
-            
+            existing = (
+                service_client.table("probe_observations")
+                .select("client_payload_hash")
+                .eq("participant_id", participant_id)
+                .eq("client_event_id", probe.client_event_id)
+                .execute()
+            )
+
             if existing.data and len(existing.data) > 0:
                 if existing.data[0]["client_payload_hash"] == client_payload_hash:
                     return {"idempotent_replay": True, "message": "Exact payload duplicate ignored."}
                 else:
-                    raise HTTPException(status_code=409, detail="Conflicting reuse of client_event_id with different payload.")
+                    raise HTTPException(
+                        status_code=409, detail="Conflicting reuse of client_event_id with different payload."
+                    )
             raise HTTPException(status_code=409, detail="Duplicate client event identifier") from e
-        
+
         logger.exception(
             "probe_insert_failed",
             extra={"request_id": req.state.request_id, "error_code": "PROBE_INSERT_FAILED"},

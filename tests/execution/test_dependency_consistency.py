@@ -138,9 +138,7 @@ def test_runtime_pins_are_declared_in_the_package_metadata():
     api = _direct_pins(API_REQUIREMENTS)
     test_only = {"pytest", "pytest-asyncio", "pytest-cov", "ruff"}
 
-    undeclared = sorted(
-        name for name in (set(base) | set(api)) - declared - test_only
-    )
+    undeclared = sorted(name for name in (set(base) | set(api)) - declared - test_only)
     assert not undeclared, (
         "Pinned for CI but absent from pyproject [project.dependencies], so an "
         "editable install would not provide them: " + ", ".join(undeclared)

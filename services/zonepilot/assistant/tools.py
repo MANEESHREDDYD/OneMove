@@ -7,10 +7,8 @@ import time
 from typing import Any, Callable
 
 from services.zonepilot.assistant.contracts import (
-    AssistantResponse,
     AssistantToolCall,
     AssistantToolResult,
-    NumericalClaimBinding,
     ToolName,
 )
 

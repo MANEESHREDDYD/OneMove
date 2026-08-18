@@ -10,20 +10,23 @@ from services.api.core.telemetry import metrics
 router = APIRouter(tags=["observability"])
 logger = logging.getLogger("zonepilot.health")
 
+
 @router.get("/healthz")
 def liveness_probe():
     """Basic liveness probe for orchestration platforms"""
     return {"status": "ok"}
 
+
 @router.get("/readyz")
 def readiness_probe(response: Response):
     """Readiness probe checking critical dependencies like DB"""
     db_url = os.environ.get("ZONEPILOT_DB_URL")
-    
+
     db_connected = False
-    
+
     if db_url:
         import psycopg
+
         try:
             with psycopg.connect(db_url, connect_timeout=3) as conn:
                 with conn.cursor() as cur:
@@ -31,11 +34,11 @@ def readiness_probe(response: Response):
                     db_connected = True
         except Exception:
             logger.exception("database_readiness_check_failed", extra={"error_code": "DB_UNAVAILABLE"})
-            
+
     if not db_connected:
         response.status_code = 503
         return {"status": "unready", "db_connected": False}
-        
+
     return {"status": "ready", "db_connected": True}
 
 

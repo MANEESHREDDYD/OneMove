@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import math
-from datetime import datetime, timezone
 from typing import Sequence
 
-from services.temporal.contracts import EvidenceClass
 from services.zonepilot.resilience.contracts import (
     ResilienceEvaluationResult,
     ResilienceMetrics,
     ResilienceScenario,
     ScenarioComparison,
-    ScenarioType,
 )
 
 
@@ -79,7 +76,9 @@ def compare_scenarios(
 ) -> ScenarioComparison:
     cov_delta = stressed.coverage_basis_points - baseline.coverage_basis_points
     p95_delta_s = stressed.p95_duration_seconds - baseline.p95_duration_seconds
-    p95_inflation_bps = int((p95_delta_s / max(1, baseline.p95_duration_seconds)) * 10_000) if baseline.p95_duration_seconds > 0 else 0
+    p95_inflation_bps = (
+        int((p95_delta_s / max(1, baseline.p95_duration_seconds)) * 10_000) if baseline.p95_duration_seconds > 0 else 0
+    )
     disc_delta = max(0, stressed.disconnected_zones_count - baseline.disconnected_zones_count)
 
     # Compute resilience grade

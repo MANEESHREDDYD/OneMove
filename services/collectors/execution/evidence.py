@@ -56,9 +56,7 @@ def request_fingerprint(method: str, url: str, params: Mapping[str, object]) -> 
         else:
             normalised[name] = str(value)
 
-    canonical = canonical_json(
-        {"method": method.upper(), "url": url, "params": normalised}
-    )
+    canonical = canonical_json({"method": method.upper(), "url": url, "params": normalised})
     return sha256_hex(canonical.encode("utf-8"))
 
 

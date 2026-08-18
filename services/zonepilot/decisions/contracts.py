@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-import hashlib
-from typing import Any, Self
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from services.temporal.contracts import EvidenceClass, OutcomeStatus
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from services.temporal.contracts import OutcomeStatus
 
 
 class ShadowState(str, Enum):

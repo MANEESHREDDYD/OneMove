@@ -12,9 +12,9 @@ from services.collectors.traffic.tomtom.client import run_tomtom_midnight
 def run_midnight_collectors():
     """Execute all daily rollover and baseline acquisition tasks (00:00 IST)."""
     print("Starting ZonePilot MIDNIGHT Collection Scheduler...")
-    
+
     has_failure = False
-    
+
     print("Executing Open-Meteo Historical/Archive...")
     try:
         run_openmeteo_midnight()
@@ -28,7 +28,7 @@ def run_midnight_collectors():
     except Exception as e:
         print(f"OSM Midnight Failed: {e}")
         has_failure = True
-        
+
     print("Executing TomTom Historical/Archive...")
     try:
         run_tomtom_midnight()
@@ -38,15 +38,16 @@ def run_midnight_collectors():
         else:
             print(f"TomTom Midnight Failed: {e}")
             has_failure = True
-        
+
     # Generate manifest for previous day
-    tz = pytz.timezone('Asia/Kolkata')
-    logical_date = datetime.now(tz).strftime('%Y-%m-%d')
+    tz = pytz.timezone("Asia/Kolkata")
+    logical_date = datetime.now(tz).strftime("%Y-%m-%d")
     generate_daily_manifest(logical_date)
-    
+
     if has_failure:
         print("Scheduler exiting with failure due to provider errors.")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     run_midnight_collectors()

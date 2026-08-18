@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
-from typing import Any, Sequence
+from datetime import datetime, timezone
+from typing import Sequence
 
 from services.temporal.contracts import OutcomeStatus
 from services.zonepilot.decisions.contracts import (
@@ -92,9 +92,9 @@ class DecisionLedger:
         if orig is None:
             raise ValueError(f"Decision {original_decision_id} not found in ledger")
 
-        action_match = (orig.selected_action == recomputed_action)
-        facilities_match = (set(orig.opened_facilities) == set(recomputed_facilities))
-        obj_match = (orig.objective_value == recomputed_objective)
+        action_match = orig.selected_action == recomputed_action
+        facilities_match = set(orig.opened_facilities) == set(recomputed_facilities)
+        obj_match = orig.objective_value == recomputed_objective
 
         return DecisionReplayResult(
             original_decision_id=original_decision_id,

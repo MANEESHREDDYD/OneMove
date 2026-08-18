@@ -120,8 +120,7 @@ class MetricsRegistry:
                 labels = f'method="{method}",route="{route}"'
                 lines.append(f"zonepilot_api_request_latency_seconds_sum{{{labels}}} {total:.9f}")
                 lines.append(
-                    f"zonepilot_api_request_latency_seconds_count{{{labels}}} "
-                    f"{self._latency_count[(method, route)]}"
+                    f"zonepilot_api_request_latency_seconds_count{{{labels}}} {self._latency_count[(method, route)]}"
                 )
         return "\n".join(lines) + "\n"
 
