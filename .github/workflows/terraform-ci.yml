@@ -1,0 +1,40 @@
+name: Terraform CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/gcp/**"
+      - ".github/workflows/terraform-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/gcp/**"
+      - ".github/workflows/terraform-ci.yml"
+
+jobs:
+  validate:
+    name: Terraform Format & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.8
+
+      - name: Check Formatting
+        run: terraform fmt -check -recursive infra/gcp
+
+      - name: Validate Staging Configuration
+        run: |
+          cd infra/gcp/environments/staging
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate Production Configuration
+        run: |
+          cd infra/gcp/environments/production
+          terraform init -backend=false
+          terraform validate
