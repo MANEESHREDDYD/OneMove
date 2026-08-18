@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
 from enum import Enum
-import math
-from typing import Any, Self
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 from services.temporal.contracts import EvidenceClass
 
 
@@ -24,7 +25,12 @@ class ProxyEconomicsMetric(StrictContract):
     evidence_class: EvidenceClass = EvidenceClass.ASSUMPTION
     assumption_version: str = Field(min_length=1)
 
-    @field_validator("total_variable_cost_proxy", "cost_per_coverage_point", "cost_per_p95_minute_reduced", "incremental_resilience_proxy_cost")
+    @field_validator(
+        "total_variable_cost_proxy",
+        "cost_per_coverage_point",
+        "cost_per_p95_minute_reduced",
+        "incremental_resilience_proxy_cost",
+    )
     @classmethod
     def numeric_is_finite(cls, val: float) -> float:
         if not math.isfinite(val):

@@ -175,9 +175,7 @@ def _parse_json(raw: bytes, what: str) -> object:
     try:
         return json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as error:
-        raise AcquisitionError(
-            f"{what} was not valid JSON", RunStatus.FAILED, "PROVIDER_MALFORMED"
-        ) from error
+        raise AcquisitionError(f"{what} was not valid JSON", RunStatus.FAILED, "PROVIDER_MALFORMED") from error
 
 
 def fetch_provider_issue(model: str = DEFAULT_MODEL) -> ProviderIssue:

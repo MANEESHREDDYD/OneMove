@@ -45,8 +45,11 @@ def _iso(value: Any) -> Any:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--environment", default=os.environ.get("EXECUTION_ENVIRONMENT", "local"),
-                        choices=["staging", "production", "local"])
+    parser.add_argument(
+        "--environment",
+        default=os.environ.get("EXECUTION_ENVIRONMENT", "local"),
+        choices=["staging", "production", "local"],
+    )
     parser.add_argument("--model", default=om.DEFAULT_MODEL, choices=sorted(om.MODEL_META_IDS))
     parser.add_argument("--forecast-days", type=int, default=2)
     parser.add_argument("--lease-seconds", type=int, default=900)
@@ -72,8 +75,13 @@ def run(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         lease = store.acquire_lease(LOCK_NAME, runner_id, lease_seconds=args.lease_seconds)
         if lease is None:
             manifest = _manifest(
-                run_id=None, status=RunStatus.SKIPPED_NO_CHANGE, args=args, result=result,
-                started_at=started_at, inserted=0, deduplicated=0,
+                run_id=None,
+                status=RunStatus.SKIPPED_NO_CHANGE,
+                args=args,
+                result=result,
+                started_at=started_at,
+                inserted=0,
+                deduplicated=0,
                 public_code_sha=public_code_sha,
                 note="another runner holds a live lease on this dataset",
             )
@@ -157,21 +165,32 @@ def run(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
             # That is a healthy outcome, not a failure, and it is not SUCCESS either.
             terminal = RunStatus.SUCCESS if inserted > 0 else RunStatus.SKIPPED_NO_CHANGE
             store.transition_run(
-                run_id, RunStatus.RUNNING, terminal,
-                records_written=inserted, records_deduplicated=deduplicated,
+                run_id,
+                RunStatus.RUNNING,
+                terminal,
+                records_written=inserted,
+                records_deduplicated=deduplicated,
             )
 
             store.set_provider_state(
-                om.PROVIDER, om.DATASET_ID, "last_issued_at",
+                om.PROVIDER,
+                om.DATASET_ID,
+                "last_issued_at",
                 {"issued_at": _iso(issue.issued_at), "model": issue.model, "records": inserted},
                 run_id=run_id,
             )
 
             summary = store.dataset_summary(om.DATASET_ID)
             manifest = _manifest(
-                run_id=run_id, status=terminal, args=args, result=result,
-                started_at=started_at, inserted=inserted, deduplicated=deduplicated,
-                public_code_sha=public_code_sha, dataset_summary=summary,
+                run_id=run_id,
+                status=terminal,
+                args=args,
+                result=result,
+                started_at=started_at,
+                inserted=inserted,
+                deduplicated=deduplicated,
+                public_code_sha=public_code_sha,
+                dataset_summary=summary,
             )
             return 0, manifest
 
@@ -181,14 +200,22 @@ def run(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
             if run_id is not None:
                 try:
                     store.transition_run(
-                        run_id, RunStatus.RUNNING, status,
-                        failure_code=code, failure_message=f"{type(error).__name__}: {error}"[:512],
+                        run_id,
+                        RunStatus.RUNNING,
+                        status,
+                        failure_code=code,
+                        failure_message=f"{type(error).__name__}: {error}"[:512],
                     )
                 except ExecutionStoreError:
                     pass
             manifest = _manifest(
-                run_id=run_id, status=status, args=args, result=result,
-                started_at=started_at, inserted=0, deduplicated=0,
+                run_id=run_id,
+                status=status,
+                args=args,
+                result=result,
+                started_at=started_at,
+                inserted=0,
+                deduplicated=0,
                 public_code_sha=public_code_sha,
                 failure={"code": code, "safe_message": f"{type(error).__name__}: {error}"[:512]},
             )

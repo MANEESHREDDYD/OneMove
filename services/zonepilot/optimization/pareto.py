@@ -184,9 +184,7 @@ def build_pareto_frontier(problem: OptimizationProblem) -> ParetoFrontier:
         evaluated_probes += 1
         result = optimize_facilities(probe_problem)
         if result.status is not OptimizationStatus.OPTIMAL or result.objective is None:
-            unproved.append(
-                UnprovedEvaluation(probe_id=probe_id, status=result.status, message=result.message)
-            )
+            unproved.append(UnprovedEvaluation(probe_id=probe_id, status=result.status, message=result.message))
             continue
         evaluated.append(
             ParetoCandidate(

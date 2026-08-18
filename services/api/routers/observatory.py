@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
-import hashlib
-from typing import Any
 import uuid
+from datetime import datetime, timezone
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from services.api.contracts.observatory import (
@@ -19,12 +18,10 @@ from services.api.contracts.observatory import (
 from services.api.core.auth import get_current_user
 from services.api.repositories.artifact_catalog import ArtifactCorrupt, ArtifactNotFound, ArtifactNotReady
 from services.api.services.observatory import ObservatoryService, get_observatory_service
-from services.zonepilot.assistant.tools import create_default_registry, sanitize_input
 from services.zonepilot.assistant.contracts import AssistantToolCall, ToolName
-from services.zonepilot.decisions.contracts import DecisionRecord
+from services.zonepilot.assistant.tools import create_default_registry
 from services.zonepilot.decisions.ledger import DecisionLedger
 from services.zonepilot.economics.registry import CANONICAL_EXPERIMENTS
-from services.zonepilot.resilience.contracts import ResilienceScenario, ScenarioType
 
 router = APIRouter(prefix="/api/v1", tags=["observatory"])
 
@@ -41,10 +38,11 @@ def standard_error(code: str, message: str, status_code: int = 400):
                 "code": code,
                 "message": message,
                 "retryable": status_code in (408, 429, 500, 502, 503, 504),
-                "details": {}
+                "details": {},
             }
-        }
+        },
     )
+
 
 def _translate_artifact_error(exc: Exception) -> None:
     if isinstance(exc, ArtifactNotReady):
@@ -70,6 +68,7 @@ def get_zones(
         return service.list_zones()
     except Exception as exc:
         _translate_artifact_error(exc)
+
 
 @router.get("/zones/{zone_id}/state", response_model=ZoneStateResponse)
 def get_zone_state(
@@ -148,6 +147,7 @@ def get_data_health(
 
 # --- R3 / R4 / R5 / R7 / R8 Endpoints ---
 
+
 class OptimizationRequest(BaseModel):
     idempotency_key: str | None = None
     min_open_facilities: int = 1
@@ -167,7 +167,7 @@ def run_optimization(
     user_id = _user.get("sub", "anonymous")
     idem_key = payload.idempotency_key or str(uuid.uuid4())
     job_id = str(uuid.uuid4())
-    
+
     job_record = {
         "job_id": job_id,
         "idempotency_key": idem_key,
@@ -211,9 +211,24 @@ def list_scenarios(_user: dict = Depends(get_current_user)):
     """List available network uncertainty and resilience scenarios."""
     return {
         "scenarios": [
-            {"scenario_id": "s1_free_flow", "title": "Free Flow Baseline", "type": "BASELINE", "probability_basis_points": 6000},
-            {"scenario_id": "s2_congested", "title": "Peak Congestion", "type": "CONGESTION_SPIKE", "probability_basis_points": 3000},
-            {"scenario_id": "s3_congested_outage", "title": "Compound Outage", "type": "COMPOUND_FAILURE", "probability_basis_points": 1000},
+            {
+                "scenario_id": "s1_free_flow",
+                "title": "Free Flow Baseline",
+                "type": "BASELINE",
+                "probability_basis_points": 6000,
+            },
+            {
+                "scenario_id": "s2_congested",
+                "title": "Peak Congestion",
+                "type": "CONGESTION_SPIKE",
+                "probability_basis_points": 3000,
+            },
+            {
+                "scenario_id": "s3_congested_outage",
+                "title": "Compound Outage",
+                "type": "COMPOUND_FAILURE",
+                "probability_basis_points": 1000,
+            },
         ]
     }
 

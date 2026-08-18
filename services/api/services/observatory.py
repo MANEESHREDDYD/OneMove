@@ -313,9 +313,7 @@ class ObservatoryService:
         gold = self.repository.gold_manifest()
         observed_at = _parse_timestamp((osm or {}).get("retrieved_at") or (osm or {}).get("timestamp"))
         source_version = (
-            str((osm or {}).get("source_version"))
-            if (osm or {}).get("source_version") is not None
-            else None
+            str((osm or {}).get("source_version")) if (osm or {}).get("source_version") is not None else None
         )
         layers: list[MapLayer] = []
 
@@ -489,8 +487,10 @@ class ObservatoryService:
             expected = self._freshness_seconds(provider)
             latest_run = max(
                 runs,
-                key=lambda run: _parse_timestamp(run.get("completed_at") or run.get("started_at"))
-                or datetime.min.replace(tzinfo=timezone.utc),
+                key=lambda run: (
+                    _parse_timestamp(run.get("completed_at") or run.get("started_at"))
+                    or datetime.min.replace(tzinfo=timezone.utc)
+                ),
                 default=None,
             )
             successes = [
@@ -517,8 +517,10 @@ class ObservatoryService:
             missing_intervals = latest_run.get("missing_intervals") if latest_run else None
             latest_success_run = max(
                 successes,
-                key=lambda run: _parse_timestamp(run.get("completed_at") or run.get("started_at"))
-                or datetime.min.replace(tzinfo=timezone.utc),
+                key=lambda run: (
+                    _parse_timestamp(run.get("completed_at") or run.get("started_at"))
+                    or datetime.min.replace(tzinfo=timezone.utc)
+                ),
                 default=None,
             )
             latest_success_records = (
@@ -545,11 +547,7 @@ class ObservatoryService:
                 state = ProviderState.FRESH
 
             dataset_ids = sorted(
-                {
-                    f"{provider}:{run['dataset']}"
-                    for run in runs
-                    if isinstance(run.get("dataset"), str)
-                }
+                {f"{provider}:{run['dataset']}" for run in runs if isinstance(run.get("dataset"), str)}
             )
             if provider == "osm":
                 dataset_ids.append("gold_network_bengaluru")

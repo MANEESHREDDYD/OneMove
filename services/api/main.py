@@ -31,10 +31,11 @@ app.add_middleware(
     allow_headers=["authorization", "content-type", "x-correlation-id", "x-request-id", "x-workspace-id"],
 )
 
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     req_id = getattr(request.state, "request_id", "unknown")
-    
+
     # Check if exc.detail is already our structured error envelope
     if isinstance(exc.detail, dict) and "error" in exc.detail:
         payload = exc.detail
@@ -42,10 +43,16 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         if "request_id" not in payload["error"]:
             payload["error"]["request_id"] = req_id
         return JSONResponse(status_code=exc.status_code, content=payload)
-    
+
     # Generic format
-    code = "UNAUTHORIZED" if exc.status_code == 401 else "FORBIDDEN" if exc.status_code == 403 else f"HTTP_{exc.status_code}"
-    
+    code = (
+        "UNAUTHORIZED"
+        if exc.status_code == 401
+        else "FORBIDDEN"
+        if exc.status_code == 403
+        else f"HTTP_{exc.status_code}"
+    )
+
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -54,10 +61,11 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
                 "message": str(exc.detail),
                 "request_id": req_id,
                 "retryable": exc.status_code in (408, 429, 500, 502, 503, 504),
-                "details": {}
+                "details": {},
             }
-        }
+        },
     )
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -78,10 +86,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                 "message": "The request body or parameters are invalid.",
                 "request_id": req_id,
                 "retryable": False,
-                "details": {"errors": safe_errors}
+                "details": {"errors": safe_errors},
             }
-        }
+        },
     )
+
 
 app.include_router(events.router)
 app.include_router(observatory.router)

@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
 from services.zonepilot.assistant.contracts import (
-    AssistantResponse,
     AssistantToolCall,
-    AssistantToolResult,
     ToolName,
 )
 from services.zonepilot.assistant.tools import (

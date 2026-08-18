@@ -84,8 +84,7 @@ def test_public_workflow_never_runs_provider_acquisition(path: Path):
     workflow = path.read_text(encoding="utf-8")
     for entrypoint in PRIVATE_ACQUISITION_ENTRYPOINTS:
         assert entrypoint not in workflow, (
-            f"{path.name} invokes {entrypoint}. Acquisition runs in the private "
-            "execution plane."
+            f"{path.name} invokes {entrypoint}. Acquisition runs in the private execution plane."
         )
 
 
@@ -117,8 +116,7 @@ def test_no_public_workflow_manages_rolling_dataset_state():
     for path in _workflow_paths():
         workflow = path.read_text(encoding="utf-8")
         assert "data/rolling" not in workflow, (
-            f"{path.name} manages data/rolling. Rolling acquisition state is "
-            "private execution data."
+            f"{path.name} manages data/rolling. Rolling acquisition state is private execution data."
         )
 
 

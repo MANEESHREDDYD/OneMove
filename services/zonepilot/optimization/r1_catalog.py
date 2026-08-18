@@ -76,9 +76,7 @@ class FileSystemArtifactCatalog:
 
     def osrm_build_manifest(self) -> dict[str, Any] | None:
         if self._osrm_build_manifest is None:
-            self._osrm_build_manifest = _read_json(
-                self.data_root / OSRM_BUILD_MANIFEST_RELATIVE, "OSRM build manifest"
-            )
+            self._osrm_build_manifest = _read_json(self.data_root / OSRM_BUILD_MANIFEST_RELATIVE, "OSRM build manifest")
         return self._osrm_build_manifest
 
     def osrm_graph_bundle_hash(self) -> str:

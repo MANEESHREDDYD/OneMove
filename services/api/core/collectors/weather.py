@@ -10,6 +10,7 @@ class WeatherData(BaseModel):
     wind_speed_10m: float
     weather_code: int
 
+
 class OpenMeteoCollector:
     BASE_URL = "https://api.open-meteo.com/v1/forecast"
 
@@ -21,9 +22,9 @@ class OpenMeteoCollector:
             "latitude": lat,
             "longitude": lon,
             "current": "temperature_2m,precipitation,weather_code,wind_speed_10m",
-            "timezone": "auto"
+            "timezone": "auto",
         }
-        
+
         response = await self.client.get(self.BASE_URL, params=params)
         response.raise_for_status()
         data = response.json()
@@ -33,5 +34,5 @@ class OpenMeteoCollector:
             temperature_2m=current.get("temperature_2m", 0.0),
             precipitation=current.get("precipitation", 0.0),
             wind_speed_10m=current.get("wind_speed_10m", 0.0),
-            weather_code=current.get("weather_code", 0)
+            weather_code=current.get("weather_code", 0),
         )

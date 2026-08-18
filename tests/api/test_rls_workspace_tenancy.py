@@ -21,9 +21,7 @@ import pytest
 
 psycopg = pytest.importorskip("psycopg", reason="psycopg is required for tenancy proofs")
 
-ENV_FILE = os.environ.get(
-    "ZONEPILOT_ENV_FILE", "C:/Users/md200/OneDrive/Desktop/OneMove/OneMove.env"
-)
+ENV_FILE = os.environ.get("ZONEPILOT_ENV_FILE", "C:/Users/md200/OneDrive/Desktop/OneMove/OneMove.env")
 
 
 def _pooler_dsn_from_env_file() -> str | None:
@@ -252,8 +250,7 @@ def test_temporal_contract_columns_exist(conn):
 def test_point_in_time_and_identity_indexes_exist(conn):
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT indexname FROM pg_indexes WHERE tablename IN "
-            "('weather_observations', 'traffic_observations')"
+            "SELECT indexname FROM pg_indexes WHERE tablename IN ('weather_observations', 'traffic_observations')"
         )
         names = {r[0] for r in cur.fetchall()}
     assert {
@@ -313,8 +310,7 @@ def test_valid_future_forecast_is_accepted(fx):
         ),
     )
     fx.cur.execute(
-        "SELECT valid_at > information_available_at FROM weather_observations "
-        "WHERE workspace_id = %s",
+        "SELECT valid_at > information_available_at FROM weather_observations WHERE workspace_id = %s",
         (fx.workspace_a,),
     )
     assert fx.cur.fetchone()[0] is True
@@ -322,9 +318,7 @@ def test_valid_future_forecast_is_accepted(fx):
 
 def test_nowcast_is_accepted(fx):
     insert_weather(fx.cur, weather_row(fx.workspace_a))
-    fx.cur.execute(
-        "SELECT count(*) FROM weather_observations WHERE workspace_id = %s", (fx.workspace_a,)
-    )
+    fx.cur.execute("SELECT count(*) FROM weather_observations WHERE workspace_id = %s", (fx.workspace_a,))
     assert fx.cur.fetchone()[0] == 1
 
 
@@ -379,9 +373,7 @@ def test_authoritative_evidence_classes_are_accepted(fx):
             fx.cur,
             weather_row(fx.workspace_a, evidence_class=evidence_class, zone_id=f"BGLR-{index}"),
         )
-    fx.cur.execute(
-        "SELECT count(*) FROM weather_observations WHERE workspace_id = %s", (fx.workspace_a,)
-    )
+    fx.cur.execute("SELECT count(*) FROM weather_observations WHERE workspace_id = %s", (fx.workspace_a,))
     assert fx.cur.fetchone()[0] == len(accepted)
 
 
@@ -406,9 +398,7 @@ def test_provider_rerun_is_idempotent(fx):
         tuple(repeat.values()),
     )
 
-    fx.cur.execute(
-        "SELECT count(*) FROM weather_observations WHERE workspace_id = %s", (fx.workspace_a,)
-    )
+    fx.cur.execute("SELECT count(*) FROM weather_observations WHERE workspace_id = %s", (fx.workspace_a,))
     assert fx.cur.fetchone()[0] == 1
 
 
@@ -473,9 +463,7 @@ def test_member_cannot_read_other_workspace(fx):
     assert fx.cur.fetchone()[0] == 0
 
     # And naming workspace B explicitly must not reveal it either.
-    fx.cur.execute(
-        "SELECT count(*) FROM weather_observations WHERE workspace_id = %s", (fx.workspace_b,)
-    )
+    fx.cur.execute("SELECT count(*) FROM weather_observations WHERE workspace_id = %s", (fx.workspace_b,))
     assert fx.cur.fetchone()[0] == 0
 
 

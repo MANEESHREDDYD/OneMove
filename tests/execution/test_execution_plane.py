@@ -41,8 +41,15 @@ ALL_SQL = PLANE_SQL + "\n" + VERSIONS_SQL
 # --------------------------------------------------------------------------
 
 EXPECTED_STATES = {
-    "PENDING", "RUNNING", "SUCCESS", "PARTIAL", "FAILED",
-    "DEGRADED", "SKIPPED_NO_CHANGE", "AUTH_REQUIRED", "RATE_LIMITED",
+    "PENDING",
+    "RUNNING",
+    "SUCCESS",
+    "PARTIAL",
+    "FAILED",
+    "DEGRADED",
+    "SKIPPED_NO_CHANGE",
+    "AUTH_REQUIRED",
+    "RATE_LIMITED",
 }
 
 
@@ -98,6 +105,7 @@ def test_provider_http_failures_map_onto_the_state_machine(code, expected):
 # Scheduler lease semantics
 # --------------------------------------------------------------------------
 
+
 def test_scheduler_locks_carries_real_lease_columns():
     block = ALL_SQL.split("CREATE TABLE IF NOT EXISTS zonepilot_exec.scheduler_locks", 1)[1]
     block = block.split("COMMENT ON TABLE", 1)[0]
@@ -131,6 +139,7 @@ def test_release_is_fenced_to_the_current_holder_and_token():
 # Tables with real consumers
 # --------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "table",
     [
@@ -155,6 +164,7 @@ def test_a_run_can_only_claim_a_declared_dataset_version():
 # Point-in-time correctness: the property R2 depends on
 # --------------------------------------------------------------------------
 
+
 def test_a_forecast_issue_is_versioned_not_overwritten():
     """issued_at is part of the natural key, so a new cycle appends beside the old."""
     assert "feature_records_forecast_version_unique" in PLANE_SQL
@@ -175,16 +185,15 @@ def test_stored_observations_are_immutable():
 
 def test_collector_role_is_append_only_on_observations():
     grants = [
-        line for line in ALL_SQL.splitlines()
+        line
+        for line in ALL_SQL.splitlines()
         if "zonepilot_r0_collector" in line and line.strip().upper().startswith("GRANT")
     ]
     assert grants, "the collector must be granted something"
     for line in grants:
         assert "DELETE" not in line.upper(), f"collector must never hold DELETE: {line}"
         assert "TRUNCATE" not in line.upper(), f"collector must never hold TRUNCATE: {line}"
-    observation_grant = next(
-        line for line in grants if "zonepilot_temporal.feature_records" in line
-    )
+    observation_grant = next(line for line in grants if "zonepilot_temporal.feature_records" in line)
     assert "UPDATE" not in observation_grant.upper(), "observations are append-only"
 
 
@@ -197,6 +206,7 @@ def test_collector_role_cannot_escalate():
 # --------------------------------------------------------------------------
 # Evidence addressing
 # --------------------------------------------------------------------------
+
 
 def test_evidence_class_is_the_canonical_taxonomy():
     assert EvidenceClass.PUBLIC_OFFICIAL.value == "PUBLIC_OFFICIAL"
@@ -220,10 +230,8 @@ def test_record_identity_refuses_blank_parts():
 
 
 def test_request_fingerprint_is_canonical_across_key_order():
-    one = request_fingerprint("GET", "https://api.open-meteo.com/v1/forecast",
-                              {"latitude": 12.9, "longitude": 77.6})
-    two = request_fingerprint("get", "https://api.open-meteo.com/v1/forecast",
-                              {"longitude": 77.6, "latitude": 12.9})
+    one = request_fingerprint("GET", "https://api.open-meteo.com/v1/forecast", {"latitude": 12.9, "longitude": 77.6})
+    two = request_fingerprint("get", "https://api.open-meteo.com/v1/forecast", {"longitude": 77.6, "latitude": 12.9})
     assert one == two
 
 
@@ -241,6 +249,7 @@ def test_canonical_json_is_deterministic():
 # --------------------------------------------------------------------------
 # Pilot area
 # --------------------------------------------------------------------------
+
 
 def test_pilot_area_is_the_agreed_94_cells():
     from services.collectors.execution.pilot_area import (

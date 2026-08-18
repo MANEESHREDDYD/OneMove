@@ -66,7 +66,11 @@ class ExecutionStore:
     # -- leases ------------------------------------------------------------
 
     def acquire_lease(
-        self, lock_name: str, lease_holder: str, *, lease_seconds: int = DEFAULT_LEASE_SECONDS,
+        self,
+        lock_name: str,
+        lease_holder: str,
+        *,
+        lease_seconds: int = DEFAULT_LEASE_SECONDS,
         run_id: str | None = None,
     ) -> LeaseHandle | None:
         """Claim a lease, or return ``None`` when a live holder already owns it."""
@@ -125,9 +129,18 @@ class ExecutionStore:
                 RETURNING run_id
                 """,
                 (
-                    provider, dataset_id, dataset_version, provider_version,
-                    logical_interval, request_fingerprint, runner_id, environment,
-                    public_code_sha, workflow_repository, workflow_run_id, workflow_run_attempt,
+                    provider,
+                    dataset_id,
+                    dataset_version,
+                    provider_version,
+                    logical_interval,
+                    request_fingerprint,
+                    runner_id,
+                    environment,
+                    public_code_sha,
+                    workflow_repository,
+                    workflow_run_id,
+                    workflow_run_attempt,
                     Jsonb(metadata or {}),
                 ),
             )
@@ -174,8 +187,7 @@ class ExecutionStore:
 
         with self._connection.cursor() as cursor:
             cursor.execute(
-                f"UPDATE {EXEC_SCHEMA}.collection_runs SET {', '.join(assignments)} "
-                "WHERE run_id = %s AND status = %s",
+                f"UPDATE {EXEC_SCHEMA}.collection_runs SET {', '.join(assignments)} WHERE run_id = %s AND status = %s",
                 values,
             )
             if cursor.rowcount != 1:
@@ -208,8 +220,14 @@ class ExecutionStore:
                 ON CONFLICT (run_id, sequence_no) DO NOTHING
                 """,
                 (
-                    run_id, provider, dataset_id, sequence_no, checkpoint_key,
-                    Jsonb(cursor_value), status.value, records_written,
+                    run_id,
+                    provider,
+                    dataset_id,
+                    sequence_no,
+                    checkpoint_key,
+                    Jsonb(cursor_value),
+                    status.value,
+                    records_written,
                 ),
             )
         self._connection.commit()
@@ -277,9 +295,22 @@ class ExecutionStore:
                 ON CONFLICT (run_id, artifact_hash, layer) DO NOTHING
                 """,
                 (
-                    run_id, artifact_hash, provider, provider_version, dataset_id, dataset_version,
-                    layer, media_type, byte_size, record_count, uri, request_fingerprint,
-                    issued_at, information_available_at, retrieved_at, evidence_class,
+                    run_id,
+                    artifact_hash,
+                    provider,
+                    provider_version,
+                    dataset_id,
+                    dataset_version,
+                    layer,
+                    media_type,
+                    byte_size,
+                    record_count,
+                    uri,
+                    request_fingerprint,
+                    issued_at,
+                    information_available_at,
+                    retrieved_at,
+                    evidence_class,
                 ),
             )
         self._connection.commit()
@@ -332,13 +363,28 @@ class ExecutionStore:
         attempted = 0
         rows = [
             (
-                record.record_id, record.dataset_id, record.dataset_version,
-                record.schema_name, record.schema_version, record.entity_id, record.zone_id,
-                record.event_time, record.issued_at, record.information_available_at,
-                record.valid_at, record.retrieved_at,
-                provider, provider_version, record.source, record.source_version,
-                record.evidence_class.value, Jsonb(record.features), unit_set_id,
-                run_id, artifact_hash, request_fingerprint,
+                record.record_id,
+                record.dataset_id,
+                record.dataset_version,
+                record.schema_name,
+                record.schema_version,
+                record.entity_id,
+                record.zone_id,
+                record.event_time,
+                record.issued_at,
+                record.information_available_at,
+                record.valid_at,
+                record.retrieved_at,
+                provider,
+                provider_version,
+                record.source,
+                record.source_version,
+                record.evidence_class.value,
+                Jsonb(record.features),
+                unit_set_id,
+                run_id,
+                artifact_hash,
+                request_fingerprint,
             )
             for record in records
         ]
@@ -364,8 +410,7 @@ class ExecutionStore:
                 )
             else:
                 cursor.execute(
-                    f"SELECT count(*) FROM {TEMPORAL_SCHEMA}.feature_records "
-                    "WHERE dataset_id = %s AND issued_at = %s",
+                    f"SELECT count(*) FROM {TEMPORAL_SCHEMA}.feature_records WHERE dataset_id = %s AND issued_at = %s",
                     (dataset_id, issued_at),
                 )
             return int(cursor.fetchone()[0])
@@ -388,8 +433,13 @@ class ExecutionStore:
             )
             row = cursor.fetchone()
         keys = (
-            "records", "zones", "forecast_issues",
-            "valid_from", "valid_to", "available_from", "available_to",
+            "records",
+            "zones",
+            "forecast_issues",
+            "valid_from",
+            "valid_to",
+            "available_from",
+            "available_to",
         )
         return dict(zip(keys, row, strict=True))
 

@@ -4,6 +4,7 @@ from main import app
 
 client = TestClient(app)
 
+
 def test_api_health():
     response = client.get("/healthz")
     assert response.status_code == 200
@@ -35,8 +36,16 @@ def test_governance_stub_routes_are_not_served(method: str, path: str):
 def test_no_governance_routes_are_registered():
     assert [route for route in app.routes if getattr(route, "path", "").startswith("/governance")] == []
 
+
 def test_unauthenticated_probes_endpoint():
     # Attempting to submit probe without bearer token must return 401 or 403
-    response = client.post("/v1/probes", json={"assignment_id": "assign-123", "client_event_id": "evt-123", "observed_at_device": "2026-08-08T12:00:00Z", "availability_state": "IN_STOCK"})
+    response = client.post(
+        "/v1/probes",
+        json={
+            "assignment_id": "assign-123",
+            "client_event_id": "evt-123",
+            "observed_at_device": "2026-08-08T12:00:00Z",
+            "availability_state": "IN_STOCK",
+        },
+    )
     assert response.status_code in [401, 403]
-

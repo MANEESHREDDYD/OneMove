@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-import os
 from pathlib import Path
-import pytest
 
 ANDORRA_HASH = "f7da0ba356d7ec1a77700dc136ceb87323b7ee2e862f11505c34890f067f2bb7"
 OFFICIAL_PILOT_ROADS_SHA256 = "461584ea03d2d0948a25715c0a901b8bb12f01ca15c59fc72bdeaf05e568d7a1"

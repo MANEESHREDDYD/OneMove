@@ -8,17 +8,16 @@ import sys
 
 def run_auditor():
     print("=== ZONEPILOT REMOTE EVIDENCE AUDITOR V2 ===")
-    
+
     verdicts = {}
     p0_issues = []
-    
-    data_root = os.environ.get('ZONEPILOT_DATA_ROOT', os.path.join(os.getcwd(), 'data_root'))
-    
+
+    data_root = os.environ.get("ZONEPILOT_DATA_ROOT", os.path.join(os.getcwd(), "data_root"))
+
     # 1. Fetch Remote State
     try:
         gh_proc = subprocess.run(
-            ["gh", "pr", "view", "1", "--json", "headRefOid,commits,statusCheckRollup"],
-            capture_output=True, text=True
+            ["gh", "pr", "view", "1", "--json", "headRefOid,commits,statusCheckRollup"], capture_output=True, text=True
         )
         if gh_proc.returncode == 0:
             gh_data = json.loads(gh_proc.stdout)
@@ -26,7 +25,9 @@ def run_auditor():
             checks = gh_data.get("statusCheckRollup", [])
             print(f"Remote PR SHA: {remote_sha}")
         else:
-            remote_sha = subprocess.run(["git", "rev-parse", "origin/ws/phase1-measurement"], capture_output=True, text=True).stdout.strip()
+            remote_sha = subprocess.run(
+                ["git", "rev-parse", "origin/ws/phase1-measurement"], capture_output=True, text=True
+            ).stdout.strip()
             checks = []
             print(f"Failed to fetch PR via gh cli. Using local origin branch SHA: {remote_sha}")
     except Exception as e:
@@ -35,16 +36,16 @@ def run_auditor():
         p0_issues.append(f"Failed to query remote state: {e}")
 
     local_sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-    
+
     if remote_sha != local_sha:
         verdicts["REMOTE_SHA_MATCH"] = "FALSE_CLAIM"
         p0_issues.append(f"Remote SHA {remote_sha} differs from local HEAD {local_sha}")
     else:
         verdicts["REMOTE_SHA_MATCH"] = "VERIFIED"
-        
+
     # CI Checks Verification
     required_workflows = ["Node.js CI", "SQL Quality", "Polyglot CI", "Python CI", "ZonePilot Release Validation"]
-    
+
     if checks:
         # Check actual status
         missing = []
@@ -54,12 +55,12 @@ def run_auditor():
             if not req_check:
                 missing.append(req)
                 continue
-            
+
             status = req_check.get("status")
             conclusion = req_check.get("conclusion")
             if status != "COMPLETED" or conclusion != "SUCCESS":
                 failed.append(f"{req} (status={status}, conclusion={conclusion})")
-        
+
         if missing or failed:
             verdicts["REMOTE_CI"] = "FALSE_CLAIM"
             p0_issues.append(f"Missing CI checks: {missing}")
@@ -110,20 +111,20 @@ def run_auditor():
     today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     public_manifests = os.path.join(data_root, "public", "manifests")
     bundle_manifest_path = os.path.join(public_manifests, f"{today}_bundle_manifest.json")
-    
+
     if os.path.exists(bundle_manifest_path):
         with open(bundle_manifest_path, "r") as f:
             bundle_man = json.load(f)
             expected_hash = bundle_man.get("output_bundle_hash")
-            
+
             # Recompute
             actual_bundle_path = os.path.join(data_root, "private", "official", "checkpoints", f"{today}_bundle.json")
             if os.path.exists(actual_bundle_path):
                 with open(actual_bundle_path, "r") as bf:
                     actual_bundle = json.load(bf)
                 bundle_str = json.dumps(actual_bundle, sort_keys=True)
-                computed_hash = hashlib.sha256(bundle_str.encode('utf-8')).hexdigest()
-                
+                computed_hash = hashlib.sha256(bundle_str.encode("utf-8")).hexdigest()
+
                 if computed_hash == expected_hash:
                     verdicts["DAILY_BUNDLE"] = "VERIFIED"
                 else:
@@ -153,13 +154,13 @@ def run_auditor():
     # 6. Contamination
     contamination_hits = 0
     forbidden = [b"faker", b"demo", b"synthetic", b"mock", b"staging", b"seed"]
-    for root, _dirs, files in os.walk(os.path.join(data_root, 'private', 'official')):
+    for root, _dirs, files in os.walk(os.path.join(data_root, "private", "official")):
         for f in files:
-            if f.endswith('.osm.pbf'):
+            if f.endswith(".osm.pbf"):
                 continue
             filepath = os.path.join(root, f)
             try:
-                with open(filepath, 'rb') as file:
+                with open(filepath, "rb") as file:
                     content = file.read().lower()
                     # Check structured evidence class first if JSON
                     if f.endswith(".json") or f.endswith(".geojson"):
@@ -172,7 +173,7 @@ def run_auditor():
                             pass
 
                     # String scanning secondary
-                    content = content.replace(b'mockaholic', b'')
+                    content = content.replace(b"mockaholic", b"")
                     for term in forbidden:
                         if term in content:
                             contamination_hits += 1
@@ -184,16 +185,17 @@ def run_auditor():
         p0_issues.append(f"Evidence contamination detected: {contamination_hits} hits")
     else:
         verdicts["CONTAMINATION"] = "VERIFIED"
-        
+
     print("\n--- SUBSYSTEM VERDICTS ---")
     for k, v in verdicts.items():
         print(f"{k}: {v}")
-        
+
     if p0_issues:
         print("\n--- P0 ISSUES DETECTED ---")
         for i in p0_issues:
             print(f"- {i}")
         sys.exit(1)
-            
+
+
 if __name__ == "__main__":
     run_auditor()

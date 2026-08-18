@@ -14,8 +14,9 @@ from services.api.core.telemetry import (
     safe_request_id,
 )
 
-MAX_PAYLOAD_SIZE = 1024 * 1024 * 4 # 4 MiB (Limit for standard routes)
-MAX_SCENARIO_PAYLOAD = 1024 * 1024 * 2 # 2 MiB scenario payload
+MAX_PAYLOAD_SIZE = 1024 * 1024 * 4  # 4 MiB (Limit for standard routes)
+MAX_SCENARIO_PAYLOAD = 1024 * 1024 * 2  # 2 MiB scenario payload
+
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -27,7 +28,9 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
         authorization = request.headers.get("authorization", "")
         authenticated = authorization.lower().startswith("bearer ")
-        principal_source = authorization[7:] if authenticated else (request.client.host if request.client else "unknown")
+        principal_source = (
+            authorization[7:] if authenticated else (request.client.host if request.client else "unknown")
+        )
         policy = rate_policy(request.url.path, authenticated)
         if policy:
             bucket, limit = policy
@@ -48,7 +51,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
                 )
                 self._record(request, response.status_code, started, req_id, correlation_id)
                 return response
-        
+
         # Payload size enforcement
         content_length = request.headers.get("content-length")
         if content_length:
@@ -57,7 +60,9 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             except ValueError:
                 return self._error_response(400, "INVALID_CONTENT_LENGTH", "Content-Length must be an integer.", req_id)
             if payload_size < 0:
-                return self._error_response(400, "INVALID_CONTENT_LENGTH", "Content-Length must not be negative.", req_id)
+                return self._error_response(
+                    400, "INVALID_CONTENT_LENGTH", "Content-Length must not be negative.", req_id
+                )
             if payload_size > MAX_PAYLOAD_SIZE:
                 return JSONResponse(
                     status_code=413,
@@ -67,9 +72,9 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
                             "message": f"Payload size exceeds {MAX_PAYLOAD_SIZE} bytes.",
                             "request_id": req_id,
                             "retryable": False,
-                            "details": {}
+                            "details": {},
                         }
-                    }
+                    },
                 )
 
         try:

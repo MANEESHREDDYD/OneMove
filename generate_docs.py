@@ -97,18 +97,39 @@ Runbook for data contamination or pipeline failures.
 """,
     "docs/runbooks/OWNER_DAILY_RUNBOOK.md": """# Daily Runbook
 Owner's daily tasks: check `/readyz`, run QC, review anomaly queue.
-"""
+""",
 }
 
 adrs = {
-    "ADR-001": ("Why single-node research architecture now; what changes at 100x", "Single node DuckDB is fast enough for the experiment scale. At 100x, requires distributed lakehouse."),
-    "ADR-002": ("Railway cron instead of APScheduler/Airflow", "Railway is zero-ops and sufficient for basic collection tasks."),
-    "ADR-003": ("DuckDB + Parquet instead of a warehouse/lakehouse", "Simplifies the private research plane and ensures reproducibility on a single laptop."),
+    "ADR-001": (
+        "Why single-node research architecture now; what changes at 100x",
+        "Single node DuckDB is fast enough for the experiment scale. At 100x, requires distributed lakehouse.",
+    ),
+    "ADR-002": (
+        "Railway cron instead of APScheduler/Airflow",
+        "Railway is zero-ops and sufficient for basic collection tasks.",
+    ),
+    "ADR-003": (
+        "DuckDB + Parquet instead of a warehouse/lakehouse",
+        "Simplifies the private research plane and ensures reproducibility on a single laptop.",
+    ),
     "ADR-004": ("Why no feature store", "Not running online inference, so offline generation is sufficient."),
-    "ADR-005": ("Immutable snapshot manifests instead of DVC/LakeFS", "Simpler to manage explicitly versions snapshots for a static experiment window."),
-    "ADR-006": ("Cloud operational plane vs private research plane", "Protects PII and raw data locally while keeping operations highly available."),
-    "ADR-007": ("Append-only observational event model", "Ensures data is never silently mutated, preserving scientific validity."),
-    "ADR-008": ("Why no LLM/fine-tuning in decision path", "Unnecessary latency, cost, and non-determinism for an operations research study.")
+    "ADR-005": (
+        "Immutable snapshot manifests instead of DVC/LakeFS",
+        "Simpler to manage explicitly versions snapshots for a static experiment window.",
+    ),
+    "ADR-006": (
+        "Cloud operational plane vs private research plane",
+        "Protects PII and raw data locally while keeping operations highly available.",
+    ),
+    "ADR-007": (
+        "Append-only observational event model",
+        "Ensures data is never silently mutated, preserving scientific validity.",
+    ),
+    "ADR-008": (
+        "Why no LLM/fine-tuning in decision path",
+        "Unnecessary latency, cost, and non-determinism for an operations research study.",
+    ),
 }
 
 for path, content in docs.items():

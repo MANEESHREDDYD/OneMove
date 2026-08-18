@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import pytest
+
 from services.temporal.contracts import EvidenceClass
 from services.zonepilot.economics.contracts import (
-    ExperimentDefinition,
     ExperimentStatus,
-    ProxyEconomicsMetric,
 )
 from services.zonepilot.economics.registry import (
     CANONICAL_EXPERIMENTS,
