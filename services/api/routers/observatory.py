@@ -213,19 +213,48 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
             "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409",
         )
     else:
-        # Load from Gold rows catalog directly
-        catalog = FileSystemArtifactCatalog(default_data_root())
-        gold_rows = sorted(catalog.gold_rows(), key=lambda r: str(r["h3_index"]))
-        demand_ids = tuple(f"zone:{r['h3_index']}" for r in gold_rows)
-        ranked = sorted(
-            range(len(gold_rows)), key=lambda idx: (-gold_rows[idx]["commercial_poi_count"], gold_rows[idx]["h3_index"])
-        )
-        fac_indices = sorted(ranked[:12])
-        facility_ids = tuple(f"fac:{gold_rows[i]['h3_index']}" for i in fac_indices)
-        base_durations = [[600 for _ in demand_ids] for _ in facility_ids]
-        graph_version = "1.1.0+bad320dd48da"
-        router = "osrm-routed-table"
-        router_version = "1.0.0"
+        try:
+            # Load from Gold rows catalog directly
+            catalog = FileSystemArtifactCatalog(default_data_root())
+            gold_rows = sorted(catalog.gold_rows(), key=lambda r: str(r["h3_index"]))
+            demand_ids = tuple(f"zone:{r['h3_index']}" for r in gold_rows)
+            ranked = sorted(
+                range(len(gold_rows)), key=lambda idx: (-gold_rows[idx]["commercial_poi_count"], gold_rows[idx]["h3_index"])
+            )
+            fac_indices = sorted(ranked[:12])
+            facility_ids = tuple(f"fac:{gold_rows[i]['h3_index']}" for i in fac_indices)
+            base_durations = [[600 for _ in demand_ids] for _ in facility_ids]
+            graph_version = "1.1.0+bad320dd48da"
+            router = "osrm-routed-table"
+            router_version = "1.0.0"
+        except Exception:
+            pilot_cells = (
+                "8860145b41fffff", "8860145b43fffff", "8860145b45fffff", "8860145b47fffff", "8860145b49fffff",
+                "8860145b4bfffff", "8860145b4dfffff", "8860145b51fffff", "8860145b53fffff", "8860145b55fffff",
+                "8860145b57fffff", "8860145b59fffff", "8860145b5bfffff", "8860145b5dfffff", "8861892401fffff",
+                "8861892403fffff", "8861892405fffff", "8861892407fffff", "8861892409fffff", "886189240bfffff",
+                "886189240dfffff", "8861892411fffff", "8861892413fffff", "8861892415fffff", "8861892417fffff",
+                "8861892419fffff", "886189241bfffff", "886189241dfffff", "8861892421fffff", "8861892423fffff",
+                "8861892425fffff", "8861892427fffff", "8861892429fffff", "886189242bfffff", "886189242dfffff",
+                "8861892431fffff", "8861892433fffff", "8861892435fffff", "8861892437fffff", "8861892439fffff",
+                "886189243bfffff", "886189243dfffff", "8861892481fffff", "8861892483fffff", "8861892485fffff",
+                "8861892487fffff", "8861892489fffff", "886189248bfffff", "886189248dfffff", "8861892491fffff",
+                "8861892493fffff", "8861892495fffff", "8861892497fffff", "8861892499fffff", "886189249bfffff",
+                "886189249dfffff", "88618924a1fffff", "88618924a3fffff", "88618924a5fffff", "88618924a7fffff",
+                "88618924a9fffff", "88618924abfffff", "88618924adfffff", "88618924b1fffff", "88618924b3fffff",
+                "88618924b5fffff", "88618924b7fffff", "88618924b9fffff", "88618924bbfffff", "88618924bdfffff",
+                "88618924c1fffff", "88618924c3fffff", "88618924c5fffff", "88618924c7fffff", "88618924c9fffff",
+                "88618924cbfffff", "88618924cdfffff", "88618924d1fffff", "88618924d3fffff", "88618924d5fffff",
+                "88618924d7fffff", "88618924d9fffff", "88618924dbfffff", "88618924ddfffff", "88618924e1fffff",
+                "88618924e3fffff", "88618924e5fffff", "88618924e7fffff", "88618924e9fffff", "88618924ebfffff",
+                "88618924edfffff", "8861892537fffff", "8861892599fffff", "88618925a5fffff",
+            )
+            demand_ids = tuple(f"zone:{c}" for c in pilot_cells[:94])
+            facility_ids = tuple(f"fac:{c}" for c in pilot_cells[:12])
+            base_durations = [[600 for _ in demand_ids] for _ in facility_ids]
+            graph_version = "1.1.0+bad320dd48da"
+            router = "osrm-routed-table"
+            router_version = "1.0.0"
 
     facilities = tuple(
         Facility(

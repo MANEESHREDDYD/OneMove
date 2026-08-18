@@ -111,7 +111,7 @@ class ReleaseIdentityService:
         except ArtifactCatalogError as exc:
             raise ReleaseIdentityUnavailable("Artifact identity could not be verified") from exc
 
-        _manifest_value(gold_manifest, "code_sha", FULL_SHA, "Gold")
+        gold_code_sha = _manifest_value(gold_manifest, "code_sha", FULL_SHA, "Gold")
         gold_schema_version = _manifest_value(
             gold_manifest,
             "schema_version",
@@ -119,7 +119,7 @@ class ReleaseIdentityService:
             "Gold",
         )
         expected_gold_sha = _manifest_value(gold_manifest, "parquet_sha256", SHA256, "Gold")
-        if gold_schema_version != schema_version:
+        if gold_code_sha != git_sha or gold_schema_version != schema_version:
             raise ReleaseIdentityUnavailable("Gold identity does not match the deployed release")
         if gold_manifest.get("dq_status") != "PASS" or expected_gold_sha != actual_gold_sha:
             raise ReleaseIdentityUnavailable("Gold artifact could not be verified")
