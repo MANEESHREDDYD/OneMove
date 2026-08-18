@@ -142,10 +142,14 @@ describe("DATASET_NOT_READY versus a hard failure", () => {
       version: new ApiError("No verified release.", 503, "DATASET_NOT_READY", null),
       "data-health": dataHealthResponse(),
     });
-    const { container } = render(<SystemHealthPage />);
+    render(<SystemHealthPage />);
 
     await screen.findByText("RELEASE IDENTITY UNAVAILABLE");
-    expect(container.textContent).not.toMatch(/unknown|N\/A|—/i);
+    // Scoped to the release region on purpose: the provider table legitimately
+    // renders the canonical dq_result value "UNKNOWN", which is reported
+    // evidence rather than a substituted placeholder.
+    const release = screen.getByRole("region", { name: /verified release identity/i });
+    expect(release.textContent).not.toMatch(/unknown|N\/A|—/i);
   });
 });
 
