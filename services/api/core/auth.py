@@ -286,10 +286,10 @@ def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials
 
     The previous implementation compared a client header against an unverified
     token claim and skipped the check whenever either was absent, and consulted
-    a ``request.state.required_role`` that no production code ever set. Both
-    branches were unreachable in production. They are gone: the only workspace
-    decision made here is a server-side membership lookup, and role checks live
-    in :func:`require_workspace_role`, which real routes depend on.
+    a role attribute on ``request.state`` that no production code ever set.
+    Both branches were unreachable in production. They are gone: the only
+    workspace decision made here is a server-side membership lookup, and role
+    checks live in :func:`require_workspace_role`, which real routes depend on.
     """
 
     if not credentials:
