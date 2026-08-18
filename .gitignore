@@ -77,7 +77,20 @@ auditor_v2_report.txt
 failed_log.txt
 pr_info.json
 pytest_report.json
-runs_info.txt
 *.parquet
 *.pbf
 *.osm
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
