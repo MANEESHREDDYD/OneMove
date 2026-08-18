@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { History, Play, CheckCircle2, AlertTriangle, ShieldCheck, Clock, RefreshCw, Cpu, Layers } from "lucide-react";
-import { ApiError, getApiJson, postApiJson } from "../../lib/api/client";
+import { History, Play, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import { ApiError, postApiJson } from "../../lib/api/client";
 
 interface ReplayResult {
   original_decision_id: string;
@@ -51,12 +51,6 @@ export default function ReplayPage() {
       setReplaying(false);
     }
   };
-
-  useEffect(() => {
-    if (queryDecisionId) {
-      setDecisionId(queryDecisionId);
-    }
-  }, [queryDecisionId]);
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">

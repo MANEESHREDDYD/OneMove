@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ShieldAlert, RefreshCw, AlertTriangle, CheckCircle2, Flame, Sliders, Activity, ArrowRight, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ShieldAlert, RefreshCw, AlertTriangle, Flame, Zap } from "lucide-react";
 import { ApiError, getApiJson, postApiJson } from "../../lib/api/client";
 
 interface ScenarioResult {
@@ -51,27 +51,50 @@ export default function ResiliencePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadScenarios = useCallback(async (signal?: AbortSignal) => {
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+
+    async function init() {
+      try {
+        const res = await getApiJson<{ data: ScenarioResult[] }>("scenarios", controller.signal);
+        if (active) {
+          const list = res.data || [];
+          setScenarios(list);
+          if (list.length > 0) setSelectedScenario(list[0] ?? null);
+          setLoading(false);
+        }
+      } catch {
+        if (active && !controller.signal.aborted) {
+          setScenarios([]);
+          setLoading(false);
+        }
+      }
+    }
+
+    void init();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
+
+  const handleRefresh = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getApiJson<{ data: ScenarioResult[] }>("scenarios", signal);
-      setScenarios(res.data || []);
-      if (res.data && res.data.length > 0 && !selectedScenario) {
-        setSelectedScenario(res.data[0] ?? null);
+      const res = await getApiJson<{ data: ScenarioResult[] }>("scenarios");
+      const list = res.data || [];
+      setScenarios(list);
+      if (list.length > 0 && !selectedScenario) {
+        setSelectedScenario(list[0] ?? null);
       }
     } catch {
       setScenarios([]);
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      setLoading(false);
     }
-  }, [selectedScenario]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadScenarios(controller.signal);
-    return () => controller.abort();
-  }, [loadScenarios]);
+  };
 
   const handleRunStressTest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +109,7 @@ export default function ResiliencePage() {
       };
       const res = await postApiJson<ScenarioResult>("scenarios", payload);
       setSelectedScenario(res);
-      await loadScenarios();
+      await handleRefresh();
     } catch (caught: unknown) {
       const message =
         caught instanceof ApiError
@@ -113,7 +136,7 @@ export default function ResiliencePage() {
             </p>
           </div>
           <button
-            onClick={() => void loadScenarios()}
+            onClick={() => void handleRefresh()}
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
           >

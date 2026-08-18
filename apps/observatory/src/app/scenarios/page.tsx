@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Boxes, RefreshCw, AlertTriangle, Play, Sparkles, CheckCircle2 } from "lucide-react";
-import { ApiError, getApiJson, postApiJson } from "../../lib/api/client";
+import { useEffect, useState } from "react";
+import { Boxes, RefreshCw, AlertTriangle, Play } from "lucide-react";
+import { getApiJson, postApiJson } from "../../lib/api/client";
 
 interface ScenarioItem {
   scenario_id: string;
@@ -28,24 +28,44 @@ export default function ScenariosPage() {
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = useCallback(async (signal?: AbortSignal) => {
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+
+    async function init() {
+      try {
+        const res = await getApiJson<{ data: ScenarioItem[] }>("scenarios", controller.signal);
+        if (active) {
+          setScenarios(res.data || []);
+          setLoading(false);
+        }
+      } catch {
+        if (active && !controller.signal.aborted) {
+          setScenarios([]);
+          setLoading(false);
+        }
+      }
+    }
+
+    void init();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
+
+  const handleRefresh = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getApiJson<{ data: ScenarioItem[] }>("scenarios", signal);
+      const res = await getApiJson<{ data: ScenarioItem[] }>("scenarios");
       setScenarios(res.data || []);
     } catch {
       setScenarios([]);
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadData(controller.signal);
-    return () => controller.abort();
-  }, [loadData]);
+  };
 
   const runPreset = async (preset: typeof PRESET_SCENARIOS[0]) => {
     setRunning(preset.type);
@@ -57,7 +77,7 @@ export default function ScenariosPage() {
         parameters: preset.params,
         seed: 42,
       });
-      await loadData();
+      await handleRefresh();
     } catch (caught: unknown) {
       const message = caught instanceof Error ? caught.message : "Failed to run scenario preset.";
       setError(message);
@@ -79,7 +99,7 @@ export default function ScenariosPage() {
             </p>
           </div>
           <button
-            onClick={() => void loadData()}
+            onClick={() => void handleRefresh()}
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
           >
