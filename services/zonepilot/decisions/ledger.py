@@ -14,15 +14,16 @@ from services.zonepilot.decisions.contracts import (
     ShadowState,
 )
 from services.zonepilot.decisions.repository import DecisionRepository
+from services.zonepilot.release import current_release_sha
 
 
 class DecisionLedger:
     def __init__(
         self,
-        code_sha: str = "c7e24e8d378db6a2f19048993bb3803e76f125c2",
+        code_sha: str | None = None,
         repository: DecisionRepository | None = None,
     ) -> None:
-        self.code_sha = code_sha
+        self.code_sha = code_sha or current_release_sha()
         self.repository = repository
         self._records: dict[str, DecisionRecord] = {}
         self._shadows: dict[str, ShadowEvaluation] = {}

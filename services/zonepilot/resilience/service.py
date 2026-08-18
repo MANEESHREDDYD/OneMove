@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any
 
 from services.zonepilot.optimization.contracts import MatrixEvidenceClass, TravelMatrix
+from services.zonepilot.optimization.r1_catalog import default_data_root
+from services.zonepilot.release import current_release_sha
 from services.zonepilot.resilience.contracts import (
     ResilienceScenario,
     ScenarioType,
@@ -14,8 +17,21 @@ from services.zonepilot.resilience.engine import ResilienceEngine
 from services.zonepilot.resilience.repository import ResilienceRepository
 
 
-def _mock_or_real_baseline_matrix(graph_version: str = "1.1") -> TravelMatrix:
-    # 12 facilities, 94 zones canonical travel matrix
+def _mock_or_real_baseline_matrix(graph_version: str = "1.1.0+bad320dd48da") -> TravelMatrix:
+    mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
+    if mat_path.is_file():
+        doc = json.loads(mat_path.read_text(encoding="utf-8"))
+        return TravelMatrix(
+            matrix_id="matrix-canonical-r1",
+            graph_version=doc.get("graph_version", graph_version),
+            router=doc.get("router", "osrm-routed-table"),
+            router_version=doc.get("router_version", "1.0.0"),
+            evidence_class=MatrixEvidenceClass.PUBLIC_GEOGRAPHIC,
+            facility_ids=tuple(doc["facility_ids"]),
+            demand_ids=tuple(doc["demand_ids"]),
+            durations_seconds=tuple(tuple(r) for r in doc["base_durations_seconds"]),
+        )
+    # Fallback only when data root unmounted in minimal isolated test environments
     facility_ids = tuple(f"fac:{i:02d}" for i in range(1, 13))
     demand_ids = tuple(f"zone:{i:02d}" for i in range(1, 95))
     durations = tuple(
@@ -64,9 +80,10 @@ class ResilienceService:
         graph_version: str = "1.1",
         created_by: str | None = None,
         baseline_matrix: TravelMatrix | None = None,
-        code_sha: str = "c7e24e8d378db6a2f19048993bb3803e76f125c2",
+        code_sha: str | None = None,
     ) -> dict[str, Any]:
         """Execute a resilience failure scenario, evaluate metrics, and persist to PostgreSQL."""
+        effective_code_sha = code_sha or current_release_sha()
         h = hashlib.sha256(f"{workspace_id}:{scenario_type}:{description}:{seed}".encode()).hexdigest()[:12]
         scenario_id = f"scen-{h}"
         eval_id = f"eval-{h}"
@@ -121,7 +138,7 @@ class ResilienceService:
             capacity_loss_basis_points=m.capacity_loss_basis_points,
             degradation_grade=grade,
             baseline_comparison=None,
-            code_sha=code_sha,
+            code_sha=effective_code_sha,
         )
 
         return self.repository.get_scenario(scenario_id, workspace_id) or {}

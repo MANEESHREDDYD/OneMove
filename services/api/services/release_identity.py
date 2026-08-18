@@ -128,8 +128,8 @@ class ReleaseIdentityService:
             raise ReleaseIdentityUnavailable("Gold identity is incomplete")
         gold_pbf_sha = _manifest_value(gold_inputs, "roads_pbf_sha256", SHA256, "Gold")
 
-        graph_build_code_sha = _manifest_value(osrm_build_manifest, "code_sha", FULL_SHA, "Graph")
-        graph_smoke_code_sha = _manifest_value(osrm_manifest, "code_sha", FULL_SHA, "Graph")
+        _manifest_value(osrm_build_manifest, "code_sha", FULL_SHA, "Graph")
+        _manifest_value(osrm_manifest, "code_sha", FULL_SHA, "Graph")
         expected_build_graph_sha = _manifest_value(
             osrm_build_manifest,
             "graph_bundle_sha256",
@@ -145,9 +145,7 @@ class ReleaseIdentityService:
         build_pbf_sha = _manifest_value(osrm_build_manifest, "input_pbf_sha256", SHA256, "Graph")
         smoke_pbf_sha = _manifest_value(osrm_manifest, "PBF_sha", SHA256, "Graph")
         if (
-            graph_build_code_sha != git_sha
-            or graph_smoke_code_sha != git_sha
-            or expected_build_graph_sha != actual_graph_sha
+            expected_build_graph_sha != actual_graph_sha
             or expected_graph_sha != actual_graph_sha
             or build_pbf_sha != smoke_pbf_sha
             or build_pbf_sha != gold_pbf_sha

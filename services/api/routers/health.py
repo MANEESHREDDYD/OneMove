@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from fastapi.responses import PlainTextResponse
 
 from services.api.core.telemetry import metrics
+from services.common.db_dsn import get_database_dsn
 
 router = APIRouter(tags=["observability"])
 logger = logging.getLogger("zonepilot.health")
@@ -20,7 +21,7 @@ def liveness_probe():
 @router.get("/readyz")
 def readiness_probe(response: Response):
     """Readiness probe checking critical dependencies like DB"""
-    db_url = os.environ.get("ZONEPILOT_DB_URL")
+    db_url = get_database_dsn()
 
     db_connected = False
 
