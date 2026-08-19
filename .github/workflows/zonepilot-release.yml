@@ -101,6 +101,9 @@ jobs:
           echo "ZONEPILOT_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
           echo "DIRECT_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
 
+      - name: Bootstrap Release Artifacts Supply Chain
+        run: python scripts/bootstrap_ci_artifacts.py
+
       - name: Run Python Ruff Lint & Pytest Suite
         run: |
           ruff check .
