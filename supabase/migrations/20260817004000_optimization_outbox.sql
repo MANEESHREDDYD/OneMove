@@ -25,7 +25,7 @@ CREATE POLICY "optimization_outbox_workspace_isolation"
     USING (
         workspace_id IN (
             SELECT workspace_id::text
-            FROM public.workspace_memberships
+            FROM public.workspace_members
             WHERE user_id = auth.uid()
         )
     );
