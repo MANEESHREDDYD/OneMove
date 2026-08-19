@@ -142,6 +142,17 @@ class OptimizationService:
         """Execute CP-SAT solver explicitly (for offline / test / worker runner only)."""
         effective_code_sha = code_sha or current_release_sha()
         start_time = time.perf_counter()
+
+        # Resolve the owning tenant from the authoritative job row rather than trusting
+        # a caller-supplied value. Snapshots must never be persisted unscoped
+        # (P0-AUTH-SNAPSHOT-001).
+        job_row = self.repository.get_job(job_id)
+        if not job_row:
+            raise LookupError(f"Optimization job {job_id} not found; cannot resolve owning workspace")
+        job_workspace_id = str(job_row["workspace_id"] or "").strip()
+        if not job_workspace_id:
+            raise ValueError(f"Optimization job {job_id} has no workspace_id; refusing to persist a global snapshot")
+
         try:
             from services.zonepilot.optimization.contracts import create_problem_snapshot
 
@@ -172,7 +183,7 @@ class OptimizationService:
                 gold_manifest_sha256=gold_sha,
                 evidence_ids=evidence_ids,
             )
-            self.repository.save_problem_snapshot(snapshot)
+            self.repository.save_problem_snapshot(snapshot, workspace_id=job_workspace_id)
 
             result = optimize_facilities(problem)
             run_ms = int((time.perf_counter() - start_time) * 1000)

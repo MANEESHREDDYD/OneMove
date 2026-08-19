@@ -261,11 +261,17 @@ class DecisionLedger:
         Loads original decision from PostgreSQL, reconstructs problem from frozen lineage,
         reruns solver, compares reproduced outputs, and stores replay record.
         """
+        # Fail closed: without a caller-supplied workspace the decision lookup would be
+        # unscoped, and ws_id would then be back-filled from the *victim's* record --
+        # re-opening the cross-tenant replay path (P0-AUTH-SNAPSHOT-001).
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("replay_decision requires an explicit workspace_id")
+
         orig = self.get_decision(original_decision_id, workspace_id)
         if orig is None:
             raise LookupError(f"Decision {original_decision_id} not found in ledger")
 
-        ws_id = workspace_id or orig.workspace_id
+        ws_id = workspace_id
         pit_valid = self.verify_pit_lineage(orig.decision_time, feature_cutoff)
 
         if not pit_valid or (feature_cutoff and feature_cutoff > orig.decision_time):

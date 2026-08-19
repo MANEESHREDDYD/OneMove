@@ -339,8 +339,14 @@ class OptimizationRepository:
                 row = cur.fetchone()
                 return float(row["age_seconds"]) if row else 0.0
 
-    def save_problem_snapshot(self, snapshot: Any, workspace_id: str | None = None) -> None:
-        """Persist an immutable problem snapshot to PostgreSQL."""
+    def save_problem_snapshot(self, snapshot: Any, workspace_id: str) -> None:
+        """Persist an immutable, workspace-scoped problem snapshot to PostgreSQL.
+
+        workspace_id is mandatory: a snapshot with no owning tenant would be
+        readable by every tenant (P0-AUTH-SNAPSHOT-001). Fail closed instead.
+        """
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("save_problem_snapshot requires a non-empty workspace_id; global snapshots are forbidden")
         snap_dict = snapshot.model_dump(mode="json") if hasattr(snapshot, "model_dump") else snapshot
         snap_id = snap_dict["problem_snapshot_id"]
         snap_sha = snap_dict["problem_snapshot_sha256"]
@@ -362,18 +368,6 @@ class OptimizationRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS public.optimization_problem_snapshots (
-                        snapshot_id TEXT PRIMARY KEY,
-                        snapshot_sha256 TEXT NOT NULL UNIQUE,
-                        workspace_id TEXT,
-                        problem_json JSONB NOT NULL,
-                        metadata JSONB NOT NULL,
-                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    )
-                    """
-                )
-                cur.execute(
-                    """
                     INSERT INTO public.optimization_problem_snapshots (
                         snapshot_id, snapshot_sha256, workspace_id, problem_json, metadata, created_at
                     ) VALUES (
@@ -391,30 +385,30 @@ class OptimizationRepository:
                 )
             conn.commit()
 
-    def get_problem_snapshot(self, snapshot_id_or_hash: str, workspace_id: str | None = None) -> dict[str, Any] | None:
-        """Fetch an immutable problem snapshot by snapshot_id or snapshot_sha256."""
+    def get_problem_snapshot(self, snapshot_id_or_hash: str, workspace_id: str) -> dict[str, Any] | None:
+        """Fetch an immutable problem snapshot, strictly scoped to the requesting workspace.
+
+        This repository connects with an owner-role DSN, so PostgreSQL RLS is NOT in
+        force on this path; this WHERE clause is the only tenant-isolation control.
+        The workspace predicate is therefore mandatory and non-optional
+        (P0-AUTH-SNAPSHOT-001). Rows with a NULL workspace_id never match, so legacy
+        unscoped snapshots are unreadable rather than globally readable.
+        """
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("get_problem_snapshot requires a non-empty workspace_id")
+
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS public.optimization_problem_snapshots (
-                        snapshot_id TEXT PRIMARY KEY,
-                        snapshot_sha256 TEXT NOT NULL UNIQUE,
-                        workspace_id TEXT,
-                        problem_json JSONB NOT NULL,
-                        metadata JSONB NOT NULL,
-                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    )
-                    """
-                )
-                cur.execute(
-                    """
                     SELECT snapshot_id, snapshot_sha256, workspace_id, problem_json, metadata, created_at
                     FROM public.optimization_problem_snapshots
-                    WHERE snapshot_id = %s OR snapshot_sha256 = %s
+                    WHERE (snapshot_id = %s OR snapshot_sha256 = %s)
+                      AND workspace_id IS NOT NULL
+                      AND workspace_id = %s
                     LIMIT 1
                     """,
-                    (snapshot_id_or_hash, snapshot_id_or_hash),
+                    (snapshot_id_or_hash, snapshot_id_or_hash, workspace_id),
                 )
                 row = cur.fetchone()
                 if not row:
