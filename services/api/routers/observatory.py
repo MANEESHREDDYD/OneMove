@@ -490,20 +490,33 @@ class DecisionFreezeRequest(BaseModel):
 
 
 class DecisionCreateRequest(BaseModel):
+    """Direct decision record submission.
+
+    Every lineage and measurement field is REQUIRED. These previously carried
+    fabricated defaults, so POST /decisions with an empty body wrote a complete,
+    plausible-looking decision -- facilities, objective value, travel times,
+    coverage, artifact hashes -- into the immutable ledger with no real lineage,
+    bypassing the DECISION_LINEAGE_INCOMPLETE guards that the optimization-backed
+    path enforces. A ledger that can be populated with invented measurements is
+    not an audit trail.
+
+    Prefer optimization_job_id, which derives lineage from a real solver run.
+    """
+
     optimization_job_id: str | None = None
     decision_time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    network_version: str = "1.1"
-    dataset_version: str = "1.0.0"
-    feature_snapshot_hash: str = "snap-7b443717"
-    selected_action: str = "DEPLOY_FACILITIES"
-    opened_facilities: list[str] = ["fac:01", "fac:04", "fac:07"]
-    objective_value: int = 154000
-    expected_travel_seconds: int = 710
-    p95_travel_seconds: int = 830
-    coverage_basis_points: int = 9910
-    graph_version: str = "1.1"
-    osrm_bundle_hash: str = "7b4437178db62410"
-    solver_version: str = "ortools-cp-sat"
+    network_version: str = Field(min_length=1)
+    dataset_version: str = Field(min_length=1)
+    feature_snapshot_hash: str = Field(min_length=1)
+    selected_action: str = Field(min_length=1)
+    opened_facilities: list[str] = Field(min_length=1)
+    objective_value: int
+    expected_travel_seconds: int = Field(ge=0)
+    p95_travel_seconds: int = Field(ge=0)
+    coverage_basis_points: int = Field(ge=0, le=10000)
+    graph_version: str = Field(min_length=1)
+    osrm_bundle_hash: str = Field(min_length=1)
+    solver_version: str = Field(min_length=1)
     evidence_ids: list[str] = []
 
 

@@ -115,3 +115,35 @@ def test_replay_requires_an_explicit_workspace(tenant_a_snapshot) -> None:
     ledger = DecisionLedger(opt_repository=repo)
     with pytest.raises(ValueError):
         ledger.replay_decision("dec-anything", workspace_id=None)
+
+
+def test_decision_create_request_rejects_an_empty_body() -> None:
+    """A decision must not be constructible from defaults.
+
+    POST /decisions with {} previously produced a complete, plausible decision
+    record -- facilities, objective value, travel times, coverage, artifact
+    hashes -- and wrote it to the immutable ledger with no real lineage.
+    """
+    import pydantic
+
+    from services.api.routers.observatory import DecisionCreateRequest
+
+    with pytest.raises(pydantic.ValidationError) as exc:
+        DecisionCreateRequest()
+
+    missing = {err["loc"][0] for err in exc.value.errors() if err["type"] == "missing"}
+    for required in (
+        "network_version",
+        "dataset_version",
+        "feature_snapshot_hash",
+        "selected_action",
+        "opened_facilities",
+        "objective_value",
+        "expected_travel_seconds",
+        "p95_travel_seconds",
+        "coverage_basis_points",
+        "graph_version",
+        "osrm_bundle_hash",
+        "solver_version",
+    ):
+        assert required in missing, f"{required} must be required, not defaulted"
