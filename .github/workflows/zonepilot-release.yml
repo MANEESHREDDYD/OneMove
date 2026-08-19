@@ -98,6 +98,7 @@ jobs:
           echo "FAIL_ON_MISSING_SUPABASE=true" >> $GITHUB_ENV
           echo "ZONEPILOT_ENV=test" >> $GITHUB_ENV
           echo "ZONEPILOT_ALLOW_DB_TEST_RESET=1" >> $GITHUB_ENV
+          echo "TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
           echo "ZONEPILOT_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
           echo "DIRECT_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
 

@@ -4,19 +4,45 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - name: Setup Supabase CLI & Local Environment
-      uses: supabase/setup-cli@v3
-      with:
-        version: 2.113.0
     - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
     - uses: actions/setup-python@v7
       with:
         python-version: '3.11'
+
+    # P0-CREDENTIAL-001: block credentials from entering the tree, and audit
+    # history. Runs before anything else so a leak fails fast.
+    - name: Secret scan (working tree)
+      run: python scripts/security/scan_secrets.py
+
+    - name: Secret scan (git history)
+      run: python scripts/security/scan_secrets.py --history
+      continue-on-error: true
+
+    - name: Setup Supabase CLI
+      uses: supabase/setup-cli@v3
+      with:
+        version: 2.113.0
+
+    # The suite performs destructive writes. It runs against an ephemeral local
+    # database only -- never a hosted one. TEST_DATABASE_URL is mandatory; there
+    # is no built-in fallback any more.
+    - name: Start ephemeral database and apply migrations
+      run: |
+        supabase start
+        supabase db reset
+        echo "TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+        echo "ZONEPILOT_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+
     - run: python -m pip install ruff==0.16.3 -r requirements.txt -r services/api/requirements.txt
     - run: pip install -e ./python
     - run: ruff check .
+
     - name: Bootstrap Release Artifacts Supply Chain
       run: python scripts/bootstrap_ci_artifacts.py
+
     - name: Run Pytest Test Suite
       env:
         ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/data_root
