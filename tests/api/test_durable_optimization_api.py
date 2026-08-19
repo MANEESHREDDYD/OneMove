@@ -110,4 +110,3 @@ def test_outbox_dispatcher_unit():
     dispatcher = OutboxDispatcher()
     count = dispatcher.run_once()
     assert count >= 0
-

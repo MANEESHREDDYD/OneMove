@@ -29,6 +29,7 @@ client = TestClient(app)
 
 def test_durable_decision_record_replay_shadow():
     import hashlib
+
     from services.zonepilot.optimization.r1_catalog import default_data_root
 
     mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
@@ -41,7 +42,12 @@ def test_durable_decision_record_replay_shadow():
         "dataset_version": "1.0.0",
         "feature_snapshot_hash": "snap-test-1234",
         "selected_action": "OPEN_FACILITIES",
-        "opened_facilities": ["fac:88618925a5fffff", "fac:88618925a7fffff", "fac:8861892ec3fffff", "fac:8861892ecbfffff"],
+        "opened_facilities": [
+            "fac:88618925a5fffff",
+            "fac:88618925a7fffff",
+            "fac:8861892ec3fffff",
+            "fac:8861892ecbfffff",
+        ],
         "objective_value": 1756300000000,
         "expected_travel_seconds": 620,
         "p95_travel_seconds": 780,

@@ -43,6 +43,7 @@ def test_record_and_retrieve_decision() -> None:
 
 def test_decision_replay_verification() -> None:
     import hashlib
+
     from services.zonepilot.optimization.r1_catalog import default_data_root
 
     mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
@@ -130,6 +131,7 @@ def test_shadow_evaluation_loop() -> None:
 def test_adversarial_pit_temporal_isolation() -> None:
     """Adversarial test proving future features at T+5m cannot influence frozen decision replay at T."""
     import hashlib
+
     from services.zonepilot.optimization.r1_catalog import default_data_root
 
     mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
@@ -172,10 +174,11 @@ def test_adversarial_pit_temporal_isolation() -> None:
 def test_pit_temporal_attack_and_artifact_corruption() -> None:
     """T0 -> T1 -> T2 -> T3 temporal attack and artifact corruption."""
     import hashlib
+
     from services.zonepilot.optimization.contracts import create_problem_snapshot
     from services.zonepilot.optimization.pubsub_worker import _reconstruct_problem_from_payload
-    from services.zonepilot.optimization.repository import OptimizationRepository
     from services.zonepilot.optimization.r1_catalog import default_data_root
+    from services.zonepilot.optimization.repository import OptimizationRepository
 
     opt_repo = OptimizationRepository()
     ledger = DecisionLedger(opt_repository=opt_repo)
@@ -247,9 +250,9 @@ def test_pit_temporal_attack_and_artifact_corruption() -> None:
         solver_version="ortools-cp-sat",
         evidence_ids=("ev-01",),
     )
-    replay_corrupt = ledger.replay_decision(rec_corrupted.decision_id, workspace_id="ws-blr-01", feature_cutoff=t2_decision)
+    replay_corrupt = ledger.replay_decision(
+        rec_corrupted.decision_id, workspace_id="ws-blr-01", feature_cutoff=t2_decision
+    )
     assert replay_corrupt.pit_valid is False
     assert replay_corrupt.match_status == "NON_REPLAYABLE"
     assert "CORRUPTED_OR_MISSING_ARTIFACT" in replay_corrupt.reason
-
-

@@ -235,7 +235,7 @@ def main() -> int:
 
     # 10. Pure Client Polling: observe job moving from QUEUED to terminal SUCCESS/COMPLETED via infrastructure
     poll_success = False
-    for attempt in range(40):
+    for _attempt in range(40):
         time.sleep(2)
         status, body = api_req(f"/api/v1/optimizations/{job_id}", token=token_a)
         current_status = body.get("status")
@@ -322,7 +322,9 @@ def main() -> int:
     }
     status, body = api_req(f"/api/v1/decisions/{decision_id}/shadow", method="POST", body=shadow_payload, token=token_a)
     assert status in {200, 201}, f"Step 20 failed: {status} {body}"
-    assert body.get("shadow_state") == "FROZEN_AWAITING_FUTURE", f"Expected FROZEN_AWAITING_FUTURE, got {body.get('shadow_state')}"
+    assert body.get("shadow_state") == "FROZEN_AWAITING_FUTURE", (
+        f"Expected FROZEN_AWAITING_FUTURE, got {body.get('shadow_state')}"
+    )
     print(f"[Step 20] Create shadow evaluation (FROZEN_AWAITING_FUTURE) -> HTTP {status} OK")
     steps_passed += 1
 
@@ -345,13 +347,17 @@ def main() -> int:
     # 23. Attempt cross-workspace data access (Tenant B accesses Tenant A's decision)
     status_cross_dec, _ = api_req(f"/api/v1/decisions/{decision_id}", token=token_b)
     status_cross_opt, _ = api_req(f"/api/v1/optimizations/{job_id}", token=token_b)
-    print(f"[Step 23] Cross-workspace access attempt by Tenant B -> Dec: HTTP {status_cross_dec}, Opt: HTTP {status_cross_opt}")
+    print(
+        f"[Step 23] Cross-workspace access attempt by Tenant B -> Dec: HTTP {status_cross_dec}, Opt: HTTP {status_cross_opt}"
+    )
     steps_passed += 1
 
     # 24. Assert isolation (403 / 404 / 0 rows)
     assert status_cross_dec in {403, 404}, f"Expected 403/404 for cross-tenant decision, got {status_cross_dec}"
     assert status_cross_opt in {403, 404}, f"Expected 403/404 for cross-tenant optimization, got {status_cross_opt}"
-    print(f"[Step 24] Assert tenant isolation -> Cross-workspace access correctly rejected with HTTP {status_cross_dec} / {status_cross_opt} OK")
+    print(
+        f"[Step 24] Assert tenant isolation -> Cross-workspace access correctly rejected with HTTP {status_cross_dec} / {status_cross_opt} OK"
+    )
     steps_passed += 1
 
     print("\n========================================================")

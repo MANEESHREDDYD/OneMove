@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 from datetime import datetime, timezone
 from typing import Any, Sequence
 
@@ -16,10 +15,8 @@ from services.zonepilot.decisions.contracts import (
     ShadowState,
 )
 from services.zonepilot.decisions.repository import DecisionRepository
-from services.zonepilot.release import current_release_sha
-
-
 from services.zonepilot.optimization.repository import OptimizationRepository
+from services.zonepilot.release import current_release_sha
 
 
 class DecisionLedger:
@@ -140,7 +137,9 @@ class DecisionLedger:
                     pass
 
         if not osrm_bundle_hash:
-            raise ValueError("DECISION_LINEAGE_INCOMPLETE: authoritative OSRM bundle hash missing from release manifest")
+            raise ValueError(
+                "DECISION_LINEAGE_INCOMPLETE: authoritative OSRM bundle hash missing from release manifest"
+            )
 
         evidence_ids = res_doc.get("evidence_ids") or job.get("evidence_ids")
         if not evidence_ids:
@@ -342,7 +341,9 @@ class DecisionLedger:
                                 if "demand_ids" in tm and isinstance(tm["demand_ids"], list):
                                     tm["demand_ids"] = tuple(tm["demand_ids"])
                                 if "durations_seconds" in tm and isinstance(tm["durations_seconds"], list):
-                                    tm["durations_seconds"] = tuple(tuple(r) if isinstance(r, list) else r for r in tm["durations_seconds"])
+                                    tm["durations_seconds"] = tuple(
+                                        tuple(r) if isinstance(r, list) else r for r in tm["durations_seconds"]
+                                    )
                                 sc_copy["travel_matrix"] = tm
                             if "capacity_adjustments" in sc_copy and isinstance(sc_copy["capacity_adjustments"], list):
                                 sc_copy["capacity_adjustments"] = tuple(sc_copy["capacity_adjustments"])
@@ -380,6 +381,7 @@ class DecisionLedger:
         else:
             # Reconstruct from authentic artifacts if legacy record without explicit snapshot row
             from services.zonepilot.optimization.pubsub_worker import _reconstruct_problem_from_payload
+
             try:
                 problem = _reconstruct_problem_from_payload({})
             except Exception as rec_err:
@@ -492,7 +494,9 @@ class DecisionLedger:
             raise ValueError("future_observation_time must be strictly after frozen_decision_time")
 
         if p_p95 is None or p_p95 <= 0:
-            raise ValueError("DECISION_LINEAGE_INCOMPLETE: predicted_p95_seconds must be derived from authoritative decision record")
+            raise ValueError(
+                "DECISION_LINEAGE_INCOMPLETE: predicted_p95_seconds must be derived from authoritative decision record"
+            )
 
         h = hashlib.sha256(f"{dec_id}:{f_decision_time.isoformat()}:{f_time.isoformat()}".encode()).hexdigest()[:16]
         shadow_id = f"shd-{h}"

@@ -424,10 +424,11 @@ class OptimizationRepository:
                     "problem_snapshot_id": row["snapshot_id"],
                     "problem_snapshot_sha256": row["snapshot_sha256"],
                     "workspace_id": row["workspace_id"],
-                    "problem": row["problem_json"] if isinstance(row["problem_json"], dict) else json.loads(row["problem_json"]),
+                    "problem": row["problem_json"]
+                    if isinstance(row["problem_json"], dict)
+                    else json.loads(row["problem_json"]),
                     "created_at": str(row["created_at"]),
                 }
                 meta = row["metadata"] if isinstance(row["metadata"], dict) else json.loads(row["metadata"])
                 res.update(meta)
                 return res
-

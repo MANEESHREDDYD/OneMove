@@ -67,9 +67,7 @@ if not JWT_SECRET:
     except Exception:
         pass
 
-TARGET_API_URL = os.environ.get(
-    "ONEMOVE_API_URL", "https://zonepilot-api-staging-xwvz4vi7ta-el.a.run.app"
-).rstrip("/")
+TARGET_API_URL = os.environ.get("ONEMOVE_API_URL", "https://zonepilot-api-staging-xwvz4vi7ta-el.a.run.app").rstrip("/")
 TARGET_WORKER_URL = os.environ.get(
     "ONEMOVE_WORKER_URL", "https://zonepilot-worker-staging-xwvz4vi7ta-el.a.run.app"
 ).rstrip("/")
@@ -325,13 +323,17 @@ def main() -> int:
     # 23. Attempt cross-workspace data access (Tenant B accesses Tenant A's decision)
     status_cross_dec, body_cross_dec = api_req(f"/api/v1/decisions/{decision_id}", token=token_b)
     status_cross_opt, body_cross_opt = api_req(f"/api/v1/optimizations/{job_id}", token=token_b)
-    print(f"[Step 23] Cross-workspace access attempt by Tenant B -> Dec: HTTP {status_cross_dec}, Opt: HTTP {status_cross_opt}")
+    print(
+        f"[Step 23] Cross-workspace access attempt by Tenant B -> Dec: HTTP {status_cross_dec}, Opt: HTTP {status_cross_opt}"
+    )
     steps_passed += 1
 
     # 24. Assert isolation (403 / 404 / 0 rows)
     assert status_cross_dec in {403, 404}, f"Expected 403/404 for cross-tenant decision, got {status_cross_dec}"
     assert status_cross_opt in {403, 404}, f"Expected 403/404 for cross-tenant optimization, got {status_cross_opt}"
-    print(f"[Step 24] Assert tenant isolation -> Cross-workspace access correctly rejected with HTTP {status_cross_dec} / {status_cross_opt} OK")
+    print(
+        f"[Step 24] Assert tenant isolation -> Cross-workspace access correctly rejected with HTTP {status_cross_dec} / {status_cross_opt} OK"
+    )
     steps_passed += 1
 
     print("\n========================================================")

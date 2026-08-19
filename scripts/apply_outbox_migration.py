@@ -35,5 +35,6 @@ def main():
     print("optimization_outbox table ready!")
     return 0
 
+
 if __name__ == "__main__":
     sys.exit(main())

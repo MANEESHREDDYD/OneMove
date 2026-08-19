@@ -251,6 +251,7 @@ async def process_pubsub_push(request: Request, response: Response):
 
         # Create and persist immutable ProblemSnapshot for true PIT replay
         from services.zonepilot.optimization.contracts import create_problem_snapshot
+
         manifest_path = default_data_root() / "private" / "official" / "manifests" / "gold_manifest.json"
         matrix_sha = ""
         gold_sha = ""
@@ -302,8 +303,15 @@ async def process_pubsub_push(request: Request, response: Response):
             code_sha=effective_code_sha,
             run_duration_ms=run_ms,
         )
-        logger.info(f"Job {job_id} solved successfully in {run_ms}ms (status={result.status.value}, snapshot={snapshot.problem_snapshot_id})")
-        return {"status": "ack", "job_id": job_id, "solver_status": result.status.value, "problem_snapshot_id": snapshot.problem_snapshot_id}
+        logger.info(
+            f"Job {job_id} solved successfully in {run_ms}ms (status={result.status.value}, snapshot={snapshot.problem_snapshot_id})"
+        )
+        return {
+            "status": "ack",
+            "job_id": job_id,
+            "solver_status": result.status.value,
+            "problem_snapshot_id": snapshot.problem_snapshot_id,
+        }
 
     except psycopg.OperationalError as db_err:
         run_ms = int((time.perf_counter() - start_time) * 1000)

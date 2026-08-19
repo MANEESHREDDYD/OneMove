@@ -412,4 +412,3 @@ def create_problem_snapshot(
         evidence_ids=evidence_ids,
         temporal_cutoff=temporal_cutoff or now_iso,
     )
-
