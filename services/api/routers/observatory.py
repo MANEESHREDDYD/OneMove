@@ -24,7 +24,7 @@ from services.api.core.auth import get_current_user
 from services.api.repositories.artifact_catalog import ArtifactCorrupt, ArtifactNotFound, ArtifactNotReady
 from services.api.services.observatory import ObservatoryService, get_observatory_service
 from services.zonepilot.assistant.contracts import AssistantToolCall, ToolName
-from services.zonepilot.assistant.tools import create_default_registry
+from services.zonepilot.assistant.tools import build_assistant_registry
 from services.zonepilot.decisions.ledger import DecisionLedger
 from services.zonepilot.decisions.repository import DecisionRepository
 from services.zonepilot.economics.registry import CANONICAL_EXPERIMENTS
@@ -55,7 +55,6 @@ _opt_service = OptimizationService(repository=OptimizationRepository())
 _res_service = ResilienceService(repository=ResilienceRepository())
 _dec_ledger = DecisionLedger(repository=DecisionRepository())
 _forecast_repo = ForecastRepository()
-_assistant_registry = create_default_registry()
 
 
 def standard_error(code: str, message: str, status_code: int = 400):
@@ -769,9 +768,15 @@ class AssistantQuery(BaseModel):
 def assistant_query(
     body: AssistantQuery,
     _user: dict = Depends(get_current_user),
+    service: ObservatoryService = Depends(get_observatory_service),
 ):
-    """Execute typed assistant tool queries deterministically."""
+    """Execute typed assistant tool queries against authoritative sources only."""
     _, ws_id = _resolve_user_context(_user)
+    registry = build_assistant_registry(
+        observatory_service=service,
+        decision_ledger=_dec_ledger,
+        forecast_repository=_forecast_repo,
+    )
     tool = ToolName.GET_ZONE_STATE
     if body.tool_name:
         try:
@@ -784,7 +789,7 @@ def assistant_query(
         arguments=body.arguments,
         workspace_id=ws_id,
     )
-    result = _assistant_registry.execute(call)
+    result = registry.execute(call)
     return result.model_dump()
 
 
