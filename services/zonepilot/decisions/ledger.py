@@ -70,58 +70,110 @@ class DecisionLedger:
         if obj_val is None or exp_travel is None or p95_travel is None:
             raise ValueError("DECISION_LINEAGE_INCOMPLETE: Incomplete objective metrics in result_document")
 
-        scenario_metrics = res_doc.get("scenario_metrics") or []
-        if scenario_metrics and isinstance(scenario_metrics[0], dict):
-            cov_bps = scenario_metrics[0].get("coverage_basis_points", 10000)
+        scenario_metrics = res_doc.get("scenario_metrics")
+        if not scenario_metrics:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: scenario_metrics missing from optimization result")
+
+        first_metric = scenario_metrics[0]
+        if isinstance(first_metric, dict):
+            cov_bps = first_metric.get("coverage_basis_points")
         else:
-            cov_bps = res_doc.get("coverage_basis_points", 10000)
+            cov_bps = getattr(first_metric, "coverage_basis_points", None)
+
+        if cov_bps is None:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: coverage_basis_points missing from scenario_metrics")
 
         graph_version = job.get("graph_version") or res_doc.get("graph_version")
         if not graph_version:
             raise ValueError("DECISION_LINEAGE_INCOMPLETE: graph_version missing from job lineage")
 
-        dataset_version = job.get("dataset_version") or res_doc.get("dataset_version") or "1.0.0"
+        dataset_version = job.get("dataset_version") or res_doc.get("dataset_version")
+        if not dataset_version:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: dataset_version missing from job lineage")
+
         req_fp = job.get("request_fingerprint") or res_doc.get("problem_fingerprint")
         if not req_fp:
             raise ValueError("DECISION_LINEAGE_INCOMPLETE: request_fingerprint missing from job lineage")
 
-        dec_time = job.get("finished_at") or job.get("created_at") or datetime.now(timezone.utc)
+        action_val = res_doc.get("action") or job.get("action")
+        if not action_val:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: action missing from optimization result")
+        selected_action = action_val if isinstance(action_val, str) else getattr(action_val, "value", str(action_val))
+
+        network_version = job.get("network_version") or res_doc.get("network_version") or graph_version
+        if not network_version:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: network_version missing from job lineage")
+
+        dec_time = job.get("finished_at") or job.get("completed_at")
+        if not dec_time:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: completed_at / finished_at missing from job lineage")
         if isinstance(dec_time, str):
             try:
                 dec_time = datetime.fromisoformat(dec_time.replace("Z", "+00:00"))
             except Exception:
-                dec_time = datetime.now(timezone.utc)
+                raise ValueError(f"DECISION_LINEAGE_INCOMPLETE: invalid completion timestamp format {dec_time}")
 
-        evidence_ids = res_doc.get("evidence_ids") or [
-            "ev-gold-network-h3r8",
-            "ev-osrm-travel-table",
-            f"ev-opt-job-{job.get('id')}",
-        ]
+        # Fetch authentic release manifest / artifact hashes without fabrication
+        from services.zonepilot.optimization.r1_catalog import default_data_root
+
+        manifest_path = default_data_root() / "private" / "official" / "manifests" / "gold_manifest.json"
+        osrm_bundle_hash = None
+        if manifest_path.is_file():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                osrm_bundle_hash = manifest.get("osrm_bundle_sha256") or manifest.get("osrm_table_sha256")
+            except Exception:
+                pass
+
+        if not osrm_bundle_hash:
+            rel_manifest_path = default_data_root().parent.parent / "release_manifest.json"
+            if rel_manifest_path.is_file():
+                try:
+                    rel_m = json.loads(rel_manifest_path.read_text(encoding="utf-8"))
+                    osrm_bundle_hash = rel_m.get("artifacts", {}).get("r1_osrm_travel_matrix.json", {}).get("sha256")
+                except Exception:
+                    pass
+
+        if not osrm_bundle_hash:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: authoritative OSRM bundle hash missing from release manifest")
+
+        evidence_ids = res_doc.get("evidence_ids") or job.get("evidence_ids")
+        if not evidence_ids:
+            matrix_id_val = job.get("matrix_id") or "r1-table"
+            evidence_ids = [
+                "ev-gold-network-h3r8",
+                f"ev-osrm-{matrix_id_val}",
+                f"ev-opt-job-{job.get('id')}",
+            ]
 
         h = hashlib.sha256(
             f"{workspace_id}:{job.get('id')}:{','.join(sorted(opened))}:{self.code_sha}".encode()
         ).hexdigest()[:16]
         dec_id = f"dec-{h}"
 
+        rec_time = datetime.now(timezone.utc)
+        if dec_time > rec_time:
+            rec_time = dec_time
+
         rec = DecisionRecord(
             decision_id=dec_id,
             workspace_id=workspace_id,
             decision_time=dec_time,
-            network_version="1.1",
+            network_version=network_version,
             dataset_version=dataset_version,
             feature_snapshot_hash=req_fp,
-            selected_action=res_doc.get("action") or job.get("action") or "OPEN_FACILITIES",
+            selected_action=selected_action,
             opened_facilities=tuple(sorted(opened)),
             objective_value=int(obj_val),
             expected_travel_seconds=int(exp_travel),
             p95_travel_seconds=int(p95_travel),
             coverage_basis_points=int(cov_bps),
             graph_version=graph_version,
-            osrm_bundle_hash=hashlib.sha256(f"osrm-{graph_version}".encode()).hexdigest(),
+            osrm_bundle_hash=osrm_bundle_hash,
             solver_version=job.get("solver_version") or res_doc.get("solver_version", "ortools-cp-sat"),
             code_sha=job.get("code_sha") or self.code_sha,
             evidence_ids=tuple(evidence_ids),
-            recorded_at=datetime.now(timezone.utc),
+            recorded_at=rec_time,
         )
 
         self.repository.record_decision(rec, recorded_by=recorded_by)
@@ -213,6 +265,20 @@ class DecisionLedger:
         ws_id = workspace_id or orig.workspace_id
         pit_valid = self.verify_pit_lineage(orig.decision_time, feature_cutoff)
 
+        if not pit_valid or (feature_cutoff and feature_cutoff > orig.decision_time):
+            replay_res = DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=False,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="NON_REPLAYABLE",
+                reason=f"Point-In-Time violation: feature_cutoff ({feature_cutoff.isoformat() if feature_cutoff else 'None'}) is strictly after frozen decision_time ({orig.decision_time.isoformat()})",
+                code_sha=self.code_sha,
+            )
+            return replay_res
+
         # Rerun deterministic solver verification from frozen lineage
         from services.zonepilot.optimization.contracts import (
             DemandPoint,
@@ -234,8 +300,6 @@ class DecisionLedger:
         mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
         if not mat_path.is_file():
             raise FileNotFoundError("MATRIX_UNAVAILABLE: Cannot replay without authoritative travel matrix.")
-
-        import json
 
         matrix_doc = json.loads(mat_path.read_text(encoding="utf-8"))
         facility_ids = tuple(matrix_doc["facility_ids"])
@@ -387,7 +451,7 @@ class DecisionLedger:
         workspace_id: str | None = None,
         frozen_decision_time: datetime | None = None,
         future_observation_time: datetime | None = None,
-        predicted_p95_seconds: int = 830,
+        predicted_p95_seconds: int | None = None,
     ) -> ShadowEvaluation:
         if isinstance(decision_or_id, DecisionRecord):
             dec_id = decision_or_id.decision_id
@@ -395,7 +459,7 @@ class DecisionLedger:
             if f_time is None:
                 raise ValueError("future_observation_time required")
             f_decision_time = decision_or_id.decision_time
-            p_p95 = decision_or_id.p95_travel_seconds
+            p_p95 = predicted_p95_seconds if predicted_p95_seconds is not None else decision_or_id.p95_travel_seconds
             ws_id = workspace_id or decision_or_id.workspace_id
         else:
             dec_id = decision_or_id
@@ -403,12 +467,17 @@ class DecisionLedger:
             if f_time is None:
                 raise ValueError("future_observation_time required")
             orig = self.get_decision(dec_id, workspace_id)
-            f_decision_time = frozen_decision_time or (orig.decision_time if orig else datetime.now(timezone.utc))
-            p_p95 = predicted_p95_seconds
-            ws_id = workspace_id or (orig.workspace_id if orig else "00000000-0000-0000-0000-000000000001")
+            if orig is None:
+                raise LookupError(f"Decision {dec_id} not found in ledger")
+            f_decision_time = frozen_decision_time or orig.decision_time
+            p_p95 = predicted_p95_seconds if predicted_p95_seconds is not None else orig.p95_travel_seconds
+            ws_id = workspace_id or orig.workspace_id
 
         if f_time <= f_decision_time:
             raise ValueError("future_observation_time must be strictly after frozen_decision_time")
+
+        if p_p95 is None or p_p95 <= 0:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: predicted_p95_seconds must be derived from authoritative decision record")
 
         h = hashlib.sha256(f"{dec_id}:{f_decision_time.isoformat()}:{f_time.isoformat()}".encode()).hexdigest()[:16]
         shadow_id = f"shd-{h}"

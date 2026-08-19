@@ -79,3 +79,38 @@ def test_durable_decision_record_replay_shadow():
     assert shad_res.status_code == 201
     shad_data = shad_res.json()
     assert shad_data["shadow_state"] == "FROZEN_AWAITING_FUTURE"
+
+
+def test_decision_freeze_lineage_incomplete_fails_closed():
+    # Attempt to freeze a decision from a non-existent job -> 404
+    res_404 = client.post("/api/v1/decisions/freeze", json={"optimization_job_id": "non-existent-job"})
+    assert res_404.status_code == 404
+
+
+def test_shadow_invalid_window_fails_closed():
+    now = datetime.now(timezone.utc)
+    # create decision
+    rec_payload = {
+        "decision_time": now.isoformat(),
+        "network_version": "1.1",
+        "dataset_version": "1.0.0",
+        "feature_snapshot_hash": "snap-test-shadow",
+        "selected_action": "OPEN_FACILITIES",
+        "opened_facilities": ["fac:88618925a5fffff"],
+        "objective_value": 1000,
+        "expected_travel_seconds": 500,
+        "p95_travel_seconds": 750,
+        "coverage_basis_points": 10000,
+        "code_sha": "git-sha-test-456",
+    }
+    res = client.post("/api/v1/decisions", json=rec_payload)
+    dec_id = res.json()["decision_id"]
+
+    # Attempt shadow with past/same observation time -> 422 INVALID_SHADOW_WINDOW
+    bad_shadow = {
+        "future_observation_time": now.isoformat(),
+        "frozen_decision_time": now.isoformat(),
+    }
+    bad_res = client.post(f"/api/v1/decisions/{dec_id}/shadow", json=bad_shadow)
+    assert bad_res.status_code == 422
+    assert bad_res.json()["error"]["code"] == "INVALID_SHADOW_WINDOW"

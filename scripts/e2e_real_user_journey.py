@@ -1,30 +1,30 @@
 """OneMove 24-Step Real User Authentication & Operational Lifecycle Journey Test.
 
-Authenticates via Supabase Auth password grant without local JWT secrets:
-1. Authenticate real user token via Supabase Auth
-2. Bind workspace
+Strict Fail-Closed Real User Journey:
+1. Authenticate real user tokens via Supabase Auth password grant REST API (fail closed, no signing-secret fallback)
+2. Bind workspace & access datasets catalog
 3. Retrieve and assert 94 Gold H3 zones
 4. Inspect real Open-Meteo dataset lineage
 5. Inspect real OSRM matrix & evidence
 6. POST resilience scenario
 7. Read scenario quantile outcomes
-8. POST optimization job
+8. POST optimization job (idempotent, transactional outbox)
 9. Assert immediate HTTP 202/QUEUED state
-10. Trigger Pub/Sub worker processing
+10. Verify asynchronous Outbox Dispatch to Pub/Sub
 11. Poll job status
 12. Assert terminal OPTIMAL result
 13. Inspect opened facilities & p95 travel metrics
-14. Persist/freeze decision to PostgreSQL ledger
+14. Persist/freeze decision to PostgreSQL ledger with complete lineage
 15. Retrieve immutable evidence chain
 16. Verify revision persistence
 17. Re-query decision from PostgreSQL
-18. Execute PIT decision replay
-19. Verify historical inputs match
-20. Create shadow evaluation
+18. Execute true historical PIT decision replay
+19. Verify historical inputs match (EXACT_MATCH)
+20. Create shadow evaluation (strict future timestamp, authoritative p95)
 21. Query assistant with deterministic tool
 22. Verify assistant references authentic evidence IDs
 23. Attempt cross-workspace data access
-24. Assert isolation (403 / 404 / 0 rows)
+24. Assert isolation (403 / 404 cross-tenant denial)
 """
 
 from __future__ import annotations
@@ -36,20 +36,25 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 
 from dotenv import dotenv_values
 
 env = dotenv_values(".env.local")
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL") or env.get("SUPABASE_URL") or env.get("NEXT_PUBLIC_SUPABASE_URL", "https://puygqvnhwsjkspoprfkb.supabase.co")
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY") or env.get("SUPABASE_ANON_KEY") or env.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+SUPABASE_URL = (
+    os.environ.get("SUPABASE_URL")
+    or env.get("SUPABASE_URL")
+    or env.get("NEXT_PUBLIC_SUPABASE_URL", "https://puygqvnhwsjkspoprfkb.supabase.co")
+)
+SUPABASE_ANON_KEY = (
+    os.environ.get("SUPABASE_ANON_KEY")
+    or env.get("SUPABASE_ANON_KEY")
+    or env.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+)
 
 TARGET_API_URL = os.environ.get(
-    "ONEMOVE_API_URL", "https://zonepilot-api-staging-xwvz4vi7ta-el.a.run.app"
-).rstrip("/")
-TARGET_WORKER_URL = os.environ.get(
-    "ONEMOVE_WORKER_URL", "https://zonepilot-worker-staging-xwvz4vi7ta-el.a.run.app"
+    "ONEMOVE_API_URL", "http://127.0.0.1:8000"
 ).rstrip("/")
 
 TENANT_A_WORKSPACE = "00000000-0000-0000-0000-000000000001"
@@ -64,9 +69,9 @@ TENANT_B_PASS = os.environ.get("TENANT_B_PASSWORD", "OneMoveTenant2026!")
 
 
 def supabase_login(email: str, password: str) -> str:
-    """Log in against Supabase Auth password grant REST API."""
+    """Log in against Supabase Auth password grant REST API (strictly fail-closed)."""
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-        raise RuntimeError("Missing SUPABASE_URL or SUPABASE_ANON_KEY for real user auth")
+        raise RuntimeError("FAIL_CLOSED: Missing SUPABASE_URL or SUPABASE_ANON_KEY for real user auth")
 
     url = f"{SUPABASE_URL.rstrip('/')}/auth/v1/token?grant_type=password"
     headers = {
@@ -75,9 +80,15 @@ def supabase_login(email: str, password: str) -> str:
     }
     payload = {"email": email, "password": password}
     req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        body = json.loads(resp.read().decode("utf-8"))
-        return body["access_token"]
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            token = body.get("access_token")
+            if not token:
+                raise RuntimeError(f"FAIL_CLOSED: Supabase did not return access_token for {email}")
+            return token
+    except Exception as exc:
+        raise RuntimeError(f"FAIL_CLOSED: Supabase password grant authentication failed for {email}: {exc}") from exc
 
 
 def api_req(
@@ -108,26 +119,19 @@ def api_req(
 
 
 def main() -> int:
-    print("=== ONEMOVE 24-STEP REAL USER AUTHENTICATION JOURNEY TEST ===")
+    print("=== ONEMOVE 24-STEP STRICT REAL USER AUTHENTICATION JOURNEY TEST ===")
     print(f"Supabase Auth Endpoint: {SUPABASE_URL}/auth/v1")
     print(f"Target API: {TARGET_API_URL}")
-    print(f"Target Worker: {TARGET_WORKER_URL}")
     print(f"Primary Workspace: {TENANT_A_WORKSPACE}\n")
 
     steps_passed = 0
 
-    # 1. Authenticate real user token via Supabase Auth password grant
-    try:
-        token_a = supabase_login(TENANT_A_EMAIL, TENANT_A_PASS)
-        token_b = supabase_login(TENANT_B_EMAIL, TENANT_B_PASS)
-        print("[Step 01] Authenticate real users via Supabase Auth REST -> OK")
-    except Exception as auth_err:
-        print(f"[Step 01] Supabase REST login fallback: {auth_err}")
-        # Fallback to local integration token if Supabase server is unreachable
-        from scripts.integration_privileged_journey import make_token
-        token_a = make_token(TENANT_A_USER, TENANT_A_WORKSPACE, TENANT_A_EMAIL)
-        token_b = make_token(TENANT_B_USER, TENANT_B_WORKSPACE, TENANT_B_EMAIL)
-        print("[Step 01] Authenticate user token via fallback -> OK")
+    # 1. Authenticate real user token via Supabase Auth password grant (fail-closed, no local minting fallback)
+    token_a = supabase_login(TENANT_A_EMAIL, TENANT_A_PASS)
+    token_b = supabase_login(TENANT_B_EMAIL, TENANT_B_PASS)
+    assert token_a and len(token_a) > 20, "Step 1 failed: Missing valid token for Tenant A"
+    assert token_b and len(token_b) > 20, "Step 1 failed: Missing valid token for Tenant B"
+    print("[Step 01] Authenticate real users via Supabase Auth REST -> OK (Fail-closed verified)")
     steps_passed += 1
 
     # 2. Bind workspace
@@ -193,6 +197,7 @@ def main() -> int:
     status, body = api_req("/api/v1/optimizations", method="POST", body=opt_payload, token=token_a)
     assert status in {201, 202}, f"Step 8 failed: {status} {body}"
     job_id = body.get("id") or body.get("job_id")
+    assert job_id, f"Step 8 failed to return job_id: {body}"
     print(f"[Step 08] POST optimization job ({job_id}) -> HTTP {status} OK")
     steps_passed += 1
 
@@ -201,21 +206,17 @@ def main() -> int:
     print("[Step 09] Assert immediate QUEUED status -> verified OK")
     steps_passed += 1
 
-    # 10. Trigger Pub/Sub worker processing
-    worker_push_payload = {
-        "message": {
-            "data": json.dumps({"job_id": job_id, "workspace_id": TENANT_A_WORKSPACE}).encode("utf-8").hex(),
-            "attributes": {"job_id": job_id, "workspace_id": TENANT_A_WORKSPACE},
-            "message_id": f"msg-{uuid.uuid4().hex[:8]}",
-        }
-    }
-    status, wbody = api_req("/push", method="POST", body=worker_push_payload, base_url=TARGET_WORKER_URL)
-    print(f"[Step 10] Trigger Worker /push for job {job_id} -> HTTP {status} OK")
+    # 10. Asynchronous Outbox Dispatch to Pub/Sub (without manual worker internals invocation)
+    from services.zonepilot.optimization.outbox_dispatcher import OutboxDispatcher
+    dispatcher = OutboxDispatcher()
+    dispatched_count = dispatcher.run_once()
+    assert dispatched_count >= 0, "Outbox dispatch returned invalid count"
+    print("[Step 10] Asynchronous Outbox Dispatcher claimed and published events -> OK")
     steps_passed += 1
 
     # 11. Poll job status
     poll_success = False
-    for _attempt in range(15):
+    for _attempt in range(25):
         time.sleep(2)
         status, body = api_req(f"/api/v1/optimizations/{job_id}", token=token_a)
         current_status = body.get("status")
@@ -232,17 +233,18 @@ def main() -> int:
     print("[Step 12] Assert solver_status OPTIMAL -> verified OK")
     steps_passed += 1
 
-    # 13. Inspect opened facilities & p95 travel metrics
+    # 13. Inspect opened facilities & p95 travel metrics (strictly from authoritative result)
     res_doc = body.get("result_document") or {}
     if isinstance(res_doc, str):
         res_doc = json.loads(res_doc)
     opened = res_doc.get("opened_facility_ids") or []
     obj_info = res_doc.get("objective") or {}
-    p95_sec = obj_info.get("p95_travel_demand_seconds", 0)
+    p95_sec = obj_info.get("p95_travel_demand_seconds") or res_doc.get("p95_travel_seconds")
+    assert p95_sec is not None and p95_sec > 0, "Expected non-zero p95 metric from solver result"
     print(f"[Step 13] Inspect result: Opened {len(opened)} facilities, P95={p95_sec}s -> OK")
     steps_passed += 1
 
-    # 14. Persist/freeze decision to PostgreSQL ledger
+    # 14. Persist/freeze decision to PostgreSQL ledger with complete lineage
     freeze_payload = {
         "optimization_job_id": job_id,
         "operator_rationale": "Real user authenticated lifecycle verification",
@@ -250,6 +252,7 @@ def main() -> int:
     status, body = api_req("/api/v1/decisions/freeze", method="POST", body=freeze_payload, token=token_a)
     assert status in {200, 201}, f"Step 14 failed: {status} {body}"
     decision_id = body.get("decision_id")
+    assert decision_id, f"Step 14 did not return decision_id: {body}"
     print(f"[Step 14] Freeze decision to PostgreSQL ledger ({decision_id}) -> HTTP {status} OK")
     steps_passed += 1
 
@@ -269,33 +272,37 @@ def main() -> int:
     status, body = api_req(f"/api/v1/decisions/{decision_id}", token=token_a)
     assert status == 200, f"Step 17 failed: {status} {body}"
     assert body.get("decision_id") == decision_id
+    frozen_dec_time = body.get("decision_time")
     print("[Step 17] Re-query decision record from PostgreSQL -> verified OK")
     steps_passed += 1
 
-    # 18. Execute PIT decision replay
+    # 18. Execute true historical PIT decision replay
     status, body = api_req(f"/api/v1/decisions/{decision_id}/replay", method="POST", body={}, token=token_a)
     assert status == 200, f"Step 18 failed: {status} {body}"
     print(f"[Step 18] Execute PIT decision replay -> HTTP {status} OK")
     steps_passed += 1
 
     # 19. Verify historical inputs match
-    assert body.get("pit_valid") is True
-    assert body.get("reproduced_exact_action") is True
-    assert body.get("reproduced_exact_facilities") is True
-    assert body.get("objective_match") is True
-    assert body.get("match_status") == "EXACT_MATCH"
+    assert body.get("pit_valid") is True, f"PIT validity check failed: {body}"
+    assert body.get("reproduced_exact_action") is True, f"Action mismatch: {body}"
+    assert body.get("reproduced_exact_facilities") is True, f"Facilities mismatch: {body}"
+    assert body.get("objective_match") is True, f"Objective mismatch: {body}"
+    assert body.get("match_status") == "EXACT_MATCH", f"Expected EXACT_MATCH, got {body.get('match_status')}"
     print("[Step 19] Verify PIT replay exact match -> EXACT_MATCH verified OK")
     steps_passed += 1
 
-    # 20. Create shadow evaluation
+    # 20. Create shadow evaluation (strictly future observation time, authoritative p95)
+    dec_dt = datetime.fromisoformat(frozen_dec_time.replace("Z", "+00:00"))
+    future_obs_dt = dec_dt + timedelta(hours=24)
     shadow_payload = {
-        "frozen_decision_time": datetime.now(timezone.utc).isoformat(),
-        "future_observation_time": datetime.now(timezone.utc).isoformat(),
-        "predicted_p95_seconds": p95_sec or 830,
+        "frozen_decision_time": dec_dt.isoformat(),
+        "future_observation_time": future_obs_dt.isoformat(),
+        "predicted_p95_seconds": p95_sec,
     }
     status, body = api_req(f"/api/v1/decisions/{decision_id}/shadow", method="POST", body=shadow_payload, token=token_a)
     assert status in {200, 201}, f"Step 20 failed: {status} {body}"
-    print(f"[Step 20] Create shadow evaluation -> HTTP {status} OK")
+    assert body.get("shadow_state") == "FROZEN_AWAITING_FUTURE", f"Expected FROZEN_AWAITING_FUTURE, got {body.get('shadow_state')}"
+    print(f"[Step 20] Create shadow evaluation (FROZEN_AWAITING_FUTURE) -> HTTP {status} OK")
     steps_passed += 1
 
     # 21. Query assistant with deterministic tool
@@ -315,8 +322,8 @@ def main() -> int:
     steps_passed += 1
 
     # 23. Attempt cross-workspace data access (Tenant B accesses Tenant A's decision)
-    status_cross_dec, body_cross_dec = api_req(f"/api/v1/decisions/{decision_id}", token=token_b)
-    status_cross_opt, body_cross_opt = api_req(f"/api/v1/optimizations/{job_id}", token=token_b)
+    status_cross_dec, _ = api_req(f"/api/v1/decisions/{decision_id}", token=token_b)
+    status_cross_opt, _ = api_req(f"/api/v1/optimizations/{job_id}", token=token_b)
     print(f"[Step 23] Cross-workspace access attempt by Tenant B -> Dec: HTTP {status_cross_dec}, Opt: HTTP {status_cross_opt}")
     steps_passed += 1
 

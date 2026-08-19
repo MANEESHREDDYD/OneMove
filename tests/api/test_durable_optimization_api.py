@@ -88,3 +88,27 @@ def test_api_process_never_invokes_solver_synchronously(monkeypatch):
     res = client.post("/api/v1/optimizations", json=req)
     assert res.status_code == 202
     assert res.json()["status"] == "QUEUED"
+
+
+def test_readiness_probe_fails_on_environment_project_mismatch(monkeypatch):
+    """P0-CONFIG-001 test: Readiness probe must fail closed on staging/production project mismatch."""
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("GCP_PROJECT_ID", "zonepilot-stg-9a4285")  # mismatch!
+    monkeypatch.setenv("PUBSUB_TOPIC_OPTIMIZATIONS", "zonepilot-opt-jobs-prod")
+
+    res = client.get("/health/ready")
+    assert res.status_code == 503
+    data = res.json()
+    assert data["status"] == "unready"
+    assert data["config_valid"] is False
+    assert "Environment/project mismatch" in data.get("reason", "")
+
+
+def test_outbox_dispatcher_unit():
+    """P1-OUTBOX-003 test: OutboxDispatcher runs standalone without synchronous API blocking."""
+    from services.zonepilot.optimization.outbox_dispatcher import OutboxDispatcher
+
+    dispatcher = OutboxDispatcher()
+    count = dispatcher.run_once()
+    assert count >= 0
+

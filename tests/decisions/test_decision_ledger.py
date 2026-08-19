@@ -119,3 +119,40 @@ def test_shadow_evaluation_loop() -> None:
     assert evaluated.shadow_state == ShadowState.EVALUATED
     assert evaluated.outcome_status == OutcomeStatus.EVALUATED
     assert evaluated.regret_seconds == 50
+
+
+def test_adversarial_pit_temporal_isolation() -> None:
+    """Adversarial test proving future features at T+5m cannot influence frozen decision replay at T."""
+    ledger = DecisionLedger()
+    t_decision = datetime(2026, 8, 18, 10, 0, 0, tzinfo=timezone.utc)
+    snapshot_hash = "c" * 64
+
+    rec = ledger.record_decision(
+        workspace_id="ws-blr-01",
+        decision_time=t_decision,
+        network_version="1.1",
+        dataset_version="1.0.0",
+        feature_snapshot_hash=snapshot_hash,
+        selected_action="OPEN_FACILITIES",
+        opened_facilities=["fac:88618925a5fffff", "fac:88618925a7fffff", "fac:8861892ec3fffff", "fac:8861892ecbfffff"],
+        objective_value=1756300000000,
+        expected_travel_seconds=500,
+        p95_travel_seconds=750,
+        coverage_basis_points=10000,
+        graph_version="1.1",
+        osrm_bundle_hash="b" * 64,
+        solver_version="ortools-9.11",
+    )
+
+    # 1. Historical replay with exact cutoff at T -> EXACT_MATCH
+    replay_exact = ledger.replay_decision(rec.decision_id, workspace_id="ws-blr-01", feature_cutoff=t_decision)
+    assert replay_exact.pit_valid is True
+    assert replay_exact.match_status == "EXACT_MATCH"
+
+    # 2. Adversarial replay with future cutoff T+5m -> NON_REPLAYABLE
+    t_future = t_decision + timedelta(minutes=5)
+    replay_future = ledger.replay_decision(rec.decision_id, workspace_id="ws-blr-01", feature_cutoff=t_future)
+    assert replay_future.pit_valid is False
+    assert replay_future.match_status == "NON_REPLAYABLE"
+    assert "Point-In-Time violation" in (replay_future.reason or "")
+

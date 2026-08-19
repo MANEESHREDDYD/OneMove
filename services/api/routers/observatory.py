@@ -527,7 +527,11 @@ def freeze_decision(
         )
         return rec.model_dump()
     except ValueError as val_err:
-        standard_error("OPTIMIZATION_NOT_COMPLETED", str(val_err), 400)
+        err_msg = str(val_err)
+        if "DECISION_LINEAGE_INCOMPLETE" in err_msg:
+            standard_error("DECISION_LINEAGE_INCOMPLETE", err_msg, 422)
+        else:
+            standard_error("OPTIMIZATION_NOT_COMPLETED", err_msg, 400)
     except Exception as exc:
         standard_error("DECISION_STORE_UNAVAILABLE", str(exc), 503)
 
@@ -551,7 +555,11 @@ def record_decision(
             )
             return rec.model_dump()
         except ValueError as val_err:
-            standard_error("OPTIMIZATION_NOT_COMPLETED", str(val_err), 400)
+            err_msg = str(val_err)
+            if "DECISION_LINEAGE_INCOMPLETE" in err_msg:
+                standard_error("DECISION_LINEAGE_INCOMPLETE", err_msg, 422)
+            else:
+                standard_error("OPTIMIZATION_NOT_COMPLETED", err_msg, 400)
         except Exception as exc:
             standard_error("DECISION_STORE_UNAVAILABLE", str(exc), 503)
 
@@ -633,9 +641,9 @@ def replay_decision(
 
 
 class ShadowRequest(BaseModel):
-    frozen_decision_time: datetime
     future_observation_time: datetime
-    predicted_p95_seconds: int = 830
+    frozen_decision_time: datetime | None = None
+    predicted_p95_seconds: int | None = None
 
 
 @router.post("/decisions/{decision_id}/shadow", status_code=201)
@@ -658,6 +666,8 @@ def create_shadow_evaluation(
         return shadow.model_dump()
     except LookupError as not_found_exc:
         standard_error("NOT_FOUND", str(not_found_exc), 404)
+    except ValueError as val_err:
+        standard_error("INVALID_SHADOW_WINDOW", str(val_err), 422)
     except Exception as exc:
         standard_error("SHADOW_ERROR", str(exc), 422)
 

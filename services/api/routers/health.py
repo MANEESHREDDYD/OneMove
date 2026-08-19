@@ -20,13 +20,45 @@ def liveness_probe():
     return {"status": "ok"}
 
 
+def validate_cloud_configuration() -> tuple[bool, str]:
+    """Validate environment and GCP project alignment to fail closed on misconfiguration."""
+    env = os.environ.get("ENVIRONMENT", "").lower()
+    if env not in {"staging", "production"}:
+        return True, "local/test environment"
+
+    gcp_project = os.environ.get("GCP_PROJECT_ID")
+    pubsub_topic = os.environ.get("PUBSUB_TOPIC_OPTIMIZATIONS")
+
+    if not gcp_project or not pubsub_topic:
+        return False, "Missing required cloud configuration: GCP_PROJECT_ID or PUBSUB_TOPIC_OPTIMIZATIONS"
+
+    expected_projects = {
+        "staging": "zonepilot-stg-9a4285",
+        "production": "zonepilot-prod-9a4285",
+    }
+
+    expected_project = expected_projects.get(env)
+    if expected_project and gcp_project != expected_project:
+        return (
+            False,
+            f"Environment/project mismatch: ENVIRONMENT='{env}' requires GCP_PROJECT_ID='{expected_project}', got '{gcp_project}'",
+        )
+
+    return True, "valid"
+
+
 @router.get("/ready")
 @router.get("/readyz")
 @router.get("/health/ready")
 def readiness_probe(response: Response):
-    """Readiness probe checking critical dependencies like DB"""
-    db_url = get_database_dsn()
+    """Readiness probe checking critical dependencies like DB and cloud configuration alignment."""
+    cfg_valid, cfg_msg = validate_cloud_configuration()
+    if not cfg_valid:
+        response.status_code = 503
+        logger.error(f"readiness_check_failed_config: {cfg_msg}")
+        return {"status": "unready", "db_connected": False, "config_valid": False, "reason": cfg_msg}
 
+    db_url = get_database_dsn()
     db_connected = False
 
     if db_url:
@@ -42,9 +74,9 @@ def readiness_probe(response: Response):
 
     if not db_connected:
         response.status_code = 503
-        return {"status": "unready", "db_connected": False}
+        return {"status": "unready", "db_connected": False, "config_valid": True}
 
-    return {"status": "ready", "db_connected": True}
+    return {"status": "ready", "db_connected": True, "config_valid": True}
 
 
 @router.get("/metrics", include_in_schema=False, response_class=PlainTextResponse)

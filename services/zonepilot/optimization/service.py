@@ -71,16 +71,16 @@ class OptimizationService:
 
         job_id = str(job["id"])
 
-        # 2. Attempt immediate dispatch of the outbox event; if background dispatch is active, it handles retries
+        # 2. Return QUEUED job immediately (HTTP 202 Accepted) without blocking API request on external Pub/Sub
         dispatch_status = "QUEUED_PENDING_DISPATCH"
-        try:
-            dispatched_count = self.dispatch_outbox_events(limit=5)
-            if dispatched_count > 0:
-                dispatch_status = "QUEUED_DISPATCHED"
-        except Exception as dispatch_err:
-            logger.debug(f"Immediate outbox dispatch deferred to background dispatcher: {dispatch_err}")
+        if os.environ.get("SYNC_OUTBOX_DISPATCH", "false").lower() in {"1", "true"}:
+            try:
+                dispatched_count = self.dispatch_outbox_events(limit=5)
+                if dispatched_count > 0:
+                    dispatch_status = "QUEUED_DISPATCHED"
+            except Exception as dispatch_err:
+                logger.debug(f"Outbox dispatch deferred to background dispatcher: {dispatch_err}")
 
-        # Return QUEUED job immediately (HTTP 202 Accepted) with dispatch_status
         result_job = dict(self.repository.get_job(job_id, workspace_id) or job)
         result_job["dispatch_status"] = dispatch_status
         return result_job
@@ -91,8 +91,19 @@ class OptimizationService:
         if not pending_events:
             return 0
 
-        topic_name = os.environ.get("PUBSUB_TOPIC_OPTIMIZATIONS", "zonepilot-opt-jobs-staging")
-        gcp_project = os.environ.get("GCP_PROJECT_ID", "zonepilot-stg-9a4285")
+        topic_name = os.environ.get("PUBSUB_TOPIC_OPTIMIZATIONS")
+        gcp_project = os.environ.get("GCP_PROJECT_ID")
+        env = os.environ.get("ENVIRONMENT", "").lower()
+
+        if env in {"staging", "production"} and (not topic_name or not gcp_project):
+            raise RuntimeError(
+                f"Missing required cloud configuration in {env} environment: GCP_PROJECT_ID and PUBSUB_TOPIC_OPTIMIZATIONS must be set."
+            )
+
+        if not topic_name or not gcp_project:
+            logger.debug("Pub/Sub configuration not set in local environment; outbox events will remain queued.")
+            return 0
+
         dispatched_count = 0
 
         for event in pending_events:

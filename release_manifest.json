@@ -1,29 +1,29 @@
 {
-  "release_id": "rel-onemove-65c0dc1d-20260819082813",
-  "release_sha": "65c0dc1ddf2cbf3b2233d02418bf129613700b03",
+  "release_id": "rel-onemove-7af5da45-20260819092100",
+  "release_sha": "7af5da45c8431879b181441fedbe7e00000d2710",
   "product_name": "OneMove",
-  "created_at": "2026-08-19T08:28:13.646635+00:00",
+  "created_at": "2026-08-19T09:21:00.170207+00:00",
   "api": {
     "image": "asia-south1-docker.pkg.dev/zonepilot-stg-9a4285/zonepilot-docker-staging/zonepilot-api",
-    "tag": "65c0dc1ddf2cbf3b2233d02418bf129613700b03",
-    "digest": "sha256:125d088fb11ac4724f5713176e0246345e4e18c03c332919dcf6eb6c71b60fa0",
-    "source_sha": "65c0dc1ddf2cbf3b2233d02418bf129613700b03"
+    "tag": "7af5da45c8431879b181441fedbe7e00000d2710",
+    "digest": "sha256:b273e06522bc06ced051801e1a5481620906e939b370e79c3e7e4ff29c7d0fa4",
+    "source_sha": "7af5da45c8431879b181441fedbe7e00000d2710"
   },
   "worker": {
     "image": "asia-south1-docker.pkg.dev/zonepilot-stg-9a4285/zonepilot-docker-staging/zonepilot-worker",
-    "tag": "65c0dc1ddf2cbf3b2233d02418bf129613700b03",
-    "digest": "sha256:730365d34f1c541d4f895e6ede35ce44145a8dce2bc5a01365bb4b531e7c7584",
-    "source_sha": "65c0dc1ddf2cbf3b2233d02418bf129613700b03"
+    "tag": "7af5da45c8431879b181441fedbe7e00000d2710",
+    "digest": "sha256:f0a4e83d0617470b7d2b06c4514469924adfec63ca3976eca936a4acc7286a22",
+    "source_sha": "7af5da45c8431879b181441fedbe7e00000d2710"
   },
   "frontend": {
-    "git_sha": "65c0dc1ddf2cbf3b2233d02418bf129613700b03",
-    "deployment_id": "dpl-65c0dc1ddf2c",
+    "git_sha": "7af5da45c8431879b181441fedbe7e00000d2710",
+    "deployment_id": "dpl-7af5da45c843",
     "framework": "nextjs-15.5.4"
   },
   "gold": {
     "dataset_version": "1.0.0",
     "artifact_sha": "7d8973d37a73d86000b066a2e955ea7421d3fa4a878d3538a8114b6a5221747e",
-    "producer_code_sha": "65c0dc1ddf2cbf3b2233d02418bf129613700b03",
+    "producer_code_sha": "7af5da45c8431879b181441fedbe7e00000d2710",
     "relative_path": "private/official/gold/gold_network_h3_8.parquet"
   },
   "osrm": {
@@ -31,14 +31,14 @@
     "bundle_sha": "1ea80d2cfd83fdf605d4dca2a7c98d0e523cd43307fd829ad4bd73e9ab6aa58e",
     "pbf_sha": "b208fae50e9557f0bb35e896154c448dcbb441d11a01242bdd7a2a2889442528",
     "image_digest": "sha256:7b4437178db62410bb85b6ef1e68fe2f07b7880ce281d146a1480f64ab86b383",
-    "producer_code_sha": "65c0dc1ddf2cbf3b2233d02418bf129613700b03"
+    "producer_code_sha": "7af5da45c8431879b181441fedbe7e00000d2710"
   },
   "matrix": {
     "matrix_id": "matrix-s1_free_flow",
     "matrix_sha": "50cf5ebdb562e5c891ee63de2d3f2c6634dc2d32138745fa1966e87a4c62a972",
     "graph_version": "1.1.0+bad320dd48da",
     "dimensions": "94x12",
-    "producer_code_sha": "65c0dc1ddf2cbf3b2233d02418bf129613700b03",
+    "producer_code_sha": "7af5da45c8431879b181441fedbe7e00000d2710",
     "relative_path": "private/official/gold/r1_osrm_travel_matrix.json"
   },
   "database": {
@@ -58,8 +58,8 @@
     "assumption_version": "r1-proxy-1.0.0"
   },
   "terraform": {
-    "commit": "65c0dc1ddf2cbf3b2233d02418bf129613700b03",
-    "plan_apply_identifier": "tf-65c0dc1d"
+    "commit": "7af5da45c8431879b181441fedbe7e00000d2710",
+    "plan_apply_identifier": "tf-7af5da45"
   },
-  "manifest_sha256": "58dc5fec8ae3a2a2d9f150c120c2e7e4dbc7a95b5b1e794cb12243fd2d124b9b"
+  "manifest_sha256": "47e4bebd7f4cd639da709b06cfcbccaff2aeb91c043dfb6566b4e26243058f76"
 }
