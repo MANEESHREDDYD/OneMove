@@ -20,14 +20,10 @@ def verify_active_project() -> str:
         raise RuntimeError("SAFETY ABORT: No active GCP project configured.")
 
     if project in {"signit-502902", "project-2040fcfb-596f-42ba-9c9"}:
-        raise RuntimeError(
-            f"CRITICAL SAFETY VIOLATION: Protected external project '{project}' is active. Aborting."
-        )
+        raise RuntimeError(f"CRITICAL SAFETY VIOLATION: Protected external project '{project}' is active. Aborting.")
 
     if not project.startswith("zonepilot-"):
-        raise RuntimeError(
-            f"SAFETY ABORT: Active project '{project}' does not start with 'zonepilot-'."
-        )
+        raise RuntimeError(f"SAFETY ABORT: Active project '{project}' does not start with 'zonepilot-'.")
 
     return project
 

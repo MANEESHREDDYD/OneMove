@@ -322,11 +322,21 @@ def _canonical_solution(
         if selected_open == minimum_open_count:
             break
     for facility_id in facility_ids:
-        open_values.setdefault(facility_id, 0)
+        val = open_values.setdefault(facility_id, 0)
+        state.model.add(state.open_facility[facility_id] == val)
 
     scenarios = {scenario.scenario_id: scenario for scenario in problem.scenarios}
     demand_ids = sorted(demand.demand_id for demand in problem.demand_points)
     problem_facility_ids = sorted(facility.facility_id for facility in problem.facilities)
+
+    if policy.skip_implied:
+        counters.implied_skips += len(demand_ids) * len(scenarios) * len(problem_facility_ids)
+        status, solver = _solve_once(state.model, problem, deadline, counters)
+        solver, failure = _require_optimal(problem, status, solver)
+        if failure is not None or solver is None:
+            return None, failure
+        return solver, None
+
     max_travel_seconds = problem.constraints.max_travel_seconds
     for scenario_id in sorted(scenarios):
         scenario = scenarios[scenario_id]

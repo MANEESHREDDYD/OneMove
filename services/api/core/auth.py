@@ -205,22 +205,56 @@ def _membership_unavailable() -> HTTPException:
 
 def workspace_memberships(user_id: str) -> tuple[WorkspacePrincipal, ...]:
     """Return every workspace the verified subject provably belongs to."""
-
-    client = service_client()
+    db_dsn = None
     try:
+        from services.common.db_dsn import get_database_dsn
+
+        db_dsn = get_database_dsn()
+    except Exception:
+        pass
+
+    if db_dsn:
+        import psycopg
+        from psycopg.rows import dict_row
+
+        try:
+            with psycopg.connect(db_dsn, row_factory=dict_row, connect_timeout=5) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT workspace_id, role FROM public.workspace_members WHERE user_id = %s::uuid",
+                        (user_id,),
+                    )
+                    rows = cur.fetchall()
+                    memberships: list[WorkspacePrincipal] = []
+                    for row in rows:
+                        try:
+                            role = WorkspaceRole(row["role"])
+                        except (KeyError, ValueError):
+                            continue
+                        memberships.append(
+                            WorkspacePrincipal(
+                                user_id=user_id,
+                                workspace_id=str(row["workspace_id"]),
+                                role=role,
+                            )
+                        )
+                    return tuple(memberships)
+        except Exception:
+            pass
+
+    try:
+        client = service_client()
         response = client.table("workspace_members").select("workspace_id, role").eq("user_id", user_id).execute()
+        memberships = []
+        for row in response.data or []:
+            try:
+                role = WorkspaceRole(row["role"])
+            except (KeyError, ValueError):
+                continue
+            memberships.append(WorkspacePrincipal(user_id=user_id, workspace_id=str(row["workspace_id"]), role=role))
+        return tuple(memberships)
     except Exception as exc:
         raise _membership_unavailable() from exc
-
-    memberships: list[WorkspacePrincipal] = []
-    for row in response.data or []:
-        try:
-            role = WorkspaceRole(row["role"])
-        except (KeyError, ValueError):
-            # An unknown role is not a role. Skip rather than widen access.
-            continue
-        memberships.append(WorkspacePrincipal(user_id=user_id, workspace_id=str(row["workspace_id"]), role=role))
-    return tuple(memberships)
 
 
 def _requested_workspace_id(request: Request, payload: dict) -> str | None:

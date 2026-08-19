@@ -41,6 +41,8 @@ class MatrixEvidenceClass(str, Enum):
     PUBLIC_GEOGRAPHIC = "PUBLIC_GEOGRAPHIC"
     PROVIDER_ESTIMATED = "PROVIDER_ESTIMATED"
     SIMULATED_FAILURE = "SIMULATED_FAILURE"
+    SIMULATED = "SIMULATED"
+    DERIVED = "DERIVED"
     TEST_ONLY = "TEST_ONLY"
 
 
@@ -96,6 +98,7 @@ class TravelMatrix(StrictContract):
     facility_ids: tuple[str, ...] = Field(min_length=1, max_length=200)
     demand_ids: tuple[str, ...] = Field(min_length=1, max_length=2_000)
     durations_seconds: tuple[tuple[int, ...], ...]
+    parent_matrix_id: str | None = None
 
     @field_validator("matrix_id", "graph_version", "router", "router_version")
     @classmethod
@@ -355,3 +358,57 @@ def problem_fingerprint(problem: OptimizationProblem) -> str:
     payload = problem.model_dump(mode="json")
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+class ProblemSnapshot(StrictContract):
+    """Immutable, cryptographically verifiable snapshot of an optimization problem."""
+
+    schema_name: Literal["zonepilot.optimization_problem_snapshot"] = "zonepilot.optimization_problem_snapshot"
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    problem_snapshot_id: str
+    problem_snapshot_sha256: str
+    created_at: str
+    code_sha: str
+    dataset_version: str
+    graph_version: str
+    assumption_version: str
+    solver_version: str
+    matrix_sha256: str
+    gold_manifest_sha256: str
+    problem: OptimizationProblem
+    evidence_ids: tuple[str, ...]
+    temporal_cutoff: str
+
+
+def create_problem_snapshot(
+    problem: OptimizationProblem,
+    *,
+    code_sha: str,
+    dataset_version: str,
+    matrix_sha256: str,
+    gold_manifest_sha256: str,
+    evidence_ids: tuple[str, ...],
+    temporal_cutoff: str | None = None,
+) -> ProblemSnapshot:
+    """Construct an immutable, canonical problem snapshot with cryptographic SHA-256."""
+    from datetime import datetime, timezone
+
+    canonical_sha = problem_fingerprint(problem)
+    snap_id = f"psnap-{canonical_sha[:16]}"
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    return ProblemSnapshot(
+        problem_snapshot_id=snap_id,
+        problem_snapshot_sha256=canonical_sha,
+        created_at=now_iso,
+        code_sha=code_sha,
+        dataset_version=dataset_version,
+        graph_version=problem.scenarios[0].travel_matrix.graph_version if problem.scenarios else "1.1",
+        assumption_version=problem.objective_weights.assumption_version,
+        solver_version="ortools-cp-sat",
+        matrix_sha256=matrix_sha256,
+        gold_manifest_sha256=gold_manifest_sha256,
+        problem=problem,
+        evidence_ids=evidence_ids,
+        temporal_cutoff=temporal_cutoff or now_iso,
+    )

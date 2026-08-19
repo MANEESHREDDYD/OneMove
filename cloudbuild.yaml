@@ -1,0 +1,42 @@
+steps:
+  # 1. Build API container
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-api:latest',
+      '-f', 'docker/Dockerfile.api',
+      '.'
+    ]
+
+  # 2. Build Worker container
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-worker:latest',
+      '-f', 'docker/Dockerfile.worker',
+      '.'
+    ]
+
+  # 3. Push API container
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'push',
+      'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-api:latest'
+    ]
+
+  # 4. Push Worker container
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'push',
+      'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-worker:latest'
+    ]
+
+substitutions:
+  _REPO_NAME: 'zonepilot-containers-staging'
+
+images:
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-api:latest'
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-worker:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

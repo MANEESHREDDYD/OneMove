@@ -1,0 +1,20 @@
+{
+  "schema_name": "zonepilot_osrm_smoke_manifest",
+  "schema_version": "1.0.0",
+  "code_sha": "388802e1795f611b655f4bcac40970f26fc5724c",
+  "PBF_sha": "461584ea03d2d0948a25715c0a901b8bb12f01ca15c59fc72bdeaf05e568d7a1",
+  "OSRM_image_digest": "af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409",
+  "profile": "default car.lua from the pinned OSRM image",
+  "graph_file_count": 27,
+  "graph_bundle_sha256": "7b4437178db62410bb85b6ef1e68fe2f07b7880ce281d146a1480f64ab86b383",
+  "origin": "77.63,12.91",
+  "destination": "77.64,12.92",
+  "distance_m": 2255.4,
+  "duration_s": 259.4,
+  "matrix_dimensions": "3x3",
+  "finite_cells": 9,
+  "null_cells": 0,
+  "generated_at": "2026-08-19T06:40:04.495633+00:00",
+  "evidence_class": "DERIVED",
+  "dq_status": "PASS"
+}

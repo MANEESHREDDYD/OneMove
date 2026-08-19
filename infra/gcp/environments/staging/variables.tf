@@ -24,12 +24,25 @@ variable "unique_suffix" {
 
 variable "api_image" {
   type        = string
-  description = "ZonePilot API container image"
-  default     = "gcr.io/cloudrun/hello" # Placeholder until first artifact registry build
+  description = "Container image URL for OneMove API"
+  default     = "asia-south1-docker.pkg.dev/zonepilot-stg-9a4285/zonepilot-containers-staging/zonepilot-api:latest"
 }
 
 variable "worker_image" {
   type        = string
-  description = "ZonePilot Worker container image"
-  default     = "gcr.io/cloudrun/hello"
+  description = "Container image URL for Optimizer Worker"
+  default     = "asia-south1-docker.pkg.dev/zonepilot-stg-9a4285/zonepilot-containers-staging/zonepilot-worker:latest"
 }
+
+variable "dispatcher_image" {
+  type        = string
+  description = "Container image URL for Outbox Dispatcher"
+  default     = "asia-south1-docker.pkg.dev/zonepilot-stg-9a4285/zonepilot-containers-staging/zonepilot-dispatcher:latest"
+}
+
+variable "release_sha" {
+  type        = string
+  description = "Source code Git SHA for release identity"
+  default     = ""
+}
+

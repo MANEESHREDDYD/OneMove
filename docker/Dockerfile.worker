@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir -e .
+
+# Copy application services and data
+COPY services/ ./services/
+COPY data_root/ ./data_root/
+
+ENV PORT=8080
+ENV PYTHONPATH=/app
+EXPOSE 8080
+
+CMD ["python", "-m", "services.zonepilot.optimization.pubsub_worker"]

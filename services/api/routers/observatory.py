@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from services.api.contracts.observatory import (
@@ -92,7 +92,9 @@ def _resolve_user_context(user: dict) -> tuple[str, str]:
     sub = user.get("sub")
     if not sub or not isinstance(sub, str) or not sub.strip():
         standard_error("UNAUTHORIZED", "Invalid authentication token: missing sub", 401)
-    ws = user.get("workspace_id") or "ws-pilot-default"
+    ws = user.get("workspace_id")
+    if not ws or not isinstance(ws, str) or not ws.strip():
+        standard_error("FORBIDDEN", "Workspace membership required", 403)
     return sub.strip(), ws.strip()
 
 
@@ -151,11 +153,11 @@ def get_network_snapshot(
 
 @router.get("/network/map-layers", response_model=MapLayerListResponse)
 @router.get("/layers", response_model=MapLayerListResponse)
-def get_map_layers(
+def get_layers(
     _user: dict = Depends(get_current_user),
     service: ObservatoryService = Depends(get_observatory_service),
 ):
-    """Return bounded, evidence-bearing GeoJSON overlays for the R1 map."""
+    """Return vector tile / GeoJSON metadata for interactive map rendering."""
     try:
         return service.map_layers()
     except Exception as exc:
@@ -167,7 +169,7 @@ def get_datasets(
     _user: dict = Depends(get_current_user),
     service: ObservatoryService = Depends(get_observatory_service),
 ):
-    """Return dataset versions discovered from immutable manifests."""
+    """Return catalog of immutable data assets with cryptographic checksums."""
     try:
         return service.list_datasets()
     except Exception as exc:
@@ -179,82 +181,61 @@ def get_data_health(
     _user: dict = Depends(get_current_user),
     service: ObservatoryService = Depends(get_observatory_service),
 ):
-    """Compute provider freshness and DQ state from collection manifests."""
+    """Return real-time data freshness, staleness, and quality monitoring across providers."""
     try:
         return service.data_health()
     except Exception as exc:
         _translate_artifact_error(exc)
 
 
-# --- R3 Durable Optimizer API ---
+@router.get("/evidence/osm/{tile_path:path}")
+def get_osm_evidence_tile(
+    tile_path: str,
+    _user: dict = Depends(get_current_user),
+    service: ObservatoryService = Depends(get_observatory_service),
+):
+    """Fetch raw OSM evidence vector tile by relative artifact path."""
+    if ".." in tile_path or "//" in tile_path:
+        standard_error("INVALID_ARGUMENT", "Invalid tile path traversal attempt", 422)
+    try:
+        raw_bytes = service.get_osm_tile(tile_path)
+        return Response(content=raw_bytes, media_type="application/octet-stream")
+    except Exception as exc:
+        _translate_artifact_error(exc)
+
+
+# --- R1 Optimization API ---
 
 
 class OptimizationRequest(BaseModel):
     idempotency_key: str | None = None
-    min_open_facilities: int = 1
-    max_open_facilities: int = 4
-    max_travel_seconds: int = 1800
+    min_open_facilities: int = Field(default=1, ge=1)
+    max_open_facilities: int = Field(default=4, ge=1)
+    max_travel_seconds: int = Field(default=1800, ge=1)
     allow_uncovered_demand: bool = True
     scenarios: list[str] = ["s1_free_flow", "s2_congested", "s3_congested_outage"]
 
 
 def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem:
-    # Load authentic R1 OSRM travel matrix and Gold network zones
     mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
-    if mat_path.is_file():
-        matrix_doc = json.loads(mat_path.read_text(encoding="utf-8"))
-        facility_ids = tuple(matrix_doc["facility_ids"])
-        demand_ids = tuple(matrix_doc["demand_ids"])
-        base_durations = matrix_doc["base_durations_seconds"]
-        graph_version = matrix_doc.get("graph_version", "1.1.0+bad320dd48da")
-        router = matrix_doc.get("router", "osrm-routed-table")
-        router_version = matrix_doc.get(
-            "router_version",
-            "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409",
+    if not mat_path.is_file():
+        raise FileNotFoundError(
+            "MATRIX_UNAVAILABLE: Authentic r1_osrm_travel_matrix.json is missing. Failing closed without synthetic substitution."
         )
-    else:
-        try:
-            # Load from Gold rows catalog directly
-            catalog = FileSystemArtifactCatalog(default_data_root())
-            gold_rows = sorted(catalog.gold_rows(), key=lambda r: str(r["h3_index"]))
-            demand_ids = tuple(f"zone:{r['h3_index']}" for r in gold_rows)
-            ranked = sorted(
-                range(len(gold_rows)), key=lambda idx: (-gold_rows[idx]["commercial_poi_count"], gold_rows[idx]["h3_index"])
-            )
-            fac_indices = sorted(ranked[:12])
-            facility_ids = tuple(f"fac:{gold_rows[i]['h3_index']}" for i in fac_indices)
-            base_durations = [[600 for _ in demand_ids] for _ in facility_ids]
-            graph_version = "1.1.0+bad320dd48da"
-            router = "osrm-routed-table"
-            router_version = "1.0.0"
-        except Exception:
-            pilot_cells = (
-                "8860145b41fffff", "8860145b43fffff", "8860145b45fffff", "8860145b47fffff", "8860145b49fffff",
-                "8860145b4bfffff", "8860145b4dfffff", "8860145b51fffff", "8860145b53fffff", "8860145b55fffff",
-                "8860145b57fffff", "8860145b59fffff", "8860145b5bfffff", "8860145b5dfffff", "8861892401fffff",
-                "8861892403fffff", "8861892405fffff", "8861892407fffff", "8861892409fffff", "886189240bfffff",
-                "886189240dfffff", "8861892411fffff", "8861892413fffff", "8861892415fffff", "8861892417fffff",
-                "8861892419fffff", "886189241bfffff", "886189241dfffff", "8861892421fffff", "8861892423fffff",
-                "8861892425fffff", "8861892427fffff", "8861892429fffff", "886189242bfffff", "886189242dfffff",
-                "8861892431fffff", "8861892433fffff", "8861892435fffff", "8861892437fffff", "8861892439fffff",
-                "886189243bfffff", "886189243dfffff", "8861892481fffff", "8861892483fffff", "8861892485fffff",
-                "8861892487fffff", "8861892489fffff", "886189248bfffff", "886189248dfffff", "8861892491fffff",
-                "8861892493fffff", "8861892495fffff", "8861892497fffff", "8861892499fffff", "886189249bfffff",
-                "886189249dfffff", "88618924a1fffff", "88618924a3fffff", "88618924a5fffff", "88618924a7fffff",
-                "88618924a9fffff", "88618924abfffff", "88618924adfffff", "88618924b1fffff", "88618924b3fffff",
-                "88618924b5fffff", "88618924b7fffff", "88618924b9fffff", "88618924bbfffff", "88618924bdfffff",
-                "88618924c1fffff", "88618924c3fffff", "88618924c5fffff", "88618924c7fffff", "88618924c9fffff",
-                "88618924cbfffff", "88618924cdfffff", "88618924d1fffff", "88618924d3fffff", "88618924d5fffff",
-                "88618924d7fffff", "88618924d9fffff", "88618924dbfffff", "88618924ddfffff", "88618924e1fffff",
-                "88618924e3fffff", "88618924e5fffff", "88618924e7fffff", "88618924e9fffff", "88618924ebfffff",
-                "88618924edfffff", "8861892537fffff", "8861892599fffff", "88618925a5fffff",
-            )
-            demand_ids = tuple(f"zone:{c}" for c in pilot_cells[:94])
-            facility_ids = tuple(f"fac:{c}" for c in pilot_cells[:12])
-            base_durations = [[600 for _ in demand_ids] for _ in facility_ids]
-            graph_version = "1.1.0+bad320dd48da"
-            router = "osrm-routed-table"
-            router_version = "1.0.0"
+
+    matrix_doc = json.loads(mat_path.read_text(encoding="utf-8"))
+    facility_ids = tuple(matrix_doc["facility_ids"])
+    demand_ids = tuple(matrix_doc["demand_ids"])
+    base_durations = matrix_doc["base_durations_seconds"]
+    graph_version = matrix_doc.get("graph_version", "1.1.0+bad320dd48da")
+    router = matrix_doc.get("router", "osrm-routed-table")
+    router_version = matrix_doc.get(
+        "router_version",
+        "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409",
+    )
+
+    catalog = FileSystemArtifactCatalog(default_data_root())
+    gold_rows = {str(r["h3_index"]): r for r in catalog.gold_rows()}
 
     facilities = tuple(
         Facility(
@@ -269,12 +250,18 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
     demands = tuple(
         DemandPoint(
             demand_id=did,
-            demand_units=10 + (idx % 15),
+            demand_units=max(
+                1,
+                int(
+                    gold_rows.get(did.split(":")[-1], {}).get("commercial_poi_count", 1) * 3
+                    + gold_rows.get(did.split(":")[-1], {}).get("intersection_count", 1)
+                ),
+            ),
         )
-        for idx, did in enumerate(demand_ids)
+        for did in demand_ids
     )
 
-    # 3 Uncertainty scenarios (s1_free_flow, s2_congested, s3_congested_outage)
+    # 3 Uncertainty scenarios with authentic provenance
     scenarios = []
     for s_idx, s_name in enumerate(req.scenarios):
         mult = 1.0 if s_idx == 0 else (1.4 if s_idx == 1 else 1.6)
@@ -284,15 +271,23 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
             tuple(int(math.ceil(math_ceil_dur * mult)) for math_ceil_dur in row) for row in base_durations
         )
 
+        evidence_cls = (
+            MatrixEvidenceClass.PUBLIC_GEOGRAPHIC
+            if s_idx == 0
+            else (MatrixEvidenceClass.DERIVED if s_idx == 1 else MatrixEvidenceClass.SIMULATED_FAILURE)
+        )
+        parent_id = None if s_idx == 0 else "matrix-s1_free_flow"
+
         mat = TravelMatrix(
             matrix_id=f"matrix-{s_name}",
             graph_version=graph_version,
             router=router,
             router_version=router_version,
-            evidence_class=MatrixEvidenceClass.PUBLIC_GEOGRAPHIC,
+            evidence_class=evidence_cls,
             facility_ids=facility_ids,
             demand_ids=demand_ids,
             durations_seconds=durations,
+            parent_matrix_id=parent_id,
         )
 
         scenarios.append(
@@ -333,11 +328,15 @@ def run_optimization(
     payload: OptimizationRequest,
     _user: dict = Depends(get_current_user),
 ):
-    """Durable facility optimization: saves QUEUED job in PostgreSQL, runs solver, persists result."""
+    """Queue durable facility optimization in PostgreSQL and dispatch to Pub/Sub asynchronously."""
     user_id, ws_id = _resolve_user_context(_user)
     idem_key = payload.idempotency_key or str(uuid.uuid4())
 
-    problem = _build_real_94x12x3_problem(payload)
+    try:
+        problem = _build_real_94x12x3_problem(payload)
+    except FileNotFoundError as fnf_err:
+        standard_error("MATRIX_UNAVAILABLE", str(fnf_err), 503)
+
     job = _opt_service.submit_optimization(
         requested_by=user_id,
         workspace_id=ws_id,
@@ -368,12 +367,13 @@ def list_optimizations(
                 "job_id": str(j["id"]),
                 "status": j["status"],
                 "solver_status": j.get("solver_status"),
-                "fail_closed": j.get("fail_closed", False),
                 "created_at": str(j.get("created_at")),
+                "started_at": str(j.get("started_at")),
                 "finished_at": str(j.get("finished_at")),
+                "run_duration_ms": j.get("run_duration_ms"),
             }
         )
-    return {"data": items, "optimizations": items}
+    return {"jobs": items}
 
 
 @router.get("/optimizations/{opt_id}")
@@ -430,7 +430,7 @@ def create_and_run_scenario(
     payload: ScenarioCreateRequest,
     _user: dict = Depends(get_current_user),
 ):
-    """Execute resilience failure scenario, compute real quantiles, and persist to PostgreSQL."""
+    """Execute scenario evaluation, compute graph degradation and delta metrics, save to PostgreSQL."""
     user_id, ws_id = _resolve_user_context(_user)
     try:
         scen = _res_service.execute_scenario(
@@ -484,7 +484,14 @@ def get_experiment(exp_id: str, _user: dict = Depends(get_current_user)):
 # --- R7 Durable Decision Ledger & Replay API ---
 
 
+class DecisionFreezeRequest(BaseModel):
+    optimization_job_id: str
+    scenario_ids: list[str] = Field(default_factory=lambda: ["s1_free_flow", "s2_congested", "s3_congested_outage"])
+    operator_rationale: str | None = None
+
+
 class DecisionCreateRequest(BaseModel):
+    optimization_job_id: str | None = None
     decision_time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     network_version: str = "1.1"
     dataset_version: str = "1.0.0"
@@ -501,83 +508,142 @@ class DecisionCreateRequest(BaseModel):
     evidence_ids: list[str] = []
 
 
+@router.post("/decisions/freeze", status_code=201)
+def freeze_decision(
+    payload: DecisionFreezeRequest,
+    _user: dict = Depends(get_current_user),
+):
+    """Freeze an immutable decision reconstructed strictly from authoritative optimization job state."""
+    user_id, ws_id = _resolve_user_context(_user)
+    job = _opt_service.get_optimization(payload.optimization_job_id, ws_id)
+    if not job:
+        standard_error("NOT_FOUND", f"Optimization job {payload.optimization_job_id} not found in workspace.", 404)
+    try:
+        rec = _dec_ledger.freeze_decision_from_optimization(
+            job=job,
+            workspace_id=ws_id,
+            operator_rationale=payload.operator_rationale,
+            recorded_by=user_id,
+        )
+        return rec.model_dump()
+    except ValueError as val_err:
+        err_msg = str(val_err)
+        if "DECISION_LINEAGE_INCOMPLETE" in err_msg:
+            standard_error("DECISION_LINEAGE_INCOMPLETE", err_msg, 422)
+        else:
+            standard_error("OPTIMIZATION_NOT_COMPLETED", err_msg, 400)
+    except Exception as exc:
+        standard_error("DECISION_STORE_UNAVAILABLE", str(exc), 503)
+
+
 @router.post("/decisions", status_code=201)
 def record_decision(
     payload: DecisionCreateRequest,
     _user: dict = Depends(get_current_user),
 ):
-    """Record an immutable decision into PostgreSQL ledger."""
+    """Record or freeze an immutable decision into PostgreSQL ledger."""
     user_id, ws_id = _resolve_user_context(_user)
-    rec = _dec_ledger.record_decision(
-        workspace_id=ws_id,
-        decision_time=payload.decision_time,
-        network_version=payload.network_version,
-        dataset_version=payload.dataset_version,
-        feature_snapshot_hash=payload.feature_snapshot_hash,
-        selected_action=payload.selected_action,
-        opened_facilities=payload.opened_facilities,
-        objective_value=payload.objective_value,
-        expected_travel_seconds=payload.expected_travel_seconds,
-        p95_travel_seconds=payload.p95_travel_seconds,
-        coverage_basis_points=payload.coverage_basis_points,
-        graph_version=payload.graph_version,
-        osrm_bundle_hash=payload.osrm_bundle_hash,
-        solver_version=payload.solver_version,
-        evidence_ids=payload.evidence_ids,
-        recorded_by=user_id,
-    )
-    return rec.model_dump()
+    if payload.optimization_job_id:
+        job = _opt_service.get_optimization(payload.optimization_job_id, ws_id)
+        if not job:
+            standard_error("NOT_FOUND", f"Optimization job {payload.optimization_job_id} not found in workspace.", 404)
+        try:
+            rec = _dec_ledger.freeze_decision_from_optimization(
+                job=job,
+                workspace_id=ws_id,
+                recorded_by=user_id,
+            )
+            return rec.model_dump()
+        except ValueError as val_err:
+            err_msg = str(val_err)
+            if "DECISION_LINEAGE_INCOMPLETE" in err_msg:
+                standard_error("DECISION_LINEAGE_INCOMPLETE", err_msg, 422)
+            else:
+                standard_error("OPTIMIZATION_NOT_COMPLETED", err_msg, 400)
+        except Exception as exc:
+            standard_error("DECISION_STORE_UNAVAILABLE", str(exc), 503)
+
+    try:
+        rec = _dec_ledger.record_decision(
+            workspace_id=ws_id,
+            decision_time=payload.decision_time,
+            network_version=payload.network_version,
+            dataset_version=payload.dataset_version,
+            feature_snapshot_hash=payload.feature_snapshot_hash,
+            selected_action=payload.selected_action,
+            opened_facilities=payload.opened_facilities,
+            objective_value=payload.objective_value,
+            expected_travel_seconds=payload.expected_travel_seconds,
+            p95_travel_seconds=payload.p95_travel_seconds,
+            coverage_basis_points=payload.coverage_basis_points,
+            graph_version=payload.graph_version,
+            osrm_bundle_hash=payload.osrm_bundle_hash,
+            solver_version=payload.solver_version,
+            evidence_ids=payload.evidence_ids,
+            recorded_by=user_id,
+        )
+        return rec.model_dump()
+    except Exception as exc:
+        standard_error("DECISION_STORE_UNAVAILABLE", str(exc), 503)
 
 
 @router.get("/decisions")
 def list_decisions(_user: dict = Depends(get_current_user)):
     """List immutable decision records from PostgreSQL."""
     _, ws_id = _resolve_user_context(_user)
-    return {"decisions": [d.model_dump() for d in _dec_ledger.list_decisions(ws_id)]}
+    try:
+        return {"decisions": [d.model_dump() for d in _dec_ledger.list_decisions(ws_id)]}
+    except Exception as exc:
+        standard_error("DECISION_STORE_UNAVAILABLE", str(exc), 503)
 
 
 @router.get("/decisions/{decision_id}")
 def get_decision(decision_id: str, _user: dict = Depends(get_current_user)):
     """Retrieve decision record from PostgreSQL."""
     _, ws_id = _resolve_user_context(_user)
-    dec = _dec_ledger.get_decision(decision_id, ws_id)
-    if not dec:
-        standard_error("NOT_FOUND", f"Decision {decision_id} not found in ledger.", 404)
-    return dec.model_dump()
+    try:
+        dec = _dec_ledger.get_decision(decision_id, ws_id)
+        if not dec:
+            standard_error("NOT_FOUND", f"Decision {decision_id} not found in ledger.", 404)
+        return dec.model_dump()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        standard_error("DECISION_STORE_UNAVAILABLE", str(exc), 503)
 
 
 class ReplayRequest(BaseModel):
-    recomputed_action: str = "DEPLOY_FACILITIES"
-    recomputed_facilities: list[str] = ["fac:01", "fac:04", "fac:07"]
-    recomputed_objective: int = 154000
+    model_config = {"extra": "ignore"}
     feature_cutoff: datetime | None = None
 
 
 @router.post("/decisions/{decision_id}/replay")
 def replay_decision(
     decision_id: str,
-    payload: ReplayRequest,
+    payload: ReplayRequest | None = None,
     _user: dict = Depends(get_current_user),
 ):
-    """Execute decision replay with PIT lineage verification and persist replay record."""
+    """Execute server-side deterministic Point-in-Time decision replay."""
     _, ws_id = _resolve_user_context(_user)
     try:
         result = _dec_ledger.replay_decision(
             decision_id,
-            recomputed_action=payload.recomputed_action,
-            recomputed_facilities=payload.recomputed_facilities,
-            recomputed_objective=payload.recomputed_objective,
-            feature_cutoff=payload.feature_cutoff,
+            workspace_id=ws_id,
+            feature_cutoff=payload.feature_cutoff if payload else None,
         )
         return result.model_dump()
+    except LookupError as not_found_exc:
+        standard_error("NOT_FOUND", str(not_found_exc), 404)
+    except FileNotFoundError as fnf_exc:
+        standard_error("MATRIX_UNAVAILABLE", str(fnf_exc), 503)
     except Exception as exc:
-        standard_error("REPLAY_ERROR", str(exc), 404)
+        standard_error("REPLAY_ERROR", str(exc), 422)
 
 
 class ShadowRequest(BaseModel):
-    frozen_decision_time: datetime
     future_observation_time: datetime
-    predicted_p95_seconds: int
+    frozen_decision_time: datetime | None = None
+    predicted_p95_seconds: int | None = None
 
 
 @router.post("/decisions/{decision_id}/shadow", status_code=201)
@@ -588,24 +654,36 @@ def create_shadow_evaluation(
     _user: dict = Depends(get_current_user),
 ):
     """Create prospective shadow evaluation record in PostgreSQL."""
+    _, ws_id = _resolve_user_context(_user)
     try:
         shadow = _dec_ledger.create_shadow(
             decision_id,
+            workspace_id=ws_id,
             frozen_decision_time=payload.frozen_decision_time,
             future_observation_time=payload.future_observation_time,
             predicted_p95_seconds=payload.predicted_p95_seconds,
         )
         return shadow.model_dump()
+    except LookupError as not_found_exc:
+        standard_error("NOT_FOUND", str(not_found_exc), 404)
+    except ValueError as val_err:
+        standard_error("INVALID_SHADOW_WINDOW", str(val_err), 422)
     except Exception as exc:
         standard_error("SHADOW_ERROR", str(exc), 422)
 
 
 @router.get("/shadows/{shadow_id}")
 def get_shadow(shadow_id: str, _user: dict = Depends(get_current_user)):
-    shadow = _dec_ledger.get_shadow(shadow_id)
-    if not shadow:
-        standard_error("NOT_FOUND", f"Shadow evaluation {shadow_id} not found.", 404)
-    return shadow.model_dump()
+    _, ws_id = _resolve_user_context(_user)
+    try:
+        shadow = _dec_ledger.get_shadow(shadow_id, ws_id)
+        if not shadow:
+            standard_error("NOT_FOUND", f"Shadow evaluation {shadow_id} not found in workspace.", 404)
+        return shadow.model_dump()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        standard_error("DECISION_STORE_UNAVAILABLE", str(exc), 503)
 
 
 # --- R2 Forecast API ---
@@ -634,9 +712,7 @@ def predict_forecast(
     except ValueError as exc:
         standard_error("INVALID_ARGUMENT", str(exc), 422)
 
-    val = round(5.0 + (hash(payload.zone_id) % 15), 2)
     pred_id = f"pred-{uuid.uuid4().hex[:12]}"
-
     record = PredictionRecord(
         prediction_id=pred_id,
         workspace_id=ws_id,
@@ -645,23 +721,28 @@ def predict_forecast(
         target_time=target_time,
         horizon_hours=payload.horizon_hours,
         target=ft,
-        predicted_value=val,
-        lower_bound=max(0.0, val - 2.5),
-        upper_bound=val + 3.5,
+        predicted_value=None,
+        lower_bound=None,
+        upper_bound=None,
         baseline_model=bm,
-        model_version="zonepilot-forecast-baseline-1.0.0",
+        model_version="onemove-forecast-baseline-1.0.0",
         feature_snapshot_hash=f"snap-{hashlib.sha256(payload.zone_id.encode()).hexdigest()[:8]}",
         dataset_version="1.0.0",
         graph_version="1.1",
         code_sha=current_release_sha(),
+        evidence_ids=(f"ev-weather-{payload.zone_id}",),
     )
 
     try:
         _forecast_repo.save_prediction(record)
-    except Exception:
-        pass
+    except Exception as exc:
+        standard_error("FORECAST_STORE_UNAVAILABLE", str(exc), 503)
 
-    return record.model_dump()
+    return {
+        **record.model_dump(),
+        "status": "EVIDENCE_ACCUMULATING",
+        "message": "Baseline forecast recorded; evidence accumulating for temporal target window.",
+    }
 
 
 @router.get("/forecast/{zone_id}")

@@ -92,6 +92,25 @@ class OptimizationRepository:
                     ),
                 )
                 row = cur.fetchone()
+
+                # Atomically enqueue transactional outbox event
+                outbox_payload = {
+                    "job_id": job_id,
+                    "workspace_id": workspace_id,
+                    "idempotency_key": idempotency_key,
+                    "graph_version": graph_version,
+                    "dataset_version": dataset_version,
+                }
+                cur.execute(
+                    """
+                    INSERT INTO public.optimization_outbox (
+                        aggregate_id, workspace_id, event_type, payload, status
+                    ) VALUES (
+                        %s::uuid, %s, 'OPTIMIZATION_SUBMITTED', %s::jsonb, 'PENDING'
+                    )
+                    """,
+                    (job_id, workspace_id, json.dumps(outbox_payload)),
+                )
             conn.commit()
             return row
 
@@ -135,6 +154,37 @@ class OptimizationRepository:
                     (workspace_id, limit),
                 )
                 return cur.fetchall()
+
+    def claim_job_lease(self, job_id: str, lease_owner: str, lease_seconds: int = 120) -> dict[str, Any] | None:
+        """Atomically claim execution lease on a QUEUED or expired RUNNING job."""
+        if not _is_valid_uuid(job_id):
+            return None
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.optimization_jobs
+                    SET status = 'RUNNING',
+                        started_at = COALESCE(started_at, now()),
+                        lease_owner = %s,
+                        lease_expires_at = now() + (%s || ' seconds')::interval,
+                        attempt_count = attempt_count + 1,
+                        updated_at = now()
+                    WHERE id = %s::uuid
+                      AND (
+                        status = 'QUEUED'
+                        OR (status = 'RUNNING' AND (lease_expires_at IS NULL OR lease_expires_at < now()))
+                      )
+                    RETURNING id, requested_by, workspace_id, idempotency_key, request_fingerprint,
+                              request_payload, graph_version, dataset_version, matrix_id,
+                              assumption_version, solver_version, code_sha, status, solver_status,
+                              attempt_count, lease_owner, lease_expires_at
+                    """,
+                    (lease_owner, str(lease_seconds), job_id),
+                )
+                row = cur.fetchone()
+            conn.commit()
+            return row
 
     def update_job_running(self, job_id: str, lease_owner: str, lease_seconds: int = 120) -> None:
         with self._connect() as conn:
@@ -210,8 +260,8 @@ class OptimizationRepository:
                     """,
                     (
                         job_id,
-                        json.dumps(result_document),
-                        json.dumps(pareto_document) if pareto_document else None,
+                        json.dumps(result_document, default=str),
+                        json.dumps(pareto_document, default=str) if pareto_document else None,
                         problem_fingerprint,
                         solver_status,
                         action,
@@ -224,3 +274,161 @@ class OptimizationRepository:
                     ),
                 )
             conn.commit()
+
+    def claim_pending_outbox_events(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Claim pending outbox events for publishing."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT event_id, aggregate_id, workspace_id, event_type, payload, attempts
+                    FROM public.optimization_outbox
+                    WHERE status = 'PENDING' AND next_attempt_at <= now()
+                    ORDER BY created_at ASC
+                    LIMIT %s
+                    FOR UPDATE SKIP LOCKED
+                    """,
+                    (limit,),
+                )
+                return cur.fetchall()
+
+    def mark_outbox_published(self, event_id: str, pubsub_message_id: str | None = None) -> None:
+        """Mark an outbox event as successfully published to Pub/Sub."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.optimization_outbox
+                    SET status = 'PUBLISHED',
+                        published_at = now(),
+                        pubsub_message_id = %s
+                    WHERE event_id = %s::uuid
+                    """,
+                    (pubsub_message_id, event_id),
+                )
+            conn.commit()
+
+    def mark_outbox_failed(self, event_id: str, error_message: str, backoff_seconds: int = 10) -> None:
+        """Mark an outbox event delivery attempt failed with exponential retry backoff."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.optimization_outbox
+                    SET attempts = attempts + 1,
+                        last_error = %s,
+                        next_attempt_at = now() + (%s || ' seconds')::interval,
+                        status = CASE WHEN attempts >= 5 THEN 'FAILED' ELSE 'PENDING' END
+                    WHERE event_id = %s::uuid
+                    """,
+                    (error_message[:500], backoff_seconds, event_id),
+                )
+            conn.commit()
+
+    def get_oldest_pending_outbox_age_seconds(self) -> float:
+        """Return the age in seconds of the oldest unpublished outbox event for monitoring SLOs."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COALESCE(EXTRACT(EPOCH FROM (now() - MIN(created_at))), 0.0) as age_seconds
+                    FROM public.optimization_outbox
+                    WHERE status = 'PENDING'
+                    """
+                )
+                row = cur.fetchone()
+                return float(row["age_seconds"]) if row else 0.0
+
+    def save_problem_snapshot(self, snapshot: Any, workspace_id: str | None = None) -> None:
+        """Persist an immutable problem snapshot to PostgreSQL."""
+        snap_dict = snapshot.model_dump(mode="json") if hasattr(snapshot, "model_dump") else snapshot
+        snap_id = snap_dict["problem_snapshot_id"]
+        snap_sha = snap_dict["problem_snapshot_sha256"]
+        problem_json = snap_dict["problem"]
+        metadata = {
+            "code_sha": snap_dict.get("code_sha"),
+            "dataset_version": snap_dict.get("dataset_version"),
+            "graph_version": snap_dict.get("graph_version"),
+            "assumption_version": snap_dict.get("assumption_version"),
+            "solver_version": snap_dict.get("solver_version"),
+            "matrix_sha256": snap_dict.get("matrix_sha256"),
+            "gold_manifest_sha256": snap_dict.get("gold_manifest_sha256"),
+            "evidence_ids": snap_dict.get("evidence_ids"),
+            "created_at": snap_dict.get("created_at"),
+            "temporal_cutoff": snap_dict.get("temporal_cutoff"),
+        }
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.optimization_problem_snapshots (
+                        snapshot_id TEXT PRIMARY KEY,
+                        snapshot_sha256 TEXT NOT NULL UNIQUE,
+                        workspace_id TEXT,
+                        problem_json JSONB NOT NULL,
+                        metadata JSONB NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cur.execute(
+                    """
+                    INSERT INTO public.optimization_problem_snapshots (
+                        snapshot_id, snapshot_sha256, workspace_id, problem_json, metadata, created_at
+                    ) VALUES (
+                        %s, %s, %s, %s::jsonb, %s::jsonb, now()
+                    )
+                    ON CONFLICT (snapshot_id) DO NOTHING
+                    """,
+                    (
+                        snap_id,
+                        snap_sha,
+                        workspace_id,
+                        json.dumps(problem_json, default=str),
+                        json.dumps(metadata, default=str),
+                    ),
+                )
+            conn.commit()
+
+    def get_problem_snapshot(self, snapshot_id_or_hash: str, workspace_id: str | None = None) -> dict[str, Any] | None:
+        """Fetch an immutable problem snapshot by snapshot_id or snapshot_sha256."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.optimization_problem_snapshots (
+                        snapshot_id TEXT PRIMARY KEY,
+                        snapshot_sha256 TEXT NOT NULL UNIQUE,
+                        workspace_id TEXT,
+                        problem_json JSONB NOT NULL,
+                        metadata JSONB NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cur.execute(
+                    """
+                    SELECT snapshot_id, snapshot_sha256, workspace_id, problem_json, metadata, created_at
+                    FROM public.optimization_problem_snapshots
+                    WHERE snapshot_id = %s OR snapshot_sha256 = %s
+                    LIMIT 1
+                    """,
+                    (snapshot_id_or_hash, snapshot_id_or_hash),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+
+                res = {
+                    "problem_snapshot_id": row["snapshot_id"],
+                    "problem_snapshot_sha256": row["snapshot_sha256"],
+                    "workspace_id": row["workspace_id"],
+                    "problem": row["problem_json"]
+                    if isinstance(row["problem_json"], dict)
+                    else json.loads(row["problem_json"]),
+                    "created_at": str(row["created_at"]),
+                }
+                meta = row["metadata"] if isinstance(row["metadata"], dict) else json.loads(row["metadata"])
+                res.update(meta)
+                return res

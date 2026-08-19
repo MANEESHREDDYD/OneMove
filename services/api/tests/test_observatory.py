@@ -214,7 +214,10 @@ def test_map_layers_render_real_bounded_osm_evidence(observatory_service: Observ
 
 
 def test_protected_routes_return_contracts(observatory_service: ObservatoryService) -> None:
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "test-user"}
+    app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "test-user",
+        "workspace_id": "00000000-0000-0000-0000-000000000001",
+    }
     app.dependency_overrides[get_observatory_service] = lambda: observatory_service
     try:
         with TestClient(app) as client:
@@ -238,7 +241,10 @@ def test_protected_routes_return_contracts(observatory_service: ObservatoryServi
 
 
 def test_invalid_h3_uses_standard_error_contract(observatory_service: ObservatoryService) -> None:
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "test-user"}
+    app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "test-user",
+        "workspace_id": "00000000-0000-0000-0000-000000000001",
+    }
     app.dependency_overrides[get_observatory_service] = lambda: observatory_service
     try:
         with TestClient(app) as client:

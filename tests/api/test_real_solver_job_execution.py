@@ -23,12 +23,15 @@ def test_real_solver_execution_94x12x3():
 
     service = OptimizationService()
     start_time = time.perf_counter()
-    job = service.submit_optimization(
+    queued_job = service.submit_optimization(
         requested_by="00000000-0000-0000-0000-000000000001",
         workspace_id="ws-test-real-solve",
         idempotency_key=idem_key,
         problem=problem,
     )
+    assert queued_job["status"] == "QUEUED"
+
+    job = service.run_solver_for_job(str(queued_job["id"]), problem)
     solve_duration = time.perf_counter() - start_time
 
     assert job["status"] == "SUCCESS"
