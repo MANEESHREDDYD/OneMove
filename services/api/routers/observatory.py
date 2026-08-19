@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from services.api.contracts.observatory import (
@@ -605,13 +605,14 @@ def get_decision(decision_id: str, _user: dict = Depends(get_current_user)):
 
 
 class ReplayRequest(BaseModel):
+    model_config = {"extra": "ignore"}
     feature_cutoff: datetime | None = None
 
 
 @router.post("/decisions/{decision_id}/replay")
 def replay_decision(
     decision_id: str,
-    payload: ReplayRequest = Body(default_factory=ReplayRequest),
+    payload: ReplayRequest | None = None,
     _user: dict = Depends(get_current_user),
 ):
     """Execute server-side deterministic Point-in-Time decision replay."""
@@ -620,7 +621,7 @@ def replay_decision(
         result = _dec_ledger.replay_decision(
             decision_id,
             workspace_id=ws_id,
-            feature_cutoff=payload.feature_cutoff,
+            feature_cutoff=payload.feature_cutoff if payload else None,
         )
         return result.model_dump()
     except LookupError as not_found_exc:
