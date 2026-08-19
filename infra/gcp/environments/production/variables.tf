@@ -24,12 +24,12 @@ variable "unique_suffix" {
 
 variable "api_image" {
   type        = string
-  description = "ZonePilot API container image"
-  default     = "gcr.io/cloudrun/hello"
+  description = "Container image URL for OneMove API"
+  default     = "asia-south1-docker.pkg.dev/zonepilot-prod-9a4285/zonepilot-containers-production/zonepilot-api:latest"
 }
 
 variable "worker_image" {
   type        = string
-  description = "ZonePilot Worker container image"
-  default     = "gcr.io/cloudrun/hello"
+  description = "Container image URL for Optimizer Worker"
+  default     = "asia-south1-docker.pkg.dev/zonepilot-prod-9a4285/zonepilot-containers-production/zonepilot-worker:latest"
 }

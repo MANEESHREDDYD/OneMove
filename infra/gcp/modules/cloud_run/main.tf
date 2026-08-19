@@ -73,15 +73,50 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "ENVIRONMENT"
         value = var.environment
       }
+
+      env {
+        name  = "ZONEPILOT_APP_VERSION"
+        value = "1.5.1"
+      }
+
+      env {
+        name  = "ZONEPILOT_GIT_SHA"
+        value = "483c8e1f6d256c39987d3780ffdb342f935f7ac2"
+      }
+
+      env {
+        name  = "ZONEPILOT_SCHEMA_VERSION"
+        value = "1.0.0"
+      }
+
+      env {
+        name = "DATABASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = "zonepilot-db-url-${var.environment}"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "SUPABASE_JWT_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "zonepilot-jwt-secret-${var.environment}"
+            version = "latest"
+          }
+        }
+      }
     }
   }
 }
 
 # Allow unauthenticated public access to API (auth handled by JWT middleware)
-resource "google_cloud_run_service_iam_member" "api_public" {
+resource "google_cloud_run_v2_service_iam_member" "api_public" {
   location = google_cloud_run_v2_service.api.location
   project  = var.project_id
-  service  = google_cloud_run_v2_service.api.name
+  name     = google_cloud_run_v2_service.api.name
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
@@ -111,9 +146,33 @@ resource "google_cloud_run_v2_service" "worker" {
         }
       }
 
+      ports {
+        container_port = 8080
+      }
+
       env {
         name  = "ENVIRONMENT"
         value = var.environment
+      }
+
+      env {
+        name = "DATABASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = "zonepilot-db-url-${var.environment}"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "SUPABASE_JWT_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "zonepilot-jwt-secret-${var.environment}"
+            version = "latest"
+          }
+        }
       }
     }
   }

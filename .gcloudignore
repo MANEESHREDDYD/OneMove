@@ -1,0 +1,15 @@
+.git/
+.github/
+.next/
+node_modules/
+tests/
+*.log
+.terraform/
+*.tfstate*
+data_root/private/official/raw/osm/southern-zone-latest.osm.pbf*
+data_root/private/official/raw/osm/southern_zone_india/
+data_root/private/official/raw/openmeteo/
+data_root/private/official/raw/tomtom/
+data_root/private/official/bronze/
+data_root/private/official/silver/openmeteo/
+data_root/private/official/silver/tomtom/

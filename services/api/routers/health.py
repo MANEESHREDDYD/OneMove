@@ -12,13 +12,17 @@ router = APIRouter(tags=["observability"])
 logger = logging.getLogger("zonepilot.health")
 
 
+@router.get("/health")
 @router.get("/healthz")
+@router.get("/health/live")
 def liveness_probe():
     """Basic liveness probe for orchestration platforms"""
     return {"status": "ok"}
 
 
+@router.get("/ready")
 @router.get("/readyz")
+@router.get("/health/ready")
 def readiness_probe(response: Response):
     """Readiness probe checking critical dependencies like DB"""
     db_url = get_database_dsn()

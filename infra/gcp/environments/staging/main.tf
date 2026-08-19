@@ -75,7 +75,7 @@ module "cloud_run" {
   worker_image    = var.worker_image
   api_sa_email    = module.iam.api_sa_email
   worker_sa_email = module.iam.worker_sa_email
-  depends_on      = [module.services, module.iam]
+  depends_on      = [module.services, module.iam, module.secrets]
 }
 
 # 8. Monitoring & Alerts
