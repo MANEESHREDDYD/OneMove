@@ -17,11 +17,8 @@ RUN pip install --no-cache-dir -e .
 COPY services/ ./services/
 COPY data_root/ ./data_root/
 
-ARG RELEASE_SHA=""
-ENV ZONEPILOT_APP_VERSION=1.5.1
-ENV ZONEPILOT_GIT_SHA=${RELEASE_SHA}
-ENV ZONEPILOT_SCHEMA_VERSION=1.0.0
-
+ENV PORT=8080
+ENV PYTHONPATH=/app
 EXPOSE 8080
 
-CMD ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python", "-m", "services.zonepilot.optimization.outbox_dispatcher"]

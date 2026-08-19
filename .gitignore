@@ -90,6 +90,11 @@ pytest_report.json
 !data/private/official/raw/
 !data/private/official/raw/osrm/
 !data/private/official/raw/osrm/benchmark.json
+data/private/official/raw/osrm/*.osrm*
+data/geo/
+data/private/raw/
+data/rolling/
+configs/data/
 
 # Terraform
 **/.terraform/

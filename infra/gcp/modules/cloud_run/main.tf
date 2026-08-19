@@ -14,6 +14,12 @@ variable "environment" {
   description = "Deployment environment"
 }
 
+variable "release_sha" {
+  type        = string
+  description = "Source code Git commit SHA for immutable release identity"
+  default     = ""
+}
+
 variable "api_image" {
   type        = string
   description = "Container image URL for ZonePilot API"
@@ -24,6 +30,12 @@ variable "worker_image" {
   description = "Container image URL for Optimizer Worker"
 }
 
+variable "dispatcher_image" {
+  type        = string
+  description = "Container image URL for Outbox Dispatcher"
+  default     = ""
+}
+
 variable "api_sa_email" {
   type        = string
   description = "Service account email for API"
@@ -32,6 +44,12 @@ variable "api_sa_email" {
 variable "worker_sa_email" {
   type        = string
   description = "Service account email for Worker"
+}
+
+variable "dispatcher_sa_email" {
+  type        = string
+  description = "Service account email for Outbox Dispatcher"
+  default     = ""
 }
 
 variable "pubsub_push_sa_email" {
@@ -81,18 +99,28 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
+      }
+
+      env {
         name  = "ZONEPILOT_APP_VERSION"
         value = "1.5.1"
       }
 
       env {
         name  = "ZONEPILOT_GIT_SHA"
-        value = "483c8e1f6d256c39987d3780ffdb342f935f7ac2"
+        value = var.release_sha
       }
 
       env {
         name  = "ZONEPILOT_SCHEMA_VERSION"
         value = "1.0.0"
+      }
+
+      env {
+        name  = "PUBSUB_TOPIC_OPTIMIZATIONS"
+        value = "zonepilot-opt-jobs-${var.environment}"
       }
 
       env {
@@ -162,6 +190,16 @@ resource "google_cloud_run_v2_service" "worker" {
       }
 
       env {
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
+      }
+
+      env {
+        name  = "ZONEPILOT_GIT_SHA"
+        value = var.release_sha
+      }
+
+      env {
         name = "DATABASE_URL"
         value_source {
           secret_key_ref {
@@ -193,10 +231,81 @@ resource "google_cloud_run_v2_service_iam_member" "worker_invoker" {
   member   = "serviceAccount:${var.pubsub_push_sa_email != "" ? var.pubsub_push_sa_email : var.worker_sa_email}"
 }
 
+# 3. ZonePilot Outbox Dispatcher Service (Continuous background daemon)
+resource "google_cloud_run_v2_service" "dispatcher" {
+  name     = "zonepilot-dispatcher-${var.environment}"
+  location = var.region
+  project  = var.project_id
+  ingress  = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+
+  template {
+    service_account = var.dispatcher_sa_email != "" ? var.dispatcher_sa_email : var.api_sa_email
+
+    scaling {
+      min_instance_count = 1
+      max_instance_count = 2
+    }
+
+    containers {
+      image = var.dispatcher_image != "" ? var.dispatcher_image : var.worker_image
+
+      resources {
+        limits = {
+          cpu    = "1000m"
+          memory = "1024Mi"
+        }
+      }
+
+      ports {
+        container_port = 8080
+      }
+
+      env {
+        name  = "ENVIRONMENT"
+        value = var.environment
+      }
+
+      env {
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
+      }
+
+      env {
+        name  = "PUBSUB_TOPIC_OPTIMIZATIONS"
+        value = "zonepilot-opt-jobs-${var.environment}"
+      }
+
+      env {
+        name  = "ZONEPILOT_GIT_SHA"
+        value = var.release_sha
+      }
+
+      env {
+        name  = "DISPATCHER_INTERVAL_SEC"
+        value = "2"
+      }
+
+      env {
+        name = "DATABASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = "zonepilot-db-url-${var.environment}"
+            version = "latest"
+          }
+        }
+      }
+    }
+  }
+}
+
 output "api_url" {
   value = google_cloud_run_v2_service.api.uri
 }
 
 output "worker_url" {
   value = google_cloud_run_v2_service.worker.uri
+}
+
+output "dispatcher_url" {
+  value = google_cloud_run_v2_service.dispatcher.uri
 }

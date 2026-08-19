@@ -49,6 +49,13 @@ resource "google_service_account" "pubsub_push" {
   display_name = "OneMove Pub/Sub Push Invoker (${var.environment})"
 }
 
+# 5b. Dedicated Outbox Dispatcher Service Account
+resource "google_service_account" "dispatcher" {
+  project      = var.project_id
+  account_id   = "onemove-dispatcher-${var.environment}"
+  display_name = "OneMove Outbox Dispatcher Runtime (${var.environment})"
+}
+
 # 6. GitHub Deployer Service Account (Workload Identity Federation)
 resource "google_service_account" "github_deployer" {
   project      = var.project_id
@@ -119,6 +126,20 @@ resource "google_project_iam_member" "worker_roles" {
   member  = "serviceAccount:${google_service_account.worker.email}"
 }
 
+# Least Privilege IAM Roles for Dispatcher SA
+resource "google_project_iam_member" "dispatcher_roles" {
+  for_each = toset([
+    "roles/cloudsql.client",
+    "roles/secretmanager.secretAccessor",
+    "roles/pubsub.publisher",
+    "roles/logging.logWriter",
+    "roles/monitoring.metricWriter",
+  ])
+  project = var.project_id
+  role    = each.key
+  member  = "serviceAccount:${google_service_account.dispatcher.email}"
+}
+
 # Least Privilege IAM Roles for Deployer SA
 resource "google_project_iam_member" "deployer_roles" {
   for_each = toset([
@@ -137,6 +158,10 @@ output "api_sa_email" {
 
 output "worker_sa_email" {
   value = google_service_account.worker.email
+}
+
+output "dispatcher_sa_email" {
+  value = google_service_account.dispatcher.email
 }
 
 output "osrm_sa_email" {

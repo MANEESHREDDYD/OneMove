@@ -143,13 +143,53 @@ class OptimizationService:
         effective_code_sha = code_sha or current_release_sha()
         start_time = time.perf_counter()
         try:
+            from services.zonepilot.optimization.contracts import create_problem_snapshot
+
+            manifest_path = self.data_root / "private" / "official" / "manifests" / "gold_manifest.json"
+            matrix_sha = ""
+            gold_sha = ""
+            if manifest_path.is_file():
+                try:
+                    m_doc = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    matrix_sha = m_doc.get("osrm_bundle_sha256") or m_doc.get("osrm_table_sha256") or ""
+                    gold_sha = m_doc.get("gold_h3_table_sha256") or ""
+                except Exception:
+                    pass
+
+            graph_ver = problem.scenarios[0].travel_matrix.graph_version if problem.scenarios else "1.1"
+            matrix_id = problem.scenarios[0].travel_matrix.matrix_id if problem.scenarios else "r1-table"
+            evidence_ids = (
+                f"ev-gold-network-{graph_ver}",
+                f"ev-osrm-{matrix_id}",
+                f"ev-opt-job-{job_id}",
+            )
+
+            snapshot = create_problem_snapshot(
+                problem,
+                code_sha=effective_code_sha,
+                dataset_version="1.0.0",
+                matrix_sha256=matrix_sha,
+                gold_manifest_sha256=gold_sha,
+                evidence_ids=evidence_ids,
+            )
+            self.repository.save_problem_snapshot(snapshot)
+
             result = optimize_facilities(problem)
             run_ms = int((time.perf_counter() - start_time) * 1000)
+
+            result_doc = result.model_dump()
+            result_doc["evidence_ids"] = list(evidence_ids)
+            result_doc["problem_snapshot_id"] = snapshot.problem_snapshot_id
+            result_doc["problem_snapshot_sha256"] = snapshot.problem_snapshot_sha256
+            result_doc["dataset_version"] = "1.0.0"
+            result_doc["network_version"] = graph_ver
+            result_doc["solver_version"] = "ortools-cp-sat"
+
             self.repository.save_result(
                 job_id=job_id,
-                result_document=result.model_dump(),
+                result_document=result_doc,
                 pareto_document=None,
-                problem_fingerprint=result.problem_fingerprint,
+                problem_fingerprint=snapshot.problem_snapshot_sha256,
                 solver_status=result.status.value,
                 action=result.action.value,
                 fail_closed=result.fail_closed,

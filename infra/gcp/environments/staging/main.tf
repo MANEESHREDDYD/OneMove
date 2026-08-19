@@ -63,10 +63,13 @@ module "cloud_run" {
   project_id           = var.project_id
   region               = var.region
   environment          = "staging"
+  release_sha          = var.release_sha
   api_image            = var.api_image
   worker_image         = var.worker_image
+  dispatcher_image     = var.dispatcher_image
   api_sa_email         = module.iam.api_sa_email
   worker_sa_email      = module.iam.worker_sa_email
+  dispatcher_sa_email  = module.iam.dispatcher_sa_email
   pubsub_push_sa_email = module.iam.pubsub_push_sa_email
   depends_on           = [module.services, module.iam, module.secrets]
 }

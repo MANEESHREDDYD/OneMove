@@ -33,3 +33,15 @@ variable "worker_image" {
   description = "Container image URL for Optimizer Worker"
   default     = "asia-south1-docker.pkg.dev/zonepilot-prod-9a4285/zonepilot-containers-production/zonepilot-worker:latest"
 }
+
+variable "dispatcher_image" {
+  type        = string
+  description = "Container image URL for Outbox Dispatcher"
+  default     = "asia-south1-docker.pkg.dev/zonepilot-prod-9a4285/zonepilot-containers-production/zonepilot-dispatcher:latest"
+}
+
+variable "release_sha" {
+  type        = string
+  description = "Source code Git SHA for release identity"
+  default     = ""
+}

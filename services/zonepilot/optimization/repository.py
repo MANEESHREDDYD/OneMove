@@ -338,3 +338,96 @@ class OptimizationRepository:
                 )
                 row = cur.fetchone()
                 return float(row["age_seconds"]) if row else 0.0
+
+    def save_problem_snapshot(self, snapshot: Any, workspace_id: str | None = None) -> None:
+        """Persist an immutable problem snapshot to PostgreSQL."""
+        snap_dict = snapshot.model_dump(mode="json") if hasattr(snapshot, "model_dump") else snapshot
+        snap_id = snap_dict["problem_snapshot_id"]
+        snap_sha = snap_dict["problem_snapshot_sha256"]
+        problem_json = snap_dict["problem"]
+        metadata = {
+            "code_sha": snap_dict.get("code_sha"),
+            "dataset_version": snap_dict.get("dataset_version"),
+            "graph_version": snap_dict.get("graph_version"),
+            "assumption_version": snap_dict.get("assumption_version"),
+            "solver_version": snap_dict.get("solver_version"),
+            "matrix_sha256": snap_dict.get("matrix_sha256"),
+            "gold_manifest_sha256": snap_dict.get("gold_manifest_sha256"),
+            "evidence_ids": snap_dict.get("evidence_ids"),
+            "created_at": snap_dict.get("created_at"),
+            "temporal_cutoff": snap_dict.get("temporal_cutoff"),
+        }
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.optimization_problem_snapshots (
+                        snapshot_id TEXT PRIMARY KEY,
+                        snapshot_sha256 TEXT NOT NULL UNIQUE,
+                        workspace_id TEXT,
+                        problem_json JSONB NOT NULL,
+                        metadata JSONB NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cur.execute(
+                    """
+                    INSERT INTO public.optimization_problem_snapshots (
+                        snapshot_id, snapshot_sha256, workspace_id, problem_json, metadata, created_at
+                    ) VALUES (
+                        %s, %s, %s, %s::jsonb, %s::jsonb, now()
+                    )
+                    ON CONFLICT (snapshot_id) DO NOTHING
+                    """,
+                    (
+                        snap_id,
+                        snap_sha,
+                        workspace_id,
+                        json.dumps(problem_json, default=str),
+                        json.dumps(metadata, default=str),
+                    ),
+                )
+            conn.commit()
+
+    def get_problem_snapshot(self, snapshot_id_or_hash: str, workspace_id: str | None = None) -> dict[str, Any] | None:
+        """Fetch an immutable problem snapshot by snapshot_id or snapshot_sha256."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.optimization_problem_snapshots (
+                        snapshot_id TEXT PRIMARY KEY,
+                        snapshot_sha256 TEXT NOT NULL UNIQUE,
+                        workspace_id TEXT,
+                        problem_json JSONB NOT NULL,
+                        metadata JSONB NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cur.execute(
+                    """
+                    SELECT snapshot_id, snapshot_sha256, workspace_id, problem_json, metadata, created_at
+                    FROM public.optimization_problem_snapshots
+                    WHERE snapshot_id = %s OR snapshot_sha256 = %s
+                    LIMIT 1
+                    """,
+                    (snapshot_id_or_hash, snapshot_id_or_hash),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+
+                res = {
+                    "problem_snapshot_id": row["snapshot_id"],
+                    "problem_snapshot_sha256": row["snapshot_sha256"],
+                    "workspace_id": row["workspace_id"],
+                    "problem": row["problem_json"] if isinstance(row["problem_json"], dict) else json.loads(row["problem_json"]),
+                    "created_at": str(row["created_at"]),
+                }
+                meta = row["metadata"] if isinstance(row["metadata"], dict) else json.loads(row["metadata"])
+                res.update(meta)
+                return res
+

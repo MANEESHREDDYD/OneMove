@@ -248,22 +248,62 @@ async def process_pubsub_push(request: Request, response: Response):
 
     try:
         problem = _reconstruct_problem_from_payload(payload)
+
+        # Create and persist immutable ProblemSnapshot for true PIT replay
+        from services.zonepilot.optimization.contracts import create_problem_snapshot
+        manifest_path = default_data_root() / "private" / "official" / "manifests" / "gold_manifest.json"
+        matrix_sha = ""
+        gold_sha = ""
+        if manifest_path.is_file():
+            try:
+                m_doc = json.loads(manifest_path.read_text(encoding="utf-8"))
+                matrix_sha = m_doc.get("osrm_bundle_sha256") or m_doc.get("osrm_table_sha256") or ""
+                gold_sha = m_doc.get("gold_h3_table_sha256") or ""
+            except Exception:
+                pass
+
+        graph_ver = job.get("graph_version") or "1.1"
+        matrix_id = job.get("matrix_id") or "r1-table"
+        evidence_ids = (
+            f"ev-gold-network-{graph_ver}",
+            f"ev-osrm-{matrix_id}",
+            f"ev-opt-job-{job_id}",
+        )
+
+        snapshot = create_problem_snapshot(
+            problem,
+            code_sha=effective_code_sha,
+            dataset_version=job.get("dataset_version") or "1.0.0",
+            matrix_sha256=matrix_sha,
+            gold_manifest_sha256=gold_sha,
+            evidence_ids=evidence_ids,
+        )
+        _repository.save_problem_snapshot(snapshot, workspace_id=workspace_id)
+
         result = optimize_facilities(problem)
         run_ms = int((time.perf_counter() - start_time) * 1000)
 
+        result_doc = result.model_dump()
+        result_doc["evidence_ids"] = list(evidence_ids)
+        result_doc["problem_snapshot_id"] = snapshot.problem_snapshot_id
+        result_doc["problem_snapshot_sha256"] = snapshot.problem_snapshot_sha256
+        result_doc["dataset_version"] = job.get("dataset_version") or "1.0.0"
+        result_doc["network_version"] = graph_ver
+        result_doc["solver_version"] = "ortools-cp-sat"
+
         _repository.save_result(
             job_id=job_id,
-            result_document=result.model_dump(),
+            result_document=result_doc,
             pareto_document=None,
-            problem_fingerprint=result.problem_fingerprint,
+            problem_fingerprint=snapshot.problem_snapshot_sha256,
             solver_status=result.status.value,
             action=result.action.value,
             fail_closed=result.fail_closed,
             code_sha=effective_code_sha,
             run_duration_ms=run_ms,
         )
-        logger.info(f"Job {job_id} solved successfully in {run_ms}ms (status={result.status.value})")
-        return {"status": "ack", "job_id": job_id, "solver_status": result.status.value}
+        logger.info(f"Job {job_id} solved successfully in {run_ms}ms (status={result.status.value}, snapshot={snapshot.problem_snapshot_id})")
+        return {"status": "ack", "job_id": job_id, "solver_status": result.status.value, "problem_snapshot_id": snapshot.problem_snapshot_id}
 
     except psycopg.OperationalError as db_err:
         run_ms = int((time.perf_counter() - start_time) * 1000)

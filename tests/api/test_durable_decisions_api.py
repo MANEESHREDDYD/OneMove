@@ -28,6 +28,12 @@ client = TestClient(app)
 
 
 def test_durable_decision_record_replay_shadow():
+    import hashlib
+    from services.zonepilot.optimization.r1_catalog import default_data_root
+
+    mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
+    mat_sha = hashlib.sha256(mat_path.read_bytes()).hexdigest()
+
     now = datetime.now(timezone.utc)
     rec_payload = {
         "decision_time": now.isoformat(),
@@ -41,6 +47,7 @@ def test_durable_decision_record_replay_shadow():
         "p95_travel_seconds": 780,
         "coverage_basis_points": 9910,
         "code_sha": "git-sha-test-456",
+        "osrm_bundle_hash": mat_sha,
     }
 
     # 1. POST /api/v1/decisions

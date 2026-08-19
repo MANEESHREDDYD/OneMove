@@ -19,14 +19,19 @@ from services.zonepilot.decisions.repository import DecisionRepository
 from services.zonepilot.release import current_release_sha
 
 
+from services.zonepilot.optimization.repository import OptimizationRepository
+
+
 class DecisionLedger:
     def __init__(
         self,
         code_sha: str | None = None,
         repository: DecisionRepository | None = None,
+        opt_repository: OptimizationRepository | None = None,
     ) -> None:
         self.code_sha = code_sha or current_release_sha()
         self.repository = repository or DecisionRepository()
+        self.opt_repository = opt_repository or OptimizationRepository()
 
     def freeze_decision_from_optimization(
         self,
@@ -100,7 +105,7 @@ class DecisionLedger:
             raise ValueError("DECISION_LINEAGE_INCOMPLETE: action missing from optimization result")
         selected_action = action_val if isinstance(action_val, str) else getattr(action_val, "value", str(action_val))
 
-        network_version = job.get("network_version") or res_doc.get("network_version") or graph_version
+        network_version = job.get("network_version") or res_doc.get("network_version")
         if not network_version:
             raise ValueError("DECISION_LINEAGE_INCOMPLETE: network_version missing from job lineage")
 
@@ -139,12 +144,11 @@ class DecisionLedger:
 
         evidence_ids = res_doc.get("evidence_ids") or job.get("evidence_ids")
         if not evidence_ids:
-            matrix_id_val = job.get("matrix_id") or "r1-table"
-            evidence_ids = [
-                "ev-gold-network-h3r8",
-                f"ev-osrm-{matrix_id_val}",
-                f"ev-opt-job-{job.get('id')}",
-            ]
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: evidence_ids missing from optimization result")
+
+        solver_version = job.get("solver_version") or res_doc.get("solver_version")
+        if not solver_version:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: solver_version missing from job lineage")
 
         h = hashlib.sha256(
             f"{workspace_id}:{job.get('id')}:{','.join(sorted(opened))}:{self.code_sha}".encode()
@@ -170,7 +174,7 @@ class DecisionLedger:
             coverage_basis_points=int(cov_bps),
             graph_version=graph_version,
             osrm_bundle_hash=osrm_bundle_hash,
-            solver_version=job.get("solver_version") or res_doc.get("solver_version", "ortools-cp-sat"),
+            solver_version=solver_version,
             code_sha=job.get("code_sha") or self.code_sha,
             evidence_ids=tuple(evidence_ids),
             recorded_at=rec_time,
@@ -201,7 +205,7 @@ class DecisionLedger:
         recorded_by: str | None = None,
     ) -> DecisionRecord:
         h = hashlib.sha256(
-            f"{workspace_id}:{decision_time.isoformat()}:{selected_action}:{','.join(sorted(opened_facilities))}:{self.code_sha}".encode()
+            f"{workspace_id}:{decision_time.isoformat()}:{feature_snapshot_hash}:{osrm_bundle_hash}:{selected_action}:{','.join(sorted(opened_facilities))}:{self.code_sha}".encode()
         ).hexdigest()[:16]
         dec_id = f"dec-{h}"
         rec_time = recorded_at or datetime.now(timezone.utc)
@@ -279,106 +283,117 @@ class DecisionLedger:
             )
             return replay_res
 
-        # Rerun deterministic solver verification from frozen lineage
+        # 1. Fetch frozen immutable ProblemSnapshot from repository
+        snapshot_doc = self.opt_repository.get_problem_snapshot(orig.feature_snapshot_hash, workspace_id=ws_id)
+
         from services.zonepilot.optimization.contracts import (
-            DemandPoint,
-            Facility,
-            MatrixEvidenceClass,
-            ObjectiveWeights,
-            OptimizationConstraints,
             OptimizationProblem,
-            SolverSettings,
-            TravelMatrix,
-            UncertaintyScenario,
+            problem_fingerprint,
         )
-        from services.zonepilot.optimization.r1_catalog import (
-            FileSystemArtifactCatalog,
-            default_data_root,
-        )
+        from services.zonepilot.optimization.r1_catalog import default_data_root
         from services.zonepilot.optimization.solver import optimize_facilities
 
+        # 2. Verify artifact integrity: check OSRM bundle hash
         mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
         if not mat_path.is_file():
-            raise FileNotFoundError("MATRIX_UNAVAILABLE: Cannot replay without authoritative travel matrix.")
-
-        matrix_doc = json.loads(mat_path.read_text(encoding="utf-8"))
-        facility_ids = tuple(matrix_doc["facility_ids"])
-        demand_ids = tuple(matrix_doc["demand_ids"])
-        base_durations = matrix_doc["base_durations_seconds"]
-
-        catalog = FileSystemArtifactCatalog(default_data_root())
-        gold_rows = {str(r["h3_index"]): r for r in catalog.gold_rows()}
-
-        facilities = tuple(
-            Facility(
-                facility_id=fid,
-                capacity_units=1500,
-                fixed_cost_units=1000,
-                failure_exposure_basis_points=100 * idx,
+            return DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=False,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="NON_REPLAYABLE",
+                reason="CORRUPTED_OR_MISSING_ARTIFACT: Authoritative travel matrix is unavailable on disk.",
+                code_sha=self.code_sha,
             )
-            for idx, fid in enumerate(facility_ids)
-        )
-        demands = tuple(
-            DemandPoint(
-                demand_id=did,
-                demand_units=max(
-                    1,
-                    int(
-                        gold_rows.get(did.split(":")[-1], {}).get("commercial_poi_count", 1) * 3
-                        + gold_rows.get(did.split(":")[-1], {}).get("intersection_count", 1)
-                    ),
-                ),
-            )
-            for did in demand_ids
-        )
 
-        scenarios = []
-        for s_idx, s_name in enumerate(["s1_free_flow", "s2_congested", "s3_congested_outage"]):
-            mult = 1.0 if s_idx == 0 else (1.4 if s_idx == 1 else 1.6)
-            prob = 6000 if s_idx == 0 else (3000 if s_idx == 1 else 1000)
-            durations = tuple(tuple(int(math.ceil(dur * mult)) for dur in row) for row in base_durations)
-            mat = TravelMatrix(
-                matrix_id=f"matrix-{s_name}",
-                graph_version=orig.graph_version,
-                router="osrm-routed-table",
-                router_version="1.0.0",
-                evidence_class=MatrixEvidenceClass.PUBLIC_GEOGRAPHIC if s_idx == 0 else MatrixEvidenceClass.DERIVED,
-                facility_ids=facility_ids,
-                demand_ids=demand_ids,
-                durations_seconds=durations,
-                parent_matrix_id=None if s_idx == 0 else "matrix-s1_free_flow",
+        current_mat_sha = hashlib.sha256(mat_path.read_bytes()).hexdigest()
+        if current_mat_sha != orig.osrm_bundle_hash:
+            return DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=False,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="NON_REPLAYABLE",
+                reason=f"CORRUPTED_OR_MISSING_ARTIFACT: Current travel matrix SHA-256 ({current_mat_sha[:16]}...) does not match frozen decision osrm_bundle_hash ({orig.osrm_bundle_hash[:16]}...).",
+                code_sha=self.code_sha,
             )
-            scenarios.append(
-                UncertaintyScenario(
-                    scenario_id=s_name,
-                    probability_basis_points=prob,
-                    travel_matrix=mat,
-                    capacity_adjustments=(),
+
+        if snapshot_doc:
+            problem_data = snapshot_doc.get("problem", {})
+            try:
+                if isinstance(problem_data, dict):
+                    p_norm = dict(problem_data)
+                    if "facilities" in p_norm and isinstance(p_norm["facilities"], list):
+                        p_norm["facilities"] = tuple(p_norm["facilities"])
+                    if "demand_points" in p_norm and isinstance(p_norm["demand_points"], list):
+                        p_norm["demand_points"] = tuple(p_norm["demand_points"])
+                    if "scenarios" in p_norm and isinstance(p_norm["scenarios"], list):
+                        scens = []
+                        for sc in p_norm["scenarios"]:
+                            sc_copy = dict(sc)
+                            if "travel_matrix" in sc_copy and isinstance(sc_copy["travel_matrix"], dict):
+                                tm = dict(sc_copy["travel_matrix"])
+                                if "facility_ids" in tm and isinstance(tm["facility_ids"], list):
+                                    tm["facility_ids"] = tuple(tm["facility_ids"])
+                                if "demand_ids" in tm and isinstance(tm["demand_ids"], list):
+                                    tm["demand_ids"] = tuple(tm["demand_ids"])
+                                if "durations_seconds" in tm and isinstance(tm["durations_seconds"], list):
+                                    tm["durations_seconds"] = tuple(tuple(r) if isinstance(r, list) else r for r in tm["durations_seconds"])
+                                sc_copy["travel_matrix"] = tm
+                            if "capacity_adjustments" in sc_copy and isinstance(sc_copy["capacity_adjustments"], list):
+                                sc_copy["capacity_adjustments"] = tuple(sc_copy["capacity_adjustments"])
+                            scens.append(sc_copy)
+                        p_norm["scenarios"] = tuple(scens)
+                    problem = OptimizationProblem.model_validate(p_norm, strict=False)
+                else:
+                    problem = OptimizationProblem.model_validate(problem_data, strict=False)
+            except Exception as parse_err:
+                return DecisionReplayResult(
+                    original_decision_id=original_decision_id,
+                    replayed_at=datetime.now(timezone.utc),
+                    pit_valid=False,
+                    reproduced_exact_action=False,
+                    reproduced_exact_facilities=False,
+                    objective_match=False,
+                    match_status="NON_REPLAYABLE",
+                    reason=f"SNAPSHOT_CORRUPTED: Failed to deserialize frozen problem snapshot: {parse_err}",
+                    code_sha=self.code_sha,
                 )
-            )
 
-        problem = OptimizationProblem(
-            problem_id=f"replay-{orig.decision_id}",
-            facilities=facilities,
-            demand_points=demands,
-            scenarios=tuple(scenarios),
-            constraints=OptimizationConstraints(
-                min_open_facilities=1,
-                max_open_facilities=4,
-                max_travel_seconds=1800,
-                minimum_coverage_basis_points=0,
-                allow_uncovered_demand=True,
-            ),
-            objective_weights=ObjectiveWeights(
-                assumption_version="r1-proxy-1.0.0",
-                expected_travel=5000,
-                p95_travel=1000,
-                facility_cost=3000,
-                failure_exposure=500,
-                coverage_loss=5000,
-            ),
-            solver_settings=SolverSettings(max_time_seconds=30.0, num_search_workers=1),
-        )
+            computed_sha = problem_fingerprint(problem)
+            if computed_sha != orig.feature_snapshot_hash:
+                return DecisionReplayResult(
+                    original_decision_id=original_decision_id,
+                    replayed_at=datetime.now(timezone.utc),
+                    pit_valid=False,
+                    reproduced_exact_action=False,
+                    reproduced_exact_facilities=False,
+                    objective_match=False,
+                    match_status="NON_REPLAYABLE",
+                    reason=f"SNAPSHOT_HASH_CORRUPTED: Computed problem fingerprint ({computed_sha[:16]}...) does not match frozen feature_snapshot_hash ({orig.feature_snapshot_hash[:16]}...).",
+                    code_sha=self.code_sha,
+                )
+        else:
+            # Reconstruct from authentic artifacts if legacy record without explicit snapshot row
+            from services.zonepilot.optimization.pubsub_worker import _reconstruct_problem_from_payload
+            try:
+                problem = _reconstruct_problem_from_payload({})
+            except Exception as rec_err:
+                return DecisionReplayResult(
+                    original_decision_id=original_decision_id,
+                    replayed_at=datetime.now(timezone.utc),
+                    pit_valid=False,
+                    reproduced_exact_action=False,
+                    reproduced_exact_facilities=False,
+                    objective_match=False,
+                    match_status="NON_REPLAYABLE",
+                    reason=f"PROBLEM_SNAPSHOT_NOT_FOUND: {rec_err}",
+                    code_sha=self.code_sha,
+                )
 
         res = optimize_facilities(problem)
 
@@ -395,7 +410,7 @@ class DecisionLedger:
             reason = "Recomputed action and facilities matched, slight numeric tolerance in objective value."
         else:
             match_status = "DRIFT"
-            reason = "Recomputed solver result drifted from original frozen decision."
+            reason = f"Decision outputs drifted: recomputed facilities={res.opened_facility_ids}, frozen={orig.opened_facilities}"
 
         expected_h = hashlib.sha256(
             f"{orig.selected_action}:{','.join(sorted(orig.opened_facilities))}:{orig.objective_value}".encode()

@@ -128,6 +128,12 @@ def test_route_9_experiments():
 
 
 def test_route_10_decisions_and_pit_replay():
+    import hashlib
+    from services.zonepilot.optimization.r1_catalog import default_data_root
+
+    mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
+    mat_sha = hashlib.sha256(mat_path.read_bytes()).hexdigest()
+
     # Record decision
     dec_req = {
         "network_version": "1.1.0+bad320dd48da",
@@ -140,7 +146,7 @@ def test_route_10_decisions_and_pit_replay():
         "p95_travel_seconds": 840,
         "coverage_basis_points": 9600,
         "graph_version": "1.1.0+bad320dd48da",
-        "osrm_bundle_hash": "7b4437178db62410bb85b6ef1e68fe2f07b7880ce281d146a1480f64ab86b383",
+        "osrm_bundle_hash": mat_sha,
         "solver_version": "ortools-cp-sat",
     }
     post_res = client.post("/api/v1/decisions", json=dec_req)

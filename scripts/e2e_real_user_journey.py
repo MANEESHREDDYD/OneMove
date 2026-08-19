@@ -42,30 +42,57 @@ from dotenv import dotenv_values
 
 env = dotenv_values(".env.local")
 
+IS_RELEASE_MODE = os.environ.get("RELEASE_GATE") == "1" or os.environ.get("ONEMOVE_E2E_RELEASE_MODE") == "1"
+
 SUPABASE_URL = (
     os.environ.get("SUPABASE_URL")
     or env.get("SUPABASE_URL")
-    or env.get("NEXT_PUBLIC_SUPABASE_URL", "https://puygqvnhwsjkspoprfkb.supabase.co")
+    or (None if IS_RELEASE_MODE else env.get("NEXT_PUBLIC_SUPABASE_URL"))
 )
 SUPABASE_ANON_KEY = (
     os.environ.get("SUPABASE_ANON_KEY")
     or env.get("SUPABASE_ANON_KEY")
-    or env.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+    or (None if IS_RELEASE_MODE else env.get("NEXT_PUBLIC_SUPABASE_ANON_KEY"))
 )
 
-TARGET_API_URL = os.environ.get(
-    "ONEMOVE_API_URL", "http://127.0.0.1:8000"
-).rstrip("/")
+TARGET_API_URL = os.environ.get("ONEMOVE_API_URL") or (None if IS_RELEASE_MODE else "http://127.0.0.1:8000")
+if TARGET_API_URL:
+    TARGET_API_URL = TARGET_API_URL.rstrip("/")
 
-TENANT_A_WORKSPACE = "00000000-0000-0000-0000-000000000001"
-TENANT_A_USER = "00000000-0000-0000-0000-000000000002"
-TENANT_A_EMAIL = "operator@onemove.internal"
-TENANT_A_PASS = os.environ.get("TENANT_A_PASSWORD", "OneMoveOperator2026!")
+TENANT_A_WORKSPACE = os.environ.get("TENANT_A_WORKSPACE", "00000000-0000-0000-0000-000000000001")
+TENANT_A_USER = os.environ.get("TENANT_A_USER", "00000000-0000-0000-0000-000000000002")
+TENANT_A_EMAIL = os.environ.get("TENANT_A_EMAIL") or (None if IS_RELEASE_MODE else "operator@onemove.internal")
+TENANT_A_PASS = os.environ.get("TENANT_A_PASSWORD")
 
-TENANT_B_WORKSPACE = "00000000-0000-0000-0000-000000000003"
-TENANT_B_USER = "00000000-0000-0000-0000-000000000004"
-TENANT_B_EMAIL = "secondary.tenant@onemove.internal"
-TENANT_B_PASS = os.environ.get("TENANT_B_PASSWORD", "OneMoveTenant2026!")
+TENANT_B_WORKSPACE = os.environ.get("TENANT_B_WORKSPACE", "00000000-0000-0000-0000-000000000003")
+TENANT_B_USER = os.environ.get("TENANT_B_USER", "00000000-0000-0000-0000-000000000004")
+TENANT_B_EMAIL = os.environ.get("TENANT_B_EMAIL") or (None if IS_RELEASE_MODE else "secondary.tenant@onemove.internal")
+TENANT_B_PASS = os.environ.get("TENANT_B_PASSWORD")
+
+if IS_RELEASE_MODE:
+    missing_vars = []
+    if not TARGET_API_URL:
+        missing_vars.append("ONEMOVE_API_URL")
+    if not SUPABASE_URL:
+        missing_vars.append("SUPABASE_URL")
+    if not SUPABASE_ANON_KEY:
+        missing_vars.append("SUPABASE_ANON_KEY")
+    if not TENANT_A_EMAIL:
+        missing_vars.append("TENANT_A_EMAIL")
+    if not TENANT_A_PASS:
+        missing_vars.append("TENANT_A_PASSWORD")
+    if not TENANT_B_EMAIL:
+        missing_vars.append("TENANT_B_EMAIL")
+    if not TENANT_B_PASS:
+        missing_vars.append("TENANT_B_PASSWORD")
+    if missing_vars:
+        raise RuntimeError(f"FAIL_CLOSED: Missing required release environment variables: {', '.join(missing_vars)}")
+else:
+    if not TENANT_A_PASS or not TENANT_B_PASS:
+        raise RuntimeError(
+            "FAIL_CLOSED: TENANT_A_PASSWORD and TENANT_B_PASSWORD environment variables are required. "
+            "No default passwords are permitted in source code."
+        )
 
 
 def supabase_login(email: str, password: str) -> str:
@@ -206,31 +233,25 @@ def main() -> int:
     print("[Step 09] Assert immediate QUEUED status -> verified OK")
     steps_passed += 1
 
-    # 10. Asynchronous Outbox Dispatch to Pub/Sub (without manual worker internals invocation)
-    from services.zonepilot.optimization.outbox_dispatcher import OutboxDispatcher
-    dispatcher = OutboxDispatcher()
-    dispatched_count = dispatcher.run_once()
-    assert dispatched_count >= 0, "Outbox dispatch returned invalid count"
-    print("[Step 10] Asynchronous Outbox Dispatcher claimed and published events -> OK")
-    steps_passed += 1
-
-    # 11. Poll job status
+    # 10. Pure Client Polling: observe job moving from QUEUED to terminal SUCCESS/COMPLETED via infrastructure
     poll_success = False
-    for _attempt in range(25):
+    for attempt in range(40):
         time.sleep(2)
         status, body = api_req(f"/api/v1/optimizations/{job_id}", token=token_a)
         current_status = body.get("status")
         if current_status in {"SUCCESS", "COMPLETED"}:
             poll_success = True
             break
+        elif current_status in {"FAILED", "ERROR"}:
+            raise RuntimeError(f"Step 10 failed: Job entered terminal failure state: {body}")
 
-    assert poll_success, f"Step 11 timed out waiting for job {job_id}. Current body: {body}"
-    print(f"[Step 11] Poll job status -> Status reached {body.get('status')} OK")
+    assert poll_success, f"Step 10 timed out waiting for job {job_id} to reach completion. Current body: {body}"
+    print(f"[Step 10] Asynchronous job execution via platform infrastructure -> Status reached {body.get('status')} OK")
     steps_passed += 1
 
-    # 12. Assert terminal OPTIMAL result
+    # 11. Assert terminal OPTIMAL result
     assert body.get("solver_status") == "OPTIMAL", f"Expected OPTIMAL, got {body.get('solver_status')}"
-    print("[Step 12] Assert solver_status OPTIMAL -> verified OK")
+    print("[Step 11] Assert solver_status OPTIMAL -> verified OK")
     steps_passed += 1
 
     # 13. Inspect opened facilities & p95 travel metrics (strictly from authoritative result)
