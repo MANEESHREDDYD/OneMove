@@ -150,3 +150,4 @@ jobs:
           
           npx playwright test apps/observatory/tests/e2e/marketplace_probe_offline.spec.ts --project=chromium
           npx playwright test apps/observatory/tests/e2e/volunteer_order_offline.spec.ts --project=chromium
+          pkill -f "next|uvicorn" || true
