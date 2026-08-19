@@ -96,38 +96,60 @@ class AuthoritativeSourceUnavailable(RuntimeError):
     """
 
 
-def _provenance(obj: Any, workspace_id: str, entity_ref: str) -> dict[str, Any]:
+# Entity types the canonical Evidence Inspector can actually resolve
+# (ObservatoryService.get_evidence). An evidence ID is only emitted when it
+# resolves through that inspector; anything else is reported as an unverified
+# reference so it can never be mistaken for an audit trail.
+RESOLVABLE_EVIDENCE_TYPES = ("dataset", "network", "zone")
+
+
+def evidence_id(entity_type: str, entity_id: str) -> str:
+    """Build an Evidence Inspector reference of the canonical resolvable form.
+
+    The value mirrors the inspector route /api/v1/evidence/{entity_type}/{entity_id},
+    so it can be dereferenced verbatim.
+    """
+    if entity_type not in RESOLVABLE_EVIDENCE_TYPES:
+        raise ValueError(f"{entity_type} is not resolvable by the Evidence Inspector")
+    return f"{entity_type}/{entity_id}"
+
+
+def _provenance(obj: Any, workspace_id: str, entity_type: str, entity_id: str) -> dict[str, Any]:
     """Extract real provenance from an authoritative response object.
 
-    Every numeric the assistant emits must carry the workspace it was read for,
-    the upstream source record, its dataset/artifact version, and an evidence ID
-    that resolves through the evidence inspector.
+    Every numeric the assistant emits carries the workspace it was read for, the
+    upstream source record, its artifact version, and an evidence ID that
+    resolves through the Evidence Inspector.
     """
     artifact_hash = getattr(obj, "artifact_hash", None)
     if not artifact_hash:
-        raise AuthoritativeSourceUnavailable(f"{entity_ref} carries no artifact hash; provenance cannot be established")
+        raise AuthoritativeSourceUnavailable(f"{entity_type}/{entity_id} carries no artifact hash")
 
     source = getattr(obj, "source", None)
     if not source:
-        raise AuthoritativeSourceUnavailable(f"{entity_ref} carries no source attribution")
+        raise AuthoritativeSourceUnavailable(f"{entity_type}/{entity_id} carries no source attribution")
 
+    evidence_class = getattr(obj, "evidence_class", None)
     observed_at = getattr(obj, "observed_at", None)
     return {
         "workspace_id": workspace_id,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
         "source": str(source),
         "source_version": getattr(obj, "source_version", None),
+        "evidence_class": getattr(evidence_class, "value", evidence_class),
         "artifact_sha256": str(artifact_hash),
         "observed_at": observed_at.isoformat() if hasattr(observed_at, "isoformat") else observed_at,
-        "evidence_ids": [f"artifact_sha256:{artifact_hash}", entity_ref],
+        "evidence_ids": [evidence_id(entity_type, entity_id)],
     }
 
 
-def _field(field_evidence: Any) -> Any:
-    """Unwrap an authoritative FieldEvidence value; never defaults."""
+def _measure(field_evidence: Any) -> dict[str, Any]:
+    """Unwrap an authoritative FieldEvidence into value + unit. Never defaults."""
     value = getattr(field_evidence, "value", None)
     if value is None:
         raise AuthoritativeSourceUnavailable("Authoritative field carries no value")
-    return value
+    return {"value": value, "unit": getattr(field_evidence, "unit", None)}
 
 
 def build_assistant_registry(
@@ -157,12 +179,12 @@ def build_assistant_registry(
         payload = {
             "zone_id": state.zone_id,
             "resolution": state.resolution,
-            "road_length_km": _field(static.road_length_km),
-            "intersection_count": _field(static.intersection_count),
-            "commercial_poi_count": _field(static.commercial_poi_count),
+            "road_length_km": _measure(static.road_length_km),
+            "intersection_count": _measure(static.intersection_count),
+            "commercial_poi_count": _measure(static.commercial_poi_count),
             "unavailable_layers": [layer.layer for layer in state.unavailable_dynamic_layers],
         }
-        payload.update(_provenance(state, ws, f"zone:{state.zone_id}"))
+        payload.update(_provenance(state, ws, "zone", state.zone_id))
         return payload
 
     def _handle_get_network_snapshot(args: dict[str, Any], ws: str) -> dict[str, Any]:
@@ -179,7 +201,7 @@ def build_assistant_registry(
             "intersections": snap.metrics.intersections,
             "connected_components": snap.metrics.connected_components,
         }
-        payload.update(_provenance(snap, ws, f"network_snapshot:{snap.snapshot_id}"))
+        payload.update(_provenance(snap, ws, "network", snap.snapshot_id))
         return payload
 
     def _handle_get_forecast(args: dict[str, Any], ws: str) -> dict[str, Any]:
@@ -202,7 +224,13 @@ def build_assistant_registry(
             "horizon_minutes": row.get("horizon_minutes"),
             "issued_at": str(row.get("issued_at")) if row.get("issued_at") is not None else None,
             "source": "forecast_records",
-            "evidence_ids": [f"forecast_record:{row.get('forecast_id') or row.get('id')}"],
+            "record_id": str(row.get("forecast_id") or row.get("id") or ""),
+            # The Evidence Inspector has no forecast branch, so there is no
+            # resolvable evidence ID to offer. Saying so is the honest answer;
+            # emitting an unresolvable identifier would fake an audit trail.
+            "evidence_ids": [],
+            "evidence_resolvable": False,
+            "evidence_unavailable_reason": "Evidence Inspector exposes no forecast_record entity type.",
         }
 
     def _handle_explain_decision(args: dict[str, Any], ws: str) -> dict[str, Any]:
@@ -229,7 +257,11 @@ def build_assistant_registry(
             "problem_snapshot_sha256": dec.feature_snapshot_hash,
             "osrm_bundle_hash": dec.osrm_bundle_hash,
             "source": "decision_records",
-            "evidence_ids": list(dec.evidence_ids),
+            "record_id": dec.decision_id,
+            "evidence_ids": [],
+            "evidence_resolvable": False,
+            "evidence_unavailable_reason": "Evidence Inspector exposes no decision entity type.",
+            "unverified_evidence_refs": list(dec.evidence_ids),
         }
 
     registry.register(ToolName.GET_ZONE_STATE, _handle_get_zone_state)

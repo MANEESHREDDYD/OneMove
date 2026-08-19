@@ -101,7 +101,7 @@ def test_provenance_is_mandatory_for_numeric_results() -> None:
         source = "somewhere"
 
     with pytest.raises(AuthoritativeSourceUnavailable):
-        tools_module._provenance(_NoProvenance(), WS, "zone:test")
+        tools_module._provenance(_NoProvenance(), WS, "zone", "test")
 
 
 def test_authoritative_zone_state_carries_full_provenance() -> None:
@@ -131,6 +131,50 @@ def test_authoritative_zone_state_carries_full_provenance() -> None:
     assert data["workspace_id"] == WS
     assert data["source"]
     assert len(data["artifact_sha256"]) == 64
-    assert result.evidence_ids and any(e.startswith("artifact_sha256:") for e in result.evidence_ids)
-    # The value must come from the artifact, not a constant.
-    assert data["road_length_km"] is not None
+    assert data["road_length_km"]["value"] is not None
+    assert data["road_length_km"]["unit"] == "km"
+
+
+def test_assistant_evidence_ids_resolve_through_the_evidence_inspector() -> None:
+    """AUDIT-2: an evidence ID that does not dereference is not evidence.
+
+    Round-trips the identifier the Assistant emits back through the canonical
+    Evidence Inspector and asserts the resolved artifact hash matches the one the
+    Assistant reported, so the two cannot drift apart.
+    """
+    from services.api.services.observatory import get_observatory_service
+
+    service = get_observatory_service()
+    zones = service.list_zones().data
+    if not zones:
+        pytest.skip("No gold network artifact mounted in this environment")
+
+    registry = build_assistant_registry(
+        observatory_service=service,
+        decision_ledger=_RaisingSource(),
+        forecast_repository=_RaisingSource(),
+    )
+    result = registry.execute(
+        AssistantToolCall(
+            tool_name=ToolName.GET_ZONE_STATE,
+            arguments={"zone_id": zones[0].zone_id},
+            workspace_id=WS,
+        )
+    )
+    assert result.success is True, result.error_message
+    assert len(result.evidence_ids) == 1
+
+    entity_type, _, entity_id = result.evidence_ids[0].partition("/")
+    assert entity_type in tools_module.RESOLVABLE_EVIDENCE_TYPES
+
+    resolved = service.get_evidence(entity_type, entity_id).data
+    assert resolved.entity_id == entity_id
+    assert resolved.artifact_hash == result.result_data["artifact_sha256"]
+
+
+def test_unresolvable_evidence_is_never_presented_as_evidence() -> None:
+    """Tools with no Inspector branch must report that, not invent an ID."""
+    with pytest.raises(ValueError):
+        tools_module.evidence_id("forecast_record", "abc")
+    with pytest.raises(ValueError):
+        tools_module.evidence_id("decision", "dec-1")
