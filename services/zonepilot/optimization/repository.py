@@ -241,8 +241,8 @@ class OptimizationRepository:
                     """,
                     (
                         job_id,
-                        json.dumps(result_document),
-                        json.dumps(pareto_document) if pareto_document else None,
+                        json.dumps(result_document, default=str),
+                        json.dumps(pareto_document, default=str) if pareto_document else None,
                         problem_fingerprint,
                         solver_status,
                         action,

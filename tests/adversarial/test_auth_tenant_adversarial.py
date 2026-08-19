@@ -63,13 +63,15 @@ def test_malformed_bearer_token(client):
 
 def test_expired_jwt_rejected(client):
     now = int(datetime.now(timezone.utc).timestamp())
-    token = _mint({
-        "sub": "usr_test",
-        "aud": "authenticated",
-        "role": "authenticated",
-        "iat": now - 7200,
-        "exp": now - 3600,
-    })
+    token = _mint(
+        {
+            "sub": "usr_test",
+            "aud": "authenticated",
+            "role": "authenticated",
+            "iat": now - 7200,
+            "exp": now - 3600,
+        }
+    )
     res = client.get("/api/v1/zones", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 401
     assert res.json()["error"]["code"] == "UNAUTHORIZED"
@@ -77,27 +79,31 @@ def test_expired_jwt_rejected(client):
 
 def test_future_nbf_rejected(client):
     now = int(datetime.now(timezone.utc).timestamp())
-    token = _mint({
-        "sub": "usr_test",
-        "aud": "authenticated",
-        "role": "authenticated",
-        "iat": now,
-        "nbf": now + 3600,
-        "exp": now + 7200,
-    })
+    token = _mint(
+        {
+            "sub": "usr_test",
+            "aud": "authenticated",
+            "role": "authenticated",
+            "iat": now,
+            "nbf": now + 3600,
+            "exp": now + 7200,
+        }
+    )
     res = client.get("/api/v1/zones", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 401
     assert res.json()["error"]["code"] == "UNAUTHORIZED"
 
 
 def test_wrong_audience_rejected(client):
-    token = _mint({
-        "sub": "usr_test",
-        "aud": "attacker-fake-audience",
-        "role": "authenticated",
-        "iat": int(datetime.now(timezone.utc).timestamp()),
-        "exp": int(datetime.now(timezone.utc).timestamp()) + 3600,
-    })
+    token = _mint(
+        {
+            "sub": "usr_test",
+            "aud": "attacker-fake-audience",
+            "role": "authenticated",
+            "iat": int(datetime.now(timezone.utc).timestamp()),
+            "exp": int(datetime.now(timezone.utc).timestamp()) + 3600,
+        }
+    )
     res = client.get("/api/v1/zones", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 401
     assert res.json()["error"]["code"] == "UNAUTHORIZED"
@@ -125,11 +131,14 @@ def test_tampered_secret_signature_rejected(client):
 
 def test_cross_workspace_decision_idor_isolation(client, monkeypatch):
     """Verify Tenant A cannot read Tenant B's decision records."""
-    token_b = _mint({
-        "sub": "usr_tenant_b",
-        "aud": "authenticated",
-        "role": "authenticated",
-    })
+    token_b = _mint(
+        {
+            "sub": "00000000-0000-0000-0000-000000000004",
+            "workspace_id": "00000000-0000-0000-0000-000000000003",
+            "aud": "authenticated",
+            "role": "authenticated",
+        }
+    )
 
     fake_dec_id = str(uuid.uuid4())
     monkeypatch.setattr("services.api.routers.observatory._dec_ledger.get_decision", lambda did, wid: None)
@@ -141,11 +150,14 @@ def test_cross_workspace_decision_idor_isolation(client, monkeypatch):
 
 def test_cross_workspace_optimization_idor_isolation(client, monkeypatch):
     """Verify Tenant A cannot retrieve Tenant B's optimization result."""
-    token_b = _mint({
-        "sub": "usr_tenant_b",
-        "aud": "authenticated",
-        "role": "authenticated",
-    })
+    token_b = _mint(
+        {
+            "sub": "00000000-0000-0000-0000-000000000004",
+            "workspace_id": "00000000-0000-0000-0000-000000000003",
+            "aud": "authenticated",
+            "role": "authenticated",
+        }
+    )
 
     fake_opt_id = str(uuid.uuid4())
     monkeypatch.setattr("services.api.routers.observatory._opt_service.get_optimization", lambda oid, wid: None)

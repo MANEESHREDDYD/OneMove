@@ -41,6 +41,8 @@ class MatrixEvidenceClass(str, Enum):
     PUBLIC_GEOGRAPHIC = "PUBLIC_GEOGRAPHIC"
     PROVIDER_ESTIMATED = "PROVIDER_ESTIMATED"
     SIMULATED_FAILURE = "SIMULATED_FAILURE"
+    SIMULATED = "SIMULATED"
+    DERIVED = "DERIVED"
     TEST_ONLY = "TEST_ONLY"
 
 
@@ -96,6 +98,7 @@ class TravelMatrix(StrictContract):
     facility_ids: tuple[str, ...] = Field(min_length=1, max_length=200)
     demand_ids: tuple[str, ...] = Field(min_length=1, max_length=2_000)
     durations_seconds: tuple[tuple[int, ...], ...]
+    parent_matrix_id: str | None = None
 
     @field_validator("matrix_id", "graph_version", "router", "router_version")
     @classmethod

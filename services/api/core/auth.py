@@ -208,6 +208,7 @@ def workspace_memberships(user_id: str) -> tuple[WorkspacePrincipal, ...]:
     db_dsn = None
     try:
         from services.common.db_dsn import get_database_dsn
+
         db_dsn = get_database_dsn()
     except Exception:
         pass

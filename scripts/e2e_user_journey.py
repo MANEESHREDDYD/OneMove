@@ -42,13 +42,23 @@ import jwt
 from dotenv import dotenv_values
 
 env = dotenv_values(".env.local")
-JWT_SECRET = env.get("SUPABASE_JWT_SECRET") or env.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_JWT_SECRET")
+JWT_SECRET = (
+    env.get("SUPABASE_JWT_SECRET") or env.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_JWT_SECRET")
+)
 if not JWT_SECRET:
     try:
         import subprocess
 
         p = subprocess.run(
-            ["gcloud", "secrets", "versions", "access", "latest", "--secret=zonepilot-jwt-secret-staging", "--project=zonepilot-stg-9a4285"],
+            [
+                "gcloud",
+                "secrets",
+                "versions",
+                "access",
+                "latest",
+                "--secret=zonepilot-jwt-secret-staging",
+                "--project=zonepilot-stg-9a4285",
+            ],
             capture_output=True,
             check=True,
             shell=True,
@@ -59,7 +69,7 @@ if not JWT_SECRET:
 
 TARGET_API_URL = os.environ.get(
     "ZONEPILOT_API_URL",
-    "https://zonepilot-api-staging-935663019643.asia-south1.run.app",
+    "https://zonepilot-api-staging-xwvz4vi7ta-el.a.run.app",
 )
 
 
@@ -134,7 +144,9 @@ def run_journey() -> bool:
     code, res = make_request("GET", "/api/v1/zones", token=token, workspace_id=ws_primary)
     assert code == 200 and isinstance(res, dict)
     zones = res.get("data", [])
-    print(f"[Step 03] GET 94-zone Gold network: count={len(zones)} (first={zones[0]['zone_id']}, last={zones[-1]['zone_id']})")
+    print(
+        f"[Step 03] GET 94-zone Gold network: count={len(zones)} (first={zones[0]['zone_id']}, last={zones[-1]['zone_id']})"
+    )
     assert len(zones) == 94
 
     # Step 4: Inspect real Open-Meteo dataset
@@ -142,13 +154,17 @@ def run_journey() -> bool:
     assert code == 200 and isinstance(res, dict)
     meteo = next((p for p in res.get("data", []) if p["provider"] == "openmeteo"), None)
     assert meteo is not None
-    print(f"[Step 04] Inspected real Open-Meteo provider lineage: state={meteo['state']}, datasets={meteo['dataset_ids']}")
+    print(
+        f"[Step 04] Inspected real Open-Meteo provider lineage: state={meteo['state']}, datasets={meteo['dataset_ids']}"
+    )
 
     # Step 5: Inspect real OSRM matrix / evidence
     code, res = make_request("GET", "/api/v1/version", token=token, workspace_id=ws_primary)
     assert code == 200 and isinstance(res, dict)
     graph_info = res.get("data", {}).get("graph", {})
-    print(f"[Step 05] Inspected real OSRM matrix & topology: version={graph_info.get('graph_version')}, bundle_sha={graph_info.get('bundle_sha256')[:16]}...")
+    print(
+        f"[Step 05] Inspected real OSRM matrix & topology: version={graph_info.get('graph_version')}, bundle_sha={graph_info.get('bundle_sha256')[:16]}..."
+    )
     assert graph_info.get("bundle_sha256") is not None
 
     # Step 6: POST scenario
@@ -166,7 +182,9 @@ def run_journey() -> bool:
     # Step 7: Read scenario result
     code, scen_get = make_request("GET", f"/api/v1/scenarios/{scen_id}", token=token, workspace_id=ws_primary)
     assert code == 200 and isinstance(scen_get, dict)
-    print(f"[Step 07] Read scenario quantiles: p95_travel_seconds={scen_get.get('p95_travel_seconds')}, risk_score={scen_get.get('risk_score')}")
+    print(
+        f"[Step 07] Read scenario quantiles: p95_travel_seconds={scen_get.get('p95_travel_seconds')}, risk_score={scen_get.get('risk_score')}"
+    )
 
     # Step 8: POST optimization
     opt_idem = f"idem-opt-{uuid.uuid4().hex[:8]}"
@@ -190,7 +208,9 @@ def run_journey() -> bool:
     # Step 10: Prove Pub/Sub delivery & solve
     code, job_state = make_request("GET", f"/api/v1/optimizations/{job_id}", token=token, workspace_id=ws_primary)
     assert code == 200 and isinstance(job_state, dict)
-    print(f"[Step 10] Polled optimization job execution: status={job_state.get('status')}, solver_status={job_state.get('solver_status')}")
+    print(
+        f"[Step 10] Polled optimization job execution: status={job_state.get('status')}, solver_status={job_state.get('solver_status')}"
+    )
 
     # Step 11 & 12: Poll until terminal SUCCEEDED / OPTIMAL
     attempts = 0
@@ -199,7 +219,9 @@ def run_journey() -> bool:
         attempts += 1
         code, job_state = make_request("GET", f"/api/v1/optimizations/{job_id}", token=token, workspace_id=ws_primary)
 
-    print(f"[Step 11] Optimization solver finished: status={job_state.get('status')}, solver_status={job_state.get('solver_status')}")
+    print(
+        f"[Step 11] Optimization solver finished: status={job_state.get('status')}, solver_status={job_state.get('solver_status')}"
+    )
     assert job_state.get("status") == "SUCCESS"
     assert job_state.get("solver_status") == "OPTIMAL"
 
@@ -207,7 +229,9 @@ def run_journey() -> bool:
     opened = job_state.get("opened_facilities") or []
     expected_travel = job_state.get("expected_travel_seconds")
     p95_travel = job_state.get("p95_travel_seconds")
-    print(f"[Step 13] Inspected opened facilities: {opened}, expected_travel={expected_travel}s, p95_travel={p95_travel}s")
+    print(
+        f"[Step 13] Inspected opened facilities: {opened}, expected_travel={expected_travel}s, p95_travel={p95_travel}s"
+    )
     assert len(opened) >= 1
 
     # Step 14: Persist / freeze decision to PostgreSQL ledger
@@ -235,12 +259,16 @@ def run_journey() -> bool:
     # Step 15: Retrieve immutable evidence chain
     code, ev_res = make_request("GET", "/api/v1/evidence/osm/8860145b41fffff", token=token, workspace_id=ws_primary)
     assert code == 200 and isinstance(ev_res, dict)
-    print(f"[Step 15] Retrieved immutable evidence chain: entity_id={ev_res.get('entity_id')}, class={ev_res.get('evidence_class')}")
+    print(
+        f"[Step 15] Retrieved immutable evidence chain: entity_id={ev_res.get('entity_id')}, class={ev_res.get('evidence_class')}"
+    )
 
     # Step 16 & 17: Query decision from PostgreSQL ledger
     code, dec_get = make_request("GET", f"/api/v1/decisions/{dec_id}", token=token, workspace_id=ws_primary)
     assert code == 200 and isinstance(dec_get, dict)
-    print(f"[Step 16-17] Retrieved decision record from PostgreSQL: id={dec_get['decision_id']}, opened={dec_get['opened_facilities']}")
+    print(
+        f"[Step 16-17] Retrieved decision record from PostgreSQL: id={dec_get['decision_id']}, opened={dec_get['opened_facilities']}"
+    )
 
     # Step 18 & 19: PIT decision replay
     replay_body = {
@@ -250,9 +278,13 @@ def run_journey() -> bool:
         "temporal_consistency_score": 1.0,
         "feature_cutoff": datetime.now(timezone.utc).isoformat(),
     }
-    code, rep_res = make_request("POST", f"/api/v1/decisions/{dec_id}/replay", token=token, body=replay_body, workspace_id=ws_primary)
+    code, rep_res = make_request(
+        "POST", f"/api/v1/decisions/{dec_id}/replay", token=token, body=replay_body, workspace_id=ws_primary
+    )
     assert code == 201 and isinstance(rep_res, dict)
-    print(f"[Step 18-19] Replayed decision PIT: matches_original={rep_res.get('matches_original')}, drift_detected={rep_res.get('drift_detected')}")
+    print(
+        f"[Step 18-19] Replayed decision PIT: matches_original={rep_res.get('matches_original')}, drift_detected={rep_res.get('drift_detected')}"
+    )
     assert rep_res.get("matches_original") is True
 
     # Step 20: Create shadow evaluation
@@ -262,9 +294,13 @@ def run_journey() -> bool:
         "alternative_facilities": ["fac:01", "fac:02", "fac:03"],
         "simulated_delta_objective": -4500,
     }
-    code, shad_res = make_request("POST", f"/api/v1/decisions/{dec_id}/shadow", token=token, body=shadow_body, workspace_id=ws_primary)
+    code, shad_res = make_request(
+        "POST", f"/api/v1/decisions/{dec_id}/shadow", token=token, body=shadow_body, workspace_id=ws_primary
+    )
     assert code == 201 and isinstance(shad_res, dict)
-    print(f"[Step 20] Created shadow evaluation: shadow_id={shad_res.get('shadow_id')}, delta={shad_res.get('simulated_delta_objective')}")
+    print(
+        f"[Step 20] Created shadow evaluation: shadow_id={shad_res.get('shadow_id')}, delta={shad_res.get('simulated_delta_objective')}"
+    )
 
     # Step 21 & 22: Query assistant with deterministic tool
     assist_body = {
@@ -272,9 +308,13 @@ def run_journey() -> bool:
         "tool_name": "get_zone_state",
         "arguments": {"zone_id": "8860145b41fffff"},
     }
-    code, assist_res = make_request("POST", "/api/v1/assistant/query", token=token, body=assist_body, workspace_id=ws_primary)
+    code, assist_res = make_request(
+        "POST", "/api/v1/assistant/query", token=token, body=assist_body, workspace_id=ws_primary
+    )
     assert code == 200 and isinstance(assist_res, dict)
-    print(f"[Step 21-22] Assistant returned deterministic evidence: tool={assist_res.get('tool_name')}, evidence_ids={assist_res.get('evidence_ids')}")
+    print(
+        f"[Step 21-22] Assistant returned deterministic evidence: tool={assist_res.get('tool_name')}, evidence_ids={assist_res.get('evidence_ids')}"
+    )
     assert len(assist_res.get("evidence_ids", [])) > 0
 
     # Step 23 & 24: Cross-workspace read isolation attempt

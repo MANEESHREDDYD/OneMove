@@ -63,7 +63,10 @@ def test_path_traversal_in_evidence_endpoint(client):
 
 
 def test_malformed_type_injection_in_optimization(client, monkeypatch):
-    monkeypatch.setattr("services.api.routers.observatory._opt_service.submit_optimization", lambda **kwargs: {"id": "mock", "status": "QUEUED"})
+    monkeypatch.setattr(
+        "services.api.routers.observatory._opt_service.submit_optimization",
+        lambda **kwargs: {"id": "mock", "status": "QUEUED"},
+    )
     bad_payload = {
         "min_open_facilities": "not-an-integer",
         "max_travel_seconds": {"nested": "injection"},
@@ -74,7 +77,10 @@ def test_malformed_type_injection_in_optimization(client, monkeypatch):
 
 
 def test_negative_values_in_optimization_rejected(client, monkeypatch):
-    monkeypatch.setattr("services.api.routers.observatory._opt_service.submit_optimization", lambda **kwargs: {"id": "mock", "status": "QUEUED"})
+    monkeypatch.setattr(
+        "services.api.routers.observatory._opt_service.submit_optimization",
+        lambda **kwargs: {"id": "mock", "status": "QUEUED"},
+    )
     bad_payload = {
         "min_open_facilities": -5,
         "max_open_facilities": -10,
@@ -84,7 +90,10 @@ def test_negative_values_in_optimization_rejected(client, monkeypatch):
 
 
 def test_huge_deeply_nested_json_handling(client, monkeypatch):
-    monkeypatch.setattr("services.api.routers.observatory._res_service.execute_scenario", lambda **kwargs: {"id": "scen-1", "scenario_type": "ROAD_CLOSURE"})
+    monkeypatch.setattr(
+        "services.api.routers.observatory._res_service.execute_scenario",
+        lambda **kwargs: {"id": "scen-1", "scenario_type": "ROAD_CLOSURE"},
+    )
     nested = {"a": 1}
     for _ in range(100):
         nested = {"level": nested}

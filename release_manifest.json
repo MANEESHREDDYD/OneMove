@@ -1,0 +1,356 @@
+{
+  "product_name": "OneMove",
+  "release_version": "1.5.1",
+  "app_version": "1.5.1",
+  "schema_version": "1.0.0",
+  "network_version": "1.1",
+  "graph_version": "1.1.0+bad320dd48da",
+  "osrm_bundle_hash": "7b4437178db62410bb85b6ef1e68fe2f07b7880ce281d146a1480f64ab86b383",
+  "solver_version": "ortools-cp-sat-9.11",
+  "assumption_version": "r1-proxy-1.0.0",
+  "artifacts": {
+    "bronze\\bronze_data.json": {
+      "path": "bronze\\bronze_data.json",
+      "size_bytes": 1305,
+      "sha256": "ee07dcea3158e82eb1091249fc101f395a61f4000b19d7fbf174dd0d0f7e1ae3"
+    },
+    "bronze\\open-meteo\\observed\\2025-08-08_2026-08-07.parquet": {
+      "path": "bronze\\open-meteo\\observed\\2025-08-08_2026-08-07.parquet",
+      "size_bytes": 112095,
+      "sha256": "b33bc1aa2efc9993a7869ef74077d8ab89f3706125f834f424a35843f51c9a48"
+    },
+    "bronze\\weather\\weather_observed_2025-08-08_2026-08-07.parquet": {
+      "path": "bronze\\weather\\weather_observed_2025-08-08_2026-08-07.parquet",
+      "size_bytes": 159160,
+      "sha256": "318a268d32c59d0145b80549831a977d6fb86bd8330944f3d03fdd426bc704ce"
+    },
+    "demo_exports\\customers_sample.csv": {
+      "path": "demo_exports\\customers_sample.csv",
+      "size_bytes": 108,
+      "sha256": "399b6d85accc6e29097c9f298164169aa0e4234bd72d1f8d6d0a0c52acf78e84"
+    },
+    "demo_exports\\merchants_sample.csv": {
+      "path": "demo_exports\\merchants_sample.csv",
+      "size_bytes": 54,
+      "sha256": "e6ca5d6d52dfac93753a41822d47a3e3e52b21c9f39add3937e06629c0868a55"
+    },
+    "demo_exports\\order_items_sample.csv": {
+      "path": "demo_exports\\order_items_sample.csv",
+      "size_bytes": 58,
+      "sha256": "c5eb82f9cfec33f1a6fd413f98e5b8f4d293795f4265018d0d01b285d4d1ea9c"
+    },
+    "demo_exports\\orders_sample.csv": {
+      "path": "demo_exports\\orders_sample.csv",
+      "size_bytes": 74,
+      "sha256": "0083a91102b39cc73296eb1d978344cc730c2b9d7b66f634d7a858548a1b1685"
+    },
+    "demo_exports\\partners_sample.csv": {
+      "path": "demo_exports\\partners_sample.csv",
+      "size_bytes": 48,
+      "sha256": "8e2b5f03d7f7e709f243ab02e0bc17dbb3a70553951c7f6a2fcd3d76d88747aa"
+    },
+    "demo_exports\\payments_sample.csv": {
+      "path": "demo_exports\\payments_sample.csv",
+      "size_bytes": 64,
+      "sha256": "7bdef124bae9e0bf25498274193f8414c6a8d4014a772c7f418e2ae7ae67eefc"
+    },
+    "demo_exports\\status_events_sample.csv": {
+      "path": "demo_exports\\status_events_sample.csv",
+      "size_bytes": 82,
+      "sha256": "10e1e4d2b146b88d1bce41ffe2372e917fe286328b68ab4c6553f61e5925466d"
+    },
+    "dq\\dq_report.json": {
+      "path": "dq\\dq_report.json",
+      "size_bytes": 170,
+      "sha256": "80ac6f3a397fc9d56ec224db5e8ec62b19da87691bb926d337db82e0abe688b8"
+    },
+    "geo\\andorra-latest.osm.pbf": {
+      "path": "geo\\andorra-latest.osm.pbf",
+      "size_bytes": 3436844,
+      "sha256": "f7da0ba356d7ec1a77700dc136ceb87323b7ee2e862f11505c34890f067f2bb7"
+    },
+    "geo\\andorra-latest.osrm": {
+      "path": "geo\\andorra-latest.osrm",
+      "size_bytes": 1905664,
+      "sha256": "2197ab65d4a1f49410cf204f57e73357b09a37314c58b6e1e25946228155bade"
+    },
+    "geo\\andorra-latest.osrm.cnbg": {
+      "path": "geo\\andorra-latest.osrm.cnbg",
+      "size_bytes": 92160,
+      "sha256": "783f27097f0b3de915a73bae69a3ec3aa6f602c73c14e4bd674e44e2e44f27ea"
+    },
+    "geo\\andorra-latest.osrm.cnbg_to_ebg": {
+      "path": "geo\\andorra-latest.osrm.cnbg_to_ebg",
+      "size_bytes": 92160,
+      "sha256": "7c5921fee559873eb56c221fe99f7290de8492d3895956e880b592d0b143d4b5"
+    },
+    "geo\\andorra-latest.osrm.ebg": {
+      "path": "geo\\andorra-latest.osrm.ebg",
+      "size_bytes": 351232,
+      "sha256": "c03cb0c586a4b5873292fde252f99df6f6af29bf7d25e233a82b4192573f51b2"
+    },
+    "geo\\andorra-latest.osrm.ebg_nodes": {
+      "path": "geo\\andorra-latest.osrm.ebg_nodes",
+      "size_bytes": 117760,
+      "sha256": "401516300aebce8ee64119445456a609a0d43a54cef6e343e061bf10130b48a3"
+    },
+    "geo\\andorra-latest.osrm.edges": {
+      "path": "geo\\andorra-latest.osrm.edges",
+      "size_bytes": 112128,
+      "sha256": "f087f0d22a8b375131dd49b818f25526df2055544318f52517cf6989e5edef77"
+    },
+    "geo\\andorra-latest.osrm.enw": {
+      "path": "geo\\andorra-latest.osrm.enw",
+      "size_bytes": 114176,
+      "sha256": "286895d0af0bb346bd6e2bcbfe7e2835a53052d51e739e41b1a90a3d5001b1d6"
+    },
+    "geo\\andorra-latest.osrm.fileIndex": {
+      "path": "geo\\andorra-latest.osrm.fileIndex",
+      "size_bytes": 781000,
+      "sha256": "489a905626571c917281e6c431e594429de27a7b40ee7ad178c558d882cab7b5"
+    },
+    "geo\\andorra-latest.osrm.geometry": {
+      "path": "geo\\andorra-latest.osrm.geometry",
+      "size_bytes": 801280,
+      "sha256": "546b8372eda1f91f32acc9a5f49669766034c1520b1d03e50abd6a73ce78d6f1"
+    },
+    "geo\\andorra-latest.osrm.icd": {
+      "path": "geo\\andorra-latest.osrm.icd",
+      "size_bytes": 172544,
+      "sha256": "9c4893d694b0742514724b30f17c41e1448f87fe3b6a839dba96d38a334dfc56"
+    },
+    "geo\\andorra-latest.osrm.maneuver_overrides": {
+      "path": "geo\\andorra-latest.osrm.maneuver_overrides",
+      "size_bytes": 5120,
+      "sha256": "7afd87cf6950cfc2dc733a14855c5eaaf0e7500660b05187465e4a0856bd08a5"
+    },
+    "geo\\andorra-latest.osrm.names": {
+      "path": "geo\\andorra-latest.osrm.names",
+      "size_bytes": 22016,
+      "sha256": "9ee1d359eddf50e25c197d6ced4c0027d8fd3130536335b3416040d8ca43a928"
+    },
+    "geo\\andorra-latest.osrm.nbg_nodes": {
+      "path": "geo\\andorra-latest.osrm.nbg_nodes",
+      "size_bytes": 473600,
+      "sha256": "305ed667be84975bf9ee19618f973cf7b7c07f2f56b7ff8ac46d24960bbdbd89"
+    },
+    "geo\\andorra-latest.osrm.properties": {
+      "path": "geo\\andorra-latest.osrm.properties",
+      "size_bytes": 6144,
+      "sha256": "566f9077e294e349054670d4bb2a133005373ee2ad7e90137791ffa33c364fef"
+    },
+    "geo\\andorra-latest.osrm.ramIndex": {
+      "path": "geo\\andorra-latest.osrm.ramIndex",
+      "size_bytes": 9216,
+      "sha256": "cc8e1f757ddf0c0cc90365d72cdd8865ddc52d04da1b97b6da7845f1e096f0c7"
+    },
+    "geo\\andorra-latest.osrm.restrictions": {
+      "path": "geo\\andorra-latest.osrm.restrictions",
+      "size_bytes": 4096,
+      "sha256": "e8e7bdc7c430fe52ba9b3fef790b2c33815aea0d8f10626f49d7d07d513eaf24"
+    },
+    "geo\\andorra-latest.osrm.timestamp": {
+      "path": "geo\\andorra-latest.osrm.timestamp",
+      "size_bytes": 3584,
+      "sha256": "c036bdddddbb99b28a075dcf16718523d9dc0f0b2a38bf0850f7887ec16135a9"
+    },
+    "geo\\andorra-latest.osrm.tld": {
+      "path": "geo\\andorra-latest.osrm.tld",
+      "size_bytes": 4096,
+      "sha256": "d6775b53f24ba676e358c8d51e25e1c5bb79a0bc8d1372b4fb0813948b0f8d63"
+    },
+    "geo\\andorra-latest.osrm.tls": {
+      "path": "geo\\andorra-latest.osrm.tls",
+      "size_bytes": 6144,
+      "sha256": "1c5b874e334ac2bc4e9c49e3bb3d22d73a02bf7e5fec79378b6c6cc4412fb5fb"
+    },
+    "geo\\andorra-latest.osrm.turn_duration_penalties": {
+      "path": "geo\\andorra-latest.osrm.turn_duration_penalties",
+      "size_bytes": 32256,
+      "sha256": "7dc584907b8c06647fc2c70ea90169705323ee54e6e60c5b872ae65742058723"
+    },
+    "geo\\andorra-latest.osrm.turn_penalties_index": {
+      "path": "geo\\andorra-latest.osrm.turn_penalties_index",
+      "size_bytes": 175616,
+      "sha256": "2e830a5e586e3c27a37611ee3c30c9b25300bc8ebc99e575ab39981f59a8fdd0"
+    },
+    "geo\\andorra-latest.osrm.turn_weight_penalties": {
+      "path": "geo\\andorra-latest.osrm.turn_weight_penalties",
+      "size_bytes": 32256,
+      "sha256": "93217a591d082b6dd5d2786649987f510918740998355bce9fcd14dec467e781"
+    },
+    "geo\\bengaluru_clip.osm": {
+      "path": "geo\\bengaluru_clip.osm",
+      "size_bytes": 370,
+      "sha256": "55446ed7e43d31f55faadce25178e7437ec7d3ba9fc2b354bf0e603e872045a4"
+    },
+    "geo\\bengaluru_clip.osm.pbf": {
+      "path": "geo\\bengaluru_clip.osm.pbf",
+      "size_bytes": 3436844,
+      "sha256": "f7da0ba356d7ec1a77700dc136ceb87323b7ee2e862f11505c34890f067f2bb7"
+    },
+    "geo\\bengaluru_clip.osrm": {
+      "path": "geo\\bengaluru_clip.osrm",
+      "size_bytes": 1905664,
+      "sha256": "637343ef70c3faa86ec157f4789d8339990f9a76c9d1639a1ab80741eff800e8"
+    },
+    "geo\\bengaluru_clip.osrm.cell_metrics": {
+      "path": "geo\\bengaluru_clip.osrm.cell_metrics",
+      "size_bytes": 175104,
+      "sha256": "23d289d4106cb7746ff27461affeba2057fca7fdbbe660f07b2df858a973adba"
+    },
+    "geo\\bengaluru_clip.osrm.cells": {
+      "path": "geo\\bengaluru_clip.osrm.cells",
+      "size_bytes": 13824,
+      "sha256": "c823088a00eef3820a2c7040c11b33ac0736446baea759ca4fbcb32ceb069c19"
+    },
+    "geo\\bengaluru_clip.osrm.cnbg": {
+      "path": "geo\\bengaluru_clip.osrm.cnbg",
+      "size_bytes": 92160,
+      "sha256": "783f27097f0b3de915a73bae69a3ec3aa6f602c73c14e4bd674e44e2e44f27ea"
+    },
+    "geo\\bengaluru_clip.osrm.cnbg_to_ebg": {
+      "path": "geo\\bengaluru_clip.osrm.cnbg_to_ebg",
+      "size_bytes": 92160,
+      "sha256": "f393f92f3f76e188057e5a89dd086689bf5b361d4c6a239c985606bed6918808"
+    },
+    "geo\\bengaluru_clip.osrm.datasource_names": {
+      "path": "geo\\bengaluru_clip.osrm.datasource_names",
+      "size_bytes": 69632,
+      "sha256": "59b6a7c28d21bc1fb1c2089926371dd6fb2951148043b54c6cc9d4bfccc9434d"
+    },
+    "geo\\bengaluru_clip.osrm.ebg": {
+      "path": "geo\\bengaluru_clip.osrm.ebg",
+      "size_bytes": 351232,
+      "sha256": "fdc9cdd3a98e2a829579853740fbf4ca645dca3c01989c98fe78b3779ba24d53"
+    },
+    "geo\\bengaluru_clip.osrm.ebg_nodes": {
+      "path": "geo\\bengaluru_clip.osrm.ebg_nodes",
+      "size_bytes": 117760,
+      "sha256": "c8f5b990de040ca217605dcd47768626786a6b64b1e2147c0bb731e26d61379f"
+    },
+    "geo\\bengaluru_clip.osrm.edges": {
+      "path": "geo\\bengaluru_clip.osrm.edges",
+      "size_bytes": 112128,
+      "sha256": "62ee787d4949a0500cf672241a45ba0f61c31e252eccc766fb2236a755c16c03"
+    },
+    "geo\\bengaluru_clip.osrm.enw": {
+      "path": "geo\\bengaluru_clip.osrm.enw",
+      "size_bytes": 114176,
+      "sha256": "4bfe50d6555d8f5b62abb9d65aafe3dbf0d80d90c6a407a46d3641922e361417"
+    },
+    "geo\\bengaluru_clip.osrm.fileIndex": {
+      "path": "geo\\bengaluru_clip.osrm.fileIndex",
+      "size_bytes": 781000,
+      "sha256": "1a0d94c7e66e002a7b1e4deef0dd17cfe7c8dc3cfd4995cec840e377bd5b6dec"
+    },
+    "geo\\bengaluru_clip.osrm.geometry": {
+      "path": "geo\\bengaluru_clip.osrm.geometry",
+      "size_bytes": 801280,
+      "sha256": "546b8372eda1f91f32acc9a5f49669766034c1520b1d03e50abd6a73ce78d6f1"
+    },
+    "geo\\bengaluru_clip.osrm.icd": {
+      "path": "geo\\bengaluru_clip.osrm.icd",
+      "size_bytes": 172544,
+      "sha256": "7b00fb00242dce149d9b588d285b2e6f9490f92e51eabc4cdee6ca8cb82cf378"
+    },
+    "geo\\bengaluru_clip.osrm.maneuver_overrides": {
+      "path": "geo\\bengaluru_clip.osrm.maneuver_overrides",
+      "size_bytes": 5120,
+      "sha256": "7afd87cf6950cfc2dc733a14855c5eaaf0e7500660b05187465e4a0856bd08a5"
+    },
+    "geo\\bengaluru_clip.osrm.mldgr": {
+      "path": "geo\\bengaluru_clip.osrm.mldgr",
+      "size_bytes": 398848,
+      "sha256": "3c7e59dd89682e96b22991d6b7e14cd16dac201875ec340cb62b92d5227e63fc"
+    },
+    "geo\\bengaluru_clip.osrm.names": {
+      "path": "geo\\bengaluru_clip.osrm.names",
+      "size_bytes": 22016,
+      "sha256": "9ee1d359eddf50e25c197d6ced4c0027d8fd3130536335b3416040d8ca43a928"
+    },
+    "geo\\bengaluru_clip.osrm.nbg_nodes": {
+      "path": "geo\\bengaluru_clip.osrm.nbg_nodes",
+      "size_bytes": 473600,
+      "sha256": "305ed667be84975bf9ee19618f973cf7b7c07f2f56b7ff8ac46d24960bbdbd89"
+    },
+    "geo\\bengaluru_clip.osrm.partition": {
+      "path": "geo\\bengaluru_clip.osrm.partition",
+      "size_bytes": 78848,
+      "sha256": "b419dadd28dd408f9793c29179df7b86337ab523150909709a3d1ce1e864423e"
+    },
+    "geo\\bengaluru_clip.osrm.properties": {
+      "path": "geo\\bengaluru_clip.osrm.properties",
+      "size_bytes": 6144,
+      "sha256": "e0c2145f2419c9d973c48b04c3b531e2b297c4447041678e5814fbaa291f5e50"
+    },
+    "geo\\bengaluru_clip.osrm.ramIndex": {
+      "path": "geo\\bengaluru_clip.osrm.ramIndex",
+      "size_bytes": 9216,
+      "sha256": "cc8e1f757ddf0c0cc90365d72cdd8865ddc52d04da1b97b6da7845f1e096f0c7"
+    },
+    "geo\\bengaluru_clip.osrm.restrictions": {
+      "path": "geo\\bengaluru_clip.osrm.restrictions",
+      "size_bytes": 4096,
+      "sha256": "e8e7bdc7c430fe52ba9b3fef790b2c33815aea0d8f10626f49d7d07d513eaf24"
+    },
+    "geo\\bengaluru_clip.osrm.timestamp": {
+      "path": "geo\\bengaluru_clip.osrm.timestamp",
+      "size_bytes": 3584,
+      "sha256": "c036bdddddbb99b28a075dcf16718523d9dc0f0b2a38bf0850f7887ec16135a9"
+    },
+    "geo\\bengaluru_clip.osrm.tld": {
+      "path": "geo\\bengaluru_clip.osrm.tld",
+      "size_bytes": 4096,
+      "sha256": "a70db3ea933758e468ce37316fee6dcbf650b4bf24ef9bc97640915109ef3a6b"
+    },
+    "geo\\bengaluru_clip.osrm.tls": {
+      "path": "geo\\bengaluru_clip.osrm.tls",
+      "size_bytes": 6144,
+      "sha256": "1c5b874e334ac2bc4e9c49e3bb3d22d73a02bf7e5fec79378b6c6cc4412fb5fb"
+    },
+    "geo\\bengaluru_clip.osrm.turn_duration_penalties": {
+      "path": "geo\\bengaluru_clip.osrm.turn_duration_penalties",
+      "size_bytes": 32256,
+      "sha256": "7dc584907b8c06647fc2c70ea90169705323ee54e6e60c5b872ae65742058723"
+    },
+    "geo\\bengaluru_clip.osrm.turn_penalties_index": {
+      "path": "geo\\bengaluru_clip.osrm.turn_penalties_index",
+      "size_bytes": 175616,
+      "sha256": "2e830a5e586e3c27a37611ee3c30c9b25300bc8ebc99e575ab39981f59a8fdd0"
+    },
+    "geo\\bengaluru_clip.osrm.turn_weight_penalties": {
+      "path": "geo\\bengaluru_clip.osrm.turn_weight_penalties",
+      "size_bytes": 32256,
+      "sha256": "93217a591d082b6dd5d2786649987f510918740998355bce9fcd14dec467e781"
+    },
+    "private\\raw\\snapshot_20260807182451.json": {
+      "path": "private\\raw\\snapshot_20260807182451.json",
+      "size_bytes": 1458,
+      "sha256": "35e17e4fd92f711608b1754f37861ad565b1eacd4c3acd15de3cbb6dd1e9999c"
+    },
+    "README.md": {
+      "path": "README.md",
+      "size_bytes": 242,
+      "sha256": "fc2480ae945eb04c83271c26c5347b373ee9af8683551891db5573a4a02cbf64"
+    },
+    "rolling\\dataset_registry.json": {
+      "path": "rolling\\dataset_registry.json",
+      "size_bytes": 1013,
+      "sha256": "f8c617e2c35c4770b49f0e1ee107bbca5c6457ce60dd1b0060a566246a335f5d"
+    },
+    "silver\\silver_data.json": {
+      "path": "silver\\silver_data.json",
+      "size_bytes": 1589,
+      "sha256": "1a3cd9fc71176baf6f33aba84039a5b2ecf93c1819ba288a5e9f783439edfa66"
+    }
+  },
+  "images": {
+    "api": "asia-south1-docker.pkg.dev/zonepilot-stg-9a4285/zonepilot-artifacts-staging/zonepilot-api:1.5.1",
+    "worker": "asia-south1-docker.pkg.dev/zonepilot-stg-9a4285/zonepilot-artifacts-staging/zonepilot-worker:1.5.1"
+  },
+  "tenancy": {
+    "primary_pilot_workspace": "00000000-0000-0000-0000-000000000001",
+    "secondary_tenant_workspace": "00000000-0000-0000-0000-000000000003"
+  }
+}

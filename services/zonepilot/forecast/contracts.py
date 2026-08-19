@@ -32,11 +32,11 @@ class PredictionRecord(BaseModel):
     target_time: datetime
     horizon_hours: int
     target: ForecastTarget
-    predicted_value: float
+    predicted_value: float | None = None
     lower_bound: float | None = None
     upper_bound: float | None = None
     baseline_model: BaselineModelType
-    model_version: str = "zonepilot-forecast-baseline-1.0.0"
+    model_version: str = "onemove-forecast-baseline-1.0.0"
     feature_snapshot_hash: str
     dataset_version: str = "1.0.0"
     graph_version: str = "1.1"

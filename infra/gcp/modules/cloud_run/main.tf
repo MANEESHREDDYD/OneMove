@@ -178,6 +178,15 @@ resource "google_cloud_run_v2_service" "worker" {
   }
 }
 
+# Grant Pub/Sub OIDC Service Account Invoker permissions on Worker
+resource "google_cloud_run_v2_service_iam_member" "worker_invoker" {
+  location = google_cloud_run_v2_service.worker.location
+  project  = var.project_id
+  name     = google_cloud_run_v2_service.worker.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${var.worker_sa_email}"
+}
+
 output "api_url" {
   value = google_cloud_run_v2_service.api.uri
 }

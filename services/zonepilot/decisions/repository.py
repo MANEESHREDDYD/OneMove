@@ -244,3 +244,55 @@ class DecisionRepository:
                 )
             conn.commit()
             return shadow
+
+    def get_shadow(self, shadow_id: str, workspace_id: str | None = None) -> ShadowEvaluation | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                query = "SELECT * FROM public.shadow_evaluations WHERE shadow_id = %s"
+                params: list[Any] = [shadow_id]
+                if workspace_id:
+                    query += " AND workspace_id = %s"
+                    params.append(workspace_id)
+                cur.execute(query, params)
+                row = cur.fetchone()
+                if not row:
+                    return None
+                from services.temporal.contracts import OutcomeStatus
+                from services.zonepilot.decisions.contracts import ShadowState
+
+                return ShadowEvaluation(
+                    shadow_id=row["shadow_id"],
+                    decision_id=row["decision_id"],
+                    frozen_decision_time=row["frozen_decision_time"],
+                    future_observation_time=row["future_observation_time"],
+                    shadow_state=ShadowState(row["shadow_state"]),
+                    predicted_p95_seconds=row["predicted_p95_seconds"],
+                    actual_observed_p95_seconds=row.get("actual_observed_p95_seconds"),
+                    regret_seconds=row.get("regret_seconds"),
+                    outcome_status=OutcomeStatus(row.get("outcome_status", "PENDING")),
+                    evaluated_at=row.get("evaluated_at"),
+                )
+
+    def evaluate_shadow(
+        self,
+        shadow_id: str,
+        workspace_id: str,
+        actual_observed_p95_seconds: int,
+        regret_seconds: int,
+        evaluated_at: datetime,
+    ) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.shadow_evaluations
+                    SET actual_observed_p95_seconds = %s,
+                        regret_seconds = %s,
+                        shadow_state = 'EVALUATED',
+                        outcome_status = 'EVALUATED',
+                        evaluated_at = %s
+                    WHERE shadow_id = %s AND workspace_id = %s
+                    """,
+                    (actual_observed_p95_seconds, regret_seconds, evaluated_at, shadow_id, workspace_id),
+                )
+            conn.commit()

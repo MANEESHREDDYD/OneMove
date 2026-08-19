@@ -105,7 +105,10 @@ def test_concurrent_lease_contention_single_winner(client, monkeypatch):
         return None  # Second worker fails to claim lease
 
     monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.claim_job_lease", mock_claim)
-    monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.get_job", lambda jid: {"id": jid, "request_payload": {}})
+    monkeypatch.setattr(
+        "services.zonepilot.optimization.pubsub_worker._repository.get_job",
+        lambda jid: {"id": jid, "request_payload": {}},
+    )
     monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.save_result", lambda **kwargs: None)
 
     res1 = client.post("/push", json=push_msg1)
@@ -145,10 +148,15 @@ def test_solver_exception_fail_closed_persistence(client, monkeypatch):
         nonlocal saved_result
         saved_result = kwargs
 
-    monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.claim_job_lease", lambda **kwargs: mock_job)
+    monkeypatch.setattr(
+        "services.zonepilot.optimization.pubsub_worker._repository.claim_job_lease", lambda **kwargs: mock_job
+    )
     monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.get_job", lambda j: mock_job)
     monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.save_result", mock_save)
-    monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker.optimize_facilities", MagicMock(side_effect=RuntimeError("Solver OOM simulation")))
+    monkeypatch.setattr(
+        "services.zonepilot.optimization.pubsub_worker.optimize_facilities",
+        MagicMock(side_effect=RuntimeError("Solver OOM simulation")),
+    )
 
     res = client.post("/push", json=push_body)
     assert res.status_code == 200

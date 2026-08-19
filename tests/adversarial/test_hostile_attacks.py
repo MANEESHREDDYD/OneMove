@@ -172,4 +172,3 @@ def test_assistant_prompt_injection_rejection(client):
         content = resp.json().get("response", "")
         assert "password" not in content.lower()
         assert "rm -rf" not in content.lower()
-

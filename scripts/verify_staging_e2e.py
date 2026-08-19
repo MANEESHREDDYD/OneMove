@@ -25,7 +25,15 @@ if not JWT_SECRET:
         import subprocess
 
         res = subprocess.run(
-            ["gcloud", "secrets", "versions", "access", "latest", "--secret=zonepilot-jwt-secret-staging", "--project=zonepilot-stg-9a4285"],
+            [
+                "gcloud",
+                "secrets",
+                "versions",
+                "access",
+                "latest",
+                "--secret=zonepilot-jwt-secret-staging",
+                "--project=zonepilot-stg-9a4285",
+            ],
             capture_output=True,
             check=True,
             shell=True,
@@ -36,7 +44,7 @@ if not JWT_SECRET:
 
 STAGING_API_URL = os.environ.get(
     "ZONEPILOT_STAGING_API_URL",
-    "https://zonepilot-api-staging-935663019643.asia-south1.run.app",
+    "https://zonepilot-api-staging-xwvz4vi7ta-el.a.run.app",
 )
 
 
@@ -44,8 +52,9 @@ def create_test_token(role: str = "authenticated") -> str:
     if not JWT_SECRET:
         raise ValueError("SUPABASE_JWT_SECRET is required to authenticate against live deployment")
     payload = {
-        "sub": "usr_operator_stg_001",
+        "sub": "00000000-0000-0000-0000-000000000002",
         "email": "operator@onemove.internal",
+        "workspace_id": "00000000-0000-0000-0000-000000000001",
         "role": role,
         "aud": "authenticated",
         "iat": int(datetime.now(timezone.utc).timestamp()),
