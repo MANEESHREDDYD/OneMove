@@ -191,9 +191,9 @@ def get_data_health(
 
 class OptimizationRequest(BaseModel):
     idempotency_key: str | None = None
-    min_open_facilities: int = 1
-    max_open_facilities: int = 4
-    max_travel_seconds: int = 1800
+    min_open_facilities: int = Field(default=1, ge=1)
+    max_open_facilities: int = Field(default=4, ge=1)
+    max_travel_seconds: int = Field(default=1800, ge=1)
     allow_uncovered_demand: bool = True
     scenarios: list[str] = ["s1_free_flow", "s2_congested", "s3_congested_outage"]
 

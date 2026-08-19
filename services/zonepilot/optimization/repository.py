@@ -136,6 +136,37 @@ class OptimizationRepository:
                 )
                 return cur.fetchall()
 
+    def claim_job_lease(self, job_id: str, lease_owner: str, lease_seconds: int = 120) -> dict[str, Any] | None:
+        """Atomically claim execution lease on a QUEUED or expired RUNNING job."""
+        if not _is_valid_uuid(job_id):
+            return None
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.optimization_jobs
+                    SET status = 'RUNNING',
+                        started_at = COALESCE(started_at, now()),
+                        lease_owner = %s,
+                        lease_expires_at = now() + (%s || ' seconds')::interval,
+                        attempt_count = attempt_count + 1,
+                        updated_at = now()
+                    WHERE id = %s::uuid
+                      AND (
+                        status = 'QUEUED'
+                        OR (status = 'RUNNING' AND (lease_expires_at IS NULL OR lease_expires_at < now()))
+                      )
+                    RETURNING id, requested_by, workspace_id, idempotency_key, request_fingerprint,
+                              request_payload, graph_version, dataset_version, matrix_id,
+                              assumption_version, solver_version, code_sha, status, solver_status,
+                              attempt_count, lease_owner, lease_expires_at
+                    """,
+                    (lease_owner, str(lease_seconds), job_id),
+                )
+                row = cur.fetchone()
+            conn.commit()
+            return row
+
     def update_job_running(self, job_id: str, lease_owner: str, lease_seconds: int = 120) -> None:
         with self._connect() as conn:
             with conn.cursor() as cur:

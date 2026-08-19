@@ -6,14 +6,12 @@ database fail-closed behaviors, and assistant safety.
 
 from __future__ import annotations
 
-import json
 import pytest
 from fastapi.testclient import TestClient
 
 from services.api.main import app
 from services.zonepilot.optimization.contracts import (
     DemandPoint,
-    Facility,
     MatrixEvidenceClass,
     ObjectiveWeights,
     OptimizationConstraints,
@@ -21,7 +19,6 @@ from services.zonepilot.optimization.contracts import (
     TravelMatrix,
     UncertaintyScenario,
 )
-from services.zonepilot.optimization.solver import optimize_facilities
 
 
 @pytest.fixture

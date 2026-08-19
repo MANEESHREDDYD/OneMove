@@ -81,17 +81,20 @@ def create_default_registry() -> AssistantToolRegistry:
     registry = AssistantToolRegistry()
 
     # Register deterministic tool handlers
-    registry.register(
-        ToolName.GET_ZONE_STATE,
-        lambda args, ws: {
-            "zone_id": args.get("zone_id", "8860145b59fffff"),
+    def _handle_get_zone_state(args: dict[str, Any], ws: str) -> dict[str, Any]:
+        zone_id = str(args.get("zone_id", "8860145b59fffff"))
+        if len(zone_id) != 15 or not all(c in "0123456789abcdefABCDEF" for c in zone_id):
+            raise ValueError(f"Invalid H3 index: {zone_id}")
+        return {
+            "zone_id": zone_id,
             "name": "Bengaluru Central Pilot Zone",
             "road_length_m": 4250.0,
             "intersection_count": 28,
             "poi_count": 14,
-            "evidence_ids": ["ev-osm-blr-8860145b59fffff"],
-        },
-    )
+            "evidence_ids": [f"ev-osm-blr-{zone_id}"],
+        }
+
+    registry.register(ToolName.GET_ZONE_STATE, _handle_get_zone_state)
 
     registry.register(
         ToolName.GET_NETWORK_SNAPSHOT,

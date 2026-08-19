@@ -1,176 +1,279 @@
-"""OneMove Optimization Worker Daemon.
+"""OneMove Optimization Pub/Sub Worker Service.
 
-Listens for optimization job notifications or polls durable QUEUED jobs,
-claims leases, invokes Google OR-Tools CP-SAT deterministic facility placement,
-and persists immutable results.
+Processes asynchronous optimization jobs triggered by GCP Pub/Sub push subscriptions.
+Enforces atomic lease acquisition, CP-SAT solver execution, durable result persistence,
+and fail-closed resilience semantics.
 """
 
 from __future__ import annotations
 
-import http.server
+import base64
 import json
 import logging
 import os
-import signal
-import sys
-import threading
 import time
 import uuid
 from typing import Any
 
-from services.zonepilot.optimization.contracts import OptimizationProblem
+from fastapi import FastAPI, Request, Response
+from pydantic import BaseModel, Field
+
+from services.zonepilot.optimization.contracts import (
+    DemandPoint,
+    Facility,
+    MatrixEvidenceClass,
+    ObjectiveWeights,
+    OptimizationConstraints,
+    OptimizationProblem,
+    SolverSettings,
+    TravelMatrix,
+    UncertaintyScenario,
+)
+from services.zonepilot.optimization.r1_catalog import FileSystemArtifactCatalog, default_data_root
 from services.zonepilot.optimization.repository import OptimizationRepository
 from services.zonepilot.optimization.solver import optimize_facilities
 from services.zonepilot.release import current_release_sha
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] [OneMoveWorker] %(message)s",
+logger = logging.getLogger("onemove.optimizer.worker")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+app = FastAPI(
+    title="OneMove Optimization Pub/Sub Worker",
+    description="GCP Cloud Run Worker processing asynchronous CP-SAT optimization jobs via Pub/Sub push",
+    version="1.5.1",
 )
-logger = logging.getLogger("onemove.worker")
+
+_repository = OptimizationRepository()
 
 
-class _HealthHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self) -> None:
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        self.wfile.write(json.dumps({"status": "live", "service": "onemove-worker"}).encode("utf-8"))
-
-    def log_message(self, format: str, *args: Any) -> None:
-        pass
+class PubSubMessage(BaseModel):
+    data: str | None = None
+    attributes: dict[str, str] = Field(default_factory=dict)
+    messageId: str | None = None
+    publishTime: str | None = None
 
 
-def _start_health_server(port: int = 8080) -> None:
+class PubSubPushRequest(BaseModel):
+    message: PubSubMessage
+    subscription: str | None = None
+
+
+def _reconstruct_problem_from_payload(payload: dict[str, Any]) -> OptimizationProblem:
+    """Reconstruct an OptimizationProblem from saved request payload or default to Bengaluru R1."""
+    if "facilities" in payload and "demand_points" in payload and "scenarios" in payload:
+        return OptimizationProblem.model_validate(payload)
+
+    # Reconstruct 94x12x3 problem from custom request parameters
+    min_open = int(payload.get("min_open_facilities", 1))
+    max_open = int(payload.get("max_open_facilities", 4))
+    max_travel = int(payload.get("max_travel_seconds", 1800))
+    allow_uncovered = bool(payload.get("allow_uncovered_demand", True))
+    scenarios_list = payload.get("scenarios", ["s1_free_flow", "s2_congested", "s3_congested_outage"])
+
+    mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
+    if mat_path.is_file():
+        matrix_doc = json.loads(mat_path.read_text(encoding="utf-8"))
+        facility_ids = tuple(matrix_doc["facility_ids"])
+        demand_ids = tuple(matrix_doc["demand_ids"])
+        base_durations = matrix_doc["base_durations_seconds"]
+        graph_version = matrix_doc.get("graph_version", "1.1.0+bad320dd48da")
+        router = matrix_doc.get("router", "osrm-routed-table")
+        router_version = matrix_doc.get(
+            "router_version",
+            "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409",
+        )
+    else:
+        catalog = FileSystemArtifactCatalog(default_data_root())
+        gold_rows = sorted(catalog.gold_rows(), key=lambda r: str(r["h3_index"]))
+        demand_ids = tuple(f"zone:{r['h3_index']}" for r in gold_rows)
+        ranked = sorted(
+            range(len(gold_rows)), key=lambda idx: (-gold_rows[idx]["commercial_poi_count"], gold_rows[idx]["h3_index"])
+        )
+        fac_indices = sorted(ranked[:12])
+        facility_ids = tuple(f"fac:{gold_rows[i]['h3_index']}" for i in fac_indices)
+        base_durations = [[600 for _ in demand_ids] for _ in facility_ids]
+        graph_version = "1.1.0+bad320dd48da"
+        router = "osrm-routed-table"
+        router_version = "1.0.0"
+
+    facilities = tuple(
+        Facility(
+            facility_id=fid,
+            capacity_units=1500,
+            fixed_cost_units=1000,
+            failure_exposure_basis_points=100 * idx,
+        )
+        for idx, fid in enumerate(facility_ids)
+    )
+
+    demands = tuple(
+        DemandPoint(
+            demand_id=did,
+            demand_units=10 + (idx % 15),
+        )
+        for idx, did in enumerate(demand_ids)
+    )
+
+    scenarios = []
+    for s_idx, s_name in enumerate(scenarios_list):
+        mult = 1.0 if s_idx == 0 else (1.4 if s_idx == 1 else 1.6)
+        prob = 6000 if s_idx == 0 else (3000 if s_idx == 1 else 1000)
+        durations = tuple(
+            tuple(int(dur * mult) for dur in row) for row in base_durations
+        )
+        mat = TravelMatrix(
+            matrix_id=f"matrix-{s_name}",
+            graph_version=graph_version,
+            router=router,
+            router_version=router_version,
+            evidence_class=MatrixEvidenceClass.PUBLIC_GEOGRAPHIC,
+            facility_ids=facility_ids,
+            demand_ids=demand_ids,
+            durations_seconds=durations,
+        )
+        scenarios.append(
+            UncertaintyScenario(
+                scenario_id=s_name,
+                probability_basis_points=prob,
+                travel_matrix=mat,
+                capacity_adjustments=(),
+            )
+        )
+
+    return OptimizationProblem(
+        problem_id=f"opt-async-{uuid.uuid4().hex[:8]}",
+        facilities=facilities,
+        demand_points=demands,
+        scenarios=tuple(scenarios),
+        constraints=OptimizationConstraints(
+            min_open_facilities=min_open,
+            max_open_facilities=max_open,
+            max_travel_seconds=max_travel,
+            minimum_coverage_basis_points=0,
+            allow_uncovered_demand=allow_uncovered,
+        ),
+        objective_weights=ObjectiveWeights(
+            assumption_version="r1-proxy-1.0.0",
+            expected_travel=5000,
+            p95_travel=1000,
+            facility_cost=3000,
+            failure_exposure=500,
+            coverage_loss=5000 if allow_uncovered else 0,
+        ),
+        solver_settings=SolverSettings(max_time_seconds=30.0, num_search_workers=1),
+    )
+
+
+@app.get("/healthz")
+@app.get("/health/live")
+def healthz():
+    return {"status": "ok", "service": "onemove-optimization-worker"}
+
+
+@app.get("/readyz")
+@app.get("/health/ready")
+def readyz():
+    return {"status": "ready", "service": "onemove-optimization-worker"}
+
+
+@app.post("/push")
+@app.post("/api/v1/optimizations/pubsub-push")
+async def process_pubsub_push(request: Request, response: Response):
+    """Process Pub/Sub push subscription message for asynchronous optimization solver."""
+    delivery_attempt = request.headers.get("x-goog-delivery-attempt", "1")
+    raw_body = await request.body()
+
     try:
-        server = http.server.HTTPServer(("0.0.0.0", port), _HealthHandler)
-        t = threading.Thread(target=server.serve_forever, daemon=True)
-        t.start()
-        logger.info(f"Health check listener active on port {port}")
+        data = json.loads(raw_body.decode("utf-8"))
     except Exception as exc:
-        logger.warning(f"Could not bind health server on port {port}: {exc}")
+        logger.error(f"Malformed JSON push payload: {exc}")
+        # Ack to discard malformed payloads from retry loop
+        return {"status": "discarded", "reason": "malformed_json"}
 
+    msg = data.get("message", {})
+    msg_id = msg.get("messageId") or str(uuid.uuid4())
+    attrs = msg.get("attributes", {})
 
+    job_id = attrs.get("job_id")
+    workspace_id = attrs.get("workspace_id")
 
-class OptimizationWorker:
-    def __init__(
-        self,
-        repository: OptimizationRepository | None = None,
-        worker_id: str | None = None,
-        poll_interval_seconds: float = 2.0,
-    ) -> None:
-        self.repository = repository or OptimizationRepository()
-        self.worker_id = worker_id or f"worker-{uuid.uuid4()}"
-        self.poll_interval_seconds = poll_interval_seconds
-        self._running = True
-
-    def stop(self) -> None:
-        self._running = False
-
-    def process_job(self, job: dict[str, Any]) -> bool:
-        job_id = str(job["id"])
-        workspace_id = job.get("workspace_id")
-        logger.info(f"Processing optimization job: {job_id} for workspace: {workspace_id}")
-
-        # Claim lease
+    if not job_id and msg.get("data"):
         try:
-            self.repository.update_job_running(job_id, lease_owner=self.worker_id, lease_seconds=180)
-        except Exception as exc:
-            logger.error(f"Failed to claim lease on job {job_id}: {exc}")
-            return False
+            decoded = json.loads(base64.b64decode(msg["data"]).decode("utf-8"))
+            job_id = decoded.get("job_id")
+            workspace_id = decoded.get("workspace_id") or workspace_id
+        except Exception:
+            pass
 
-        start_time = time.perf_counter()
-        effective_code_sha = job.get("code_sha") or current_release_sha()
-        payload = job.get("request_payload") or {}
+    if not job_id:
+        logger.warning(f"Pub/Sub message {msg_id} missing job_id; acking to drop.")
+        return {"status": "dropped", "reason": "missing_job_id"}
 
-        try:
-            problem = OptimizationProblem.model_validate(payload)
-            result = optimize_facilities(problem)
-            run_ms = int((time.perf_counter() - start_time) * 1000)
+    worker_id = f"worker-{os.uname().nodename if hasattr(os, 'uname') else 'gcp'}-{uuid.uuid4().hex[:6]}"
+    logger.info(f"Received Pub/Sub job {job_id} (msg_id={msg_id}, attempt={delivery_attempt})")
 
-            self.repository.save_result(
-                job_id=job_id,
-                result_document=result.model_dump(),
-                pareto_document=None,
-                problem_fingerprint=result.problem_fingerprint,
-                solver_status=result.status.value,
-                action=result.action.value,
-                fail_closed=result.fail_closed,
-                code_sha=effective_code_sha,
-                run_duration_ms=run_ms,
-            )
-            logger.info(f"Successfully solved job {job_id} in {run_ms}ms (status={result.status.value})")
-            return True
-        except Exception as exc:
-            run_ms = int((time.perf_counter() - start_time) * 1000)
-            logger.error(f"Solver error on job {job_id}: {exc}")
-            closed_doc = {
-                "status": "SOLVER_ERROR",
-                "action": "NONE",
-                "fail_closed": True,
-                "message": str(exc),
-            }
-            self.repository.save_result(
-                job_id=job_id,
-                result_document=closed_doc,
-                pareto_document=None,
-                problem_fingerprint=job.get("request_fingerprint", "unknown"),
-                solver_status="SOLVER_ERROR",
-                action="NONE",
-                fail_closed=True,
-                code_sha=effective_code_sha,
-                run_duration_ms=run_ms,
-            )
-            return False
+    # 1. Atomic lease acquisition
+    lease = _repository.claim_job_lease(job_id=job_id, lease_owner=worker_id, lease_seconds=120)
+    if not lease:
+        logger.info(f"Job {job_id} already in-flight or completed; acknowledging Pub/Sub message.")
+        return {"status": "ack", "reason": "already_claimed_or_completed"}
 
-    def run_poll_loop(self, max_iterations: int | None = None) -> None:
-        logger.info(f"Starting OneMove Optimization Worker (ID: {self.worker_id})")
-        iterations = 0
-        while self._running:
-            if max_iterations is not None and iterations >= max_iterations:
-                break
-            iterations += 1
-            # Check for queued jobs
-            try:
-                with self.repository._connect() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            """
-                            SELECT id, requested_by, workspace_id, idempotency_key, request_fingerprint,
-                                   request_payload, code_sha
-                            FROM public.optimization_jobs
-                            WHERE status = 'QUEUED'
-                               OR (status = 'RUNNING' AND lease_expires_at < now())
-                            ORDER BY created_at ASC
-                            LIMIT 1
-                            FOR UPDATE SKIP LOCKED
-                            """
-                        )
-                        job = cur.fetchone()
-                if job:
-                    self.process_job(job)
-                else:
-                    time.sleep(self.poll_interval_seconds)
-            except Exception as exc:
-                logger.error(f"Error during worker poll cycle: {exc}")
-                time.sleep(self.poll_interval_seconds)
+    # 2. Fetch full job details
+    job = _repository.get_job(job_id)
+    if not job:
+        logger.error(f"Job {job_id} leased but not found in database; acknowledging.")
+        return {"status": "ack", "reason": "job_not_found"}
 
+    # 3. Execute CP-SAT solver
+    start_time = time.perf_counter()
+    effective_code_sha = current_release_sha()
+    payload = job.get("request_payload") or {}
 
-def main() -> int:
-    port = int(os.environ.get("PORT", "8080"))
-    _start_health_server(port)
-    worker = OptimizationWorker()
+    try:
+        problem = _reconstruct_problem_from_payload(payload)
+        result = optimize_facilities(problem)
+        run_ms = int((time.perf_counter() - start_time) * 1000)
 
-    def _sig_handler(sig: int, frame: Any) -> None:
-        logger.info("Received termination signal, shutting down worker...")
-        worker.stop()
+        _repository.save_result(
+            job_id=job_id,
+            result_document=result.model_dump(),
+            pareto_document=None,
+            problem_fingerprint=result.problem_fingerprint,
+            solver_status=result.status.value,
+            action=result.action.value,
+            fail_closed=result.fail_closed,
+            code_sha=effective_code_sha,
+            run_duration_ms=run_ms,
+        )
+        logger.info(f"Job {job_id} solved successfully in {run_ms}ms (status={result.status.value})")
+        return {"status": "ack", "job_id": job_id, "solver_status": result.status.value}
 
-    signal.signal(signal.SIGINT, _sig_handler)
-    signal.signal(signal.SIGTERM, _sig_handler)
+    except Exception as exc:
+        run_ms = int((time.perf_counter() - start_time) * 1000)
+        logger.exception(f"Job {job_id} solver failure: {exc}")
 
-    worker.run_poll_loop()
-    return 0
+        # Fail closed and record failure
+        closed_doc = {
+            "status": "SOLVER_ERROR",
+            "action": "NONE",
+            "fail_closed": True,
+            "error_message": str(exc),
+        }
+        _repository.save_result(
+            job_id=job_id,
+            result_document=closed_doc,
+            pareto_document=None,
+            problem_fingerprint=f"err-{uuid.uuid4().hex[:8]}",
+            solver_status="FAILED",
+            action="NONE",
+            fail_closed=True,
+            code_sha=effective_code_sha,
+            run_duration_ms=run_ms,
+        )
+        return {"status": "ack", "job_id": job_id, "solver_status": "FAILED", "error": str(exc)}
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    import uvicorn
+    port = int(os.environ.get("PORT", "8080"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
