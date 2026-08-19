@@ -42,7 +42,14 @@ resource "google_service_account" "acquisition" {
   display_name = "ZonePilot Acquisition Collector (${var.environment})"
 }
 
-# 5. GitHub Deployer Service Account (Workload Identity Federation)
+# 5. Dedicated Pub/Sub Push Invoker Service Account
+resource "google_service_account" "pubsub_push" {
+  project      = var.project_id
+  account_id   = "onemove-pubsub-push-${var.environment}"
+  display_name = "OneMove Pub/Sub Push Invoker (${var.environment})"
+}
+
+# 6. GitHub Deployer Service Account (Workload Identity Federation)
 resource "google_service_account" "github_deployer" {
   project      = var.project_id
   account_id   = "zonepilot-deployer-${var.environment}"
@@ -138,6 +145,10 @@ output "osrm_sa_email" {
 
 output "acquisition_sa_email" {
   value = google_service_account.acquisition.email
+}
+
+output "pubsub_push_sa_email" {
+  value = google_service_account.pubsub_push.email
 }
 
 output "deployer_sa_email" {

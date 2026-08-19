@@ -605,9 +605,6 @@ def get_decision(decision_id: str, _user: dict = Depends(get_current_user)):
 
 
 class ReplayRequest(BaseModel):
-    recomputed_action: str | None = None
-    recomputed_facilities: list[str] | None = None
-    recomputed_objective: int | None = None
     feature_cutoff: datetime | None = None
 
 
@@ -623,9 +620,6 @@ def replay_decision(
         result = _dec_ledger.replay_decision(
             decision_id,
             workspace_id=ws_id,
-            recomputed_action=payload.recomputed_action,
-            recomputed_facilities=payload.recomputed_facilities,
-            recomputed_objective=payload.recomputed_objective,
             feature_cutoff=payload.feature_cutoff,
         )
         return result.model_dump()

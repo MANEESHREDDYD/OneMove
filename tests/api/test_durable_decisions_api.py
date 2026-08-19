@@ -34,9 +34,9 @@ def test_durable_decision_record_replay_shadow():
         "network_version": "1.1",
         "dataset_version": "1.0.0",
         "feature_snapshot_hash": "snap-test-1234",
-        "selected_action": "DEPLOY_FACILITIES",
-        "opened_facilities": ["fac:01", "fac:04", "fac:07"],
-        "objective_value": 154000,
+        "selected_action": "OPEN_FACILITIES",
+        "opened_facilities": ["fac:88618925a5fffff", "fac:88618925a7fffff", "fac:8861892ec3fffff", "fac:8861892ecbfffff"],
+        "objective_value": 1756300000000,
         "expected_travel_seconds": 620,
         "p95_travel_seconds": 780,
         "coverage_basis_points": 9910,
@@ -57,9 +57,6 @@ def test_durable_decision_record_replay_shadow():
 
     # 3. POST /api/v1/decisions/{id}/replay
     replay_payload = {
-        "recomputed_action": "DEPLOY_FACILITIES",
-        "recomputed_facilities": ["fac:01", "fac:04", "fac:07"],
-        "recomputed_objective": 154000,
         "feature_cutoff": now.isoformat(),
     }
     rep_res = client.post(f"/api/v1/decisions/{dec_id}/replay", json=replay_payload)
@@ -69,6 +66,7 @@ def test_durable_decision_record_replay_shadow():
     assert replay_data["reproduced_exact_action"] is True
     assert replay_data["reproduced_exact_facilities"] is True
     assert replay_data["objective_match"] is True
+    assert replay_data["match_status"] == "EXACT_MATCH"
 
     # 4. POST /api/v1/decisions/{id}/shadows
     future_time = datetime.fromtimestamp(now.timestamp() + 7200, tz=timezone.utc)

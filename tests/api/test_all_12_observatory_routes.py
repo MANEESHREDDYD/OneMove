@@ -134,8 +134,8 @@ def test_route_10_decisions_and_pit_replay():
         "dataset_version": "1.0.0",
         "feature_snapshot_hash": "snap-7b443717",
         "selected_action": "OPEN_FACILITIES",
-        "opened_facilities": ["fac:8861892421fffff", "fac:8861892537fffff"],
-        "objective_value": 450000,
+        "opened_facilities": ["fac:88618925a5fffff", "fac:88618925a7fffff", "fac:8861892ec3fffff", "fac:8861892ecbfffff"],
+        "objective_value": 1756300000000,
         "expected_travel_seconds": 620,
         "p95_travel_seconds": 840,
         "coverage_basis_points": 9600,
@@ -150,17 +150,15 @@ def test_route_10_decisions_and_pit_replay():
     # Replay decision with PIT validation
     rep_res = client.post(
         f"/api/v1/decisions/{dec_id}/replay",
-        json={
-            "recomputed_action": "OPEN_FACILITIES",
-            "recomputed_facilities": ["fac:8861892421fffff", "fac:8861892537fffff"],
-            "recomputed_objective": 450000,
-        },
+        json={},
     )
     assert rep_res.status_code == 200
     rep_data = rep_res.json()
     assert rep_data["pit_valid"] is True
     assert rep_data["reproduced_exact_action"] is True
     assert rep_data["reproduced_exact_facilities"] is True
+    assert rep_data["objective_match"] is True
+    assert rep_data["match_status"] == "EXACT_MATCH"
 
 
 def test_route_11_forecast_prediction():

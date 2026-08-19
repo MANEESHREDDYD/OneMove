@@ -1,0 +1,18 @@
+{
+  "schema_name": "zonepilot_osrm_build_manifest",
+  "schema_version": "1.0.0",
+  "timestamp": "2026-08-18T06:02:54.905446+00:00",
+  "generated_at": "2026-08-18T06:02:54.905446+00:00",
+  "image": "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409",
+  "extract_time_seconds": 5.755864858627319,
+  "partition_time_seconds": 1.6931548118591309,
+  "customize_time_seconds": 1.5594041347503662,
+  "total_time_seconds": 9.008423805236816,
+  "graph_file_count": 27,
+  "graph_size_bytes": 22540736,
+  "input_pbf_sha256": "461584ea03d2d0948a25715c0a901b8bb12f01ca15c59fc72bdeaf05e568d7a1",
+  "graph_bundle_sha256": "7b4437178db62410bb85b6ef1e68fe2f07b7880ce281d146a1480f64ab86b383",
+  "code_sha": "deefa218a69ced7ad58fe4502b2343fa5f8d6d81",
+  "evidence_class": "DERIVED",
+  "dq_status": "PASS"
+}

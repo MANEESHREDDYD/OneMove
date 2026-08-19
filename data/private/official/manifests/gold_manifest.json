@@ -1,0 +1,48 @@
+{
+  "schema_name": "zonepilot_gold_network_h3",
+  "schema_version": "1.0.0",
+  "dataset_id": "gold_network_bengaluru",
+  "dataset_version": "osm-461584ea03d2.code-483c8e1f6d25",
+  "rows": 94,
+  "columns": [
+    "h3_index",
+    "h3_resolution",
+    "cell_area_km2",
+    "road_length_km",
+    "intersection_count",
+    "restaurant_count",
+    "grocery_count",
+    "commercial_poi_count",
+    "road_density_km_per_sqkm",
+    "intersection_density_per_sqkm"
+  ],
+  "h3_resolution": 8,
+  "source": "osm_geofabrik",
+  "source_version": "461584ea03d2d0948a25715c0a901b8bb12f01ca15c59fc72bdeaf05e568d7a1",
+  "osm_source": "pilot_roads.osm.pbf",
+  "osm_input_hash": "461584ea03d2d0948a25715c0a901b8bb12f01ca15c59fc72bdeaf05e568d7a1",
+  "input_hashes": {
+    "roads_pbf_sha256": "461584ea03d2d0948a25715c0a901b8bb12f01ca15c59fc72bdeaf05e568d7a1",
+    "pois_geojson_sha256": "1f629e78a756aa8b7d11c419123bc324663ee12970b6bff381620fa1c190a370"
+  },
+  "graph_version": "1.1.0+bad320dd48da",
+  "graph_topology_sha256": "bad320dd48da0a6aa070efb00595143da5b009db231e859184ff050bb117c365",
+  "pilot_boundary_hash": "33512a16a8eca73f611cc5ae990df3fba7a8aec6875ca185be48a326c7087573",
+  "code_sha": "483c8e1f6d256c39987d3780ffdb342f935f7ac2",
+  "parquet_sha256": "7d8973d37a73d86000b066a2e955ea7421d3fa4a878d3538a8114b6a5221747e",
+  "sorted_cell_list_sha256": "bf939dc50c2a2f08f7b60deda119bef73874014a3eeafb1c640f8531f493df73",
+  "h3_library_version": "4.5.0",
+  "generated_at": "2026-08-13T11:14:40.368859+00:00",
+  "information_availability_range": null,
+  "time_range": null,
+  "record_count": 94,
+  "evidence_class": "DERIVED",
+  "dq_status": "PASS",
+  "graph_metrics": {
+    "graph_vertices": 63674,
+    "graph_directed_edges": 136346,
+    "intersections": 23110,
+    "connected_components": 131,
+    "largest_component_vertices": 62270
+  }
+}

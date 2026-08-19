@@ -49,15 +49,7 @@ module "storage" {
   depends_on    = [module.services]
 }
 
-# 5. Pub/Sub Async Queue & Dead-Letter
-module "pubsub" {
-  source      = "../../modules/pubsub"
-  project_id  = var.project_id
-  environment = "staging"
-  depends_on  = [module.services]
-}
-
-# 6. Secret Manager
+# 5. Secret Manager
 module "secrets" {
   source      = "../../modules/secrets"
   project_id  = var.project_id
@@ -65,17 +57,28 @@ module "secrets" {
   depends_on  = [module.services]
 }
 
-# 7. Cloud Run Services
+# 6. Cloud Run Services
 module "cloud_run" {
-  source          = "../../modules/cloud_run"
-  project_id      = var.project_id
-  region          = var.region
-  environment     = "staging"
-  api_image       = var.api_image
-  worker_image    = var.worker_image
-  api_sa_email    = module.iam.api_sa_email
-  worker_sa_email = module.iam.worker_sa_email
-  depends_on      = [module.services, module.iam, module.secrets]
+  source               = "../../modules/cloud_run"
+  project_id           = var.project_id
+  region               = var.region
+  environment          = "staging"
+  api_image            = var.api_image
+  worker_image         = var.worker_image
+  api_sa_email         = module.iam.api_sa_email
+  worker_sa_email      = module.iam.worker_sa_email
+  pubsub_push_sa_email = module.iam.pubsub_push_sa_email
+  depends_on           = [module.services, module.iam, module.secrets]
+}
+
+# 7. Pub/Sub Async Queue & Dead-Letter with Authenticated Push Config
+module "pubsub" {
+  source                     = "../../modules/pubsub"
+  project_id                 = var.project_id
+  environment                = "staging"
+  push_endpoint              = "${module.cloud_run.worker_url}/push"
+  push_service_account_email = module.iam.pubsub_push_sa_email
+  depends_on                 = [module.services, module.cloud_run]
 }
 
 # 8. Monitoring & Alerts

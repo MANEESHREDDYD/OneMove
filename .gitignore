@@ -67,8 +67,6 @@ reports/pre_zonepilot_audit/00_REPOSITORY_STATE.md
 log.txt
 
 # Raw datasets & geo binaries
-data/
-data_root/private/
 data_root/
 artifacts/
 scratch/
@@ -77,9 +75,21 @@ auditor_v2_report.txt
 failed_log.txt
 pr_info.json
 pytest_report.json
-*.parquet
 *.pbf
 *.osm
+*.parquet
+
+# Allow official immutable datasets and manifests in data/
+!data/
+!data/private/
+!data/private/official/
+!data/private/official/gold/
+!data/private/official/gold/r1_osrm_travel_matrix.json
+!data/private/official/manifests/
+!data/private/official/manifests/*
+!data/private/official/raw/
+!data/private/official/raw/osrm/
+!data/private/official/raw/osrm/benchmark.json
 
 # Terraform
 **/.terraform/

@@ -57,6 +57,11 @@ class DecisionReplayResult(StrictContract):
     reproduced_exact_action: bool
     reproduced_exact_facilities: bool
     objective_match: bool
+    match_status: str = "EXACT_MATCH"
+    expected_hash: str | None = None
+    actual_hash: str | None = None
+    difference: dict[str, str | int | float | list[str]] = Field(default_factory=dict)
+    reason: str | None = None
     code_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 

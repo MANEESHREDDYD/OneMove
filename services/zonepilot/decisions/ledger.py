@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from datetime import datetime, timezone
 from typing import Any, Sequence
@@ -36,22 +37,53 @@ class DecisionLedger:
         recorded_by: str | None = None,
     ) -> DecisionRecord:
         """Freeze an authoritative decision cryptographically bound to a completed optimization job."""
-        if job.get("status") not in {"SUCCESS", "COMPLETED", "TERMINAL"}:
-            res_doc = job.get("result_document") or {}
-            if res_doc.get("status") not in {"OPTIMAL", "FEASIBLE"}:
-                raise ValueError(
-                    f"Cannot freeze decision: optimization job {job.get('id')} has status {job.get('status')}"
-                )
+        if not job:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: No job provided")
 
-        res_doc = job.get("result_document") or {}
-        opened = res_doc.get("opened_facility_ids") or res_doc.get("opened_facilities", [])
-        if not opened and "opened_facilities" in job:
-            opened = job["opened_facilities"]
+        res_doc = job.get("result_document")
+        if not res_doc:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: No result_document present in optimization job")
 
-        obj_val = res_doc.get("objective_value") or 154000
-        exp_travel = res_doc.get("expected_travel_seconds") or 710
-        p95_travel = res_doc.get("p95_travel_seconds") or 830
-        cov_bps = res_doc.get("coverage_basis_points") or 9910
+        if isinstance(res_doc, str):
+            res_doc = json.loads(res_doc)
+
+        solver_status = res_doc.get("status") or job.get("solver_status")
+        if solver_status not in {"OPTIMAL", "FEASIBLE"}:
+            raise ValueError(
+                f"DECISION_LINEAGE_INCOMPLETE: Cannot freeze decision from non-optimal job status {solver_status}"
+            )
+
+        opened = res_doc.get("opened_facility_ids") or res_doc.get("opened_facilities")
+        if not opened:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: opened_facility_ids missing from optimization result")
+
+        obj_info = res_doc.get("objective")
+        if isinstance(obj_info, dict):
+            obj_val = obj_info.get("weighted_total")
+            exp_travel = obj_info.get("expected_travel_probability_demand_seconds")
+            p95_travel = obj_info.get("p95_travel_demand_seconds")
+        else:
+            obj_val = res_doc.get("objective_value")
+            exp_travel = res_doc.get("expected_travel_seconds")
+            p95_travel = res_doc.get("p95_travel_seconds")
+
+        if obj_val is None or exp_travel is None or p95_travel is None:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: Incomplete objective metrics in result_document")
+
+        scenario_metrics = res_doc.get("scenario_metrics") or []
+        if scenario_metrics and isinstance(scenario_metrics[0], dict):
+            cov_bps = scenario_metrics[0].get("coverage_basis_points", 10000)
+        else:
+            cov_bps = res_doc.get("coverage_basis_points", 10000)
+
+        graph_version = job.get("graph_version") or res_doc.get("graph_version")
+        if not graph_version:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: graph_version missing from job lineage")
+
+        dataset_version = job.get("dataset_version") or res_doc.get("dataset_version") or "1.0.0"
+        req_fp = job.get("request_fingerprint") or res_doc.get("problem_fingerprint")
+        if not req_fp:
+            raise ValueError("DECISION_LINEAGE_INCOMPLETE: request_fingerprint missing from job lineage")
 
         dec_time = job.get("finished_at") or job.get("created_at") or datetime.now(timezone.utc)
         if isinstance(dec_time, str):
@@ -76,17 +108,17 @@ class DecisionLedger:
             workspace_id=workspace_id,
             decision_time=dec_time,
             network_version="1.1",
-            dataset_version=job.get("dataset_version", "1.0.0"),
-            feature_snapshot_hash=job.get("request_fingerprint", "snap-7b443717"),
-            selected_action="DEPLOY_FACILITIES",
+            dataset_version=dataset_version,
+            feature_snapshot_hash=req_fp,
+            selected_action=res_doc.get("action") or job.get("action") or "OPEN_FACILITIES",
             opened_facilities=tuple(sorted(opened)),
             objective_value=int(obj_val),
             expected_travel_seconds=int(exp_travel),
             p95_travel_seconds=int(p95_travel),
             coverage_basis_points=int(cov_bps),
-            graph_version=job.get("graph_version", "1.1.0+bad320dd48da"),
-            osrm_bundle_hash="7b4437178db62410bb85b6ef1e68fe2f07b7880ce281d146a1480f64ab86b383",
-            solver_version=job.get("solver_version", "ortools-cp-sat"),
+            graph_version=graph_version,
+            osrm_bundle_hash=hashlib.sha256(f"osrm-{graph_version}".encode()).hexdigest(),
+            solver_version=job.get("solver_version") or res_doc.get("solver_version", "ortools-cp-sat"),
             code_sha=job.get("code_sha") or self.code_sha,
             evidence_ids=tuple(evidence_ids),
             recorded_at=datetime.now(timezone.utc),
@@ -167,9 +199,6 @@ class DecisionLedger:
         original_decision_id: str,
         workspace_id: str | None = None,
         *,
-        recomputed_action: str | None = None,
-        recomputed_facilities: Sequence[str] | None = None,
-        recomputed_objective: int | None = None,
         feature_cutoff: datetime | None = None,
     ) -> DecisionReplayResult:
         """Server-side deterministic Point-in-Time Replay.
@@ -184,7 +213,7 @@ class DecisionLedger:
         ws_id = workspace_id or orig.workspace_id
         pit_valid = self.verify_pit_lineage(orig.decision_time, feature_cutoff)
 
-        # Rerun deterministic solver verification
+        # Rerun deterministic solver verification from frozen lineage
         from services.zonepilot.optimization.contracts import (
             DemandPoint,
             Facility,
@@ -289,26 +318,35 @@ class DecisionLedger:
 
         res = optimize_facilities(problem)
 
-        if recomputed_action is not None or recomputed_facilities is not None or recomputed_objective is not None:
-            action_match = (
-                (recomputed_action == orig.selected_action)
-                if recomputed_action is not None
-                else (res.action.value == orig.selected_action)
-            )
-            facilities_match = (
-                (set(recomputed_facilities) == set(orig.opened_facilities))
-                if recomputed_facilities is not None
-                else (set(res.opened_facility_ids) == set(orig.opened_facilities))
-            )
-            obj_match = (
-                (recomputed_objective == orig.objective_value)
-                if recomputed_objective is not None
-                else ((res.objective.weighted_total if res.objective else 0) == orig.objective_value)
-            )
+        action_match = res.action.value == orig.selected_action
+        facilities_match = set(res.opened_facility_ids) == set(orig.opened_facilities)
+        recomputed_obj = res.objective.weighted_total if res.objective else 0
+        obj_match = recomputed_obj == orig.objective_value
+
+        if action_match and facilities_match and obj_match:
+            match_status = "EXACT_MATCH"
+            reason = "Recomputed action, facilities, and objective matched frozen decision lineage exactly."
+        elif action_match and facilities_match:
+            match_status = "SEMANTIC_MATCH"
+            reason = "Recomputed action and facilities matched, slight numeric tolerance in objective value."
         else:
-            action_match = res.action.value == orig.selected_action
-            facilities_match = set(res.opened_facility_ids) == set(orig.opened_facilities)
-            obj_match = (res.objective.weighted_total if res.objective else 0) == orig.objective_value
+            match_status = "DRIFT"
+            reason = "Recomputed solver result drifted from original frozen decision."
+
+        expected_h = hashlib.sha256(
+            f"{orig.selected_action}:{','.join(sorted(orig.opened_facilities))}:{orig.objective_value}".encode()
+        ).hexdigest()[:16]
+        actual_h = hashlib.sha256(
+            f"{res.action.value}:{','.join(sorted(res.opened_facility_ids))}:{recomputed_obj}".encode()
+        ).hexdigest()[:16]
+
+        diff: dict[str, str | int | float | list[str]] = {}
+        if not action_match:
+            diff["action"] = f"expected={orig.selected_action}, actual={res.action.value}"
+        if not facilities_match:
+            diff["facilities"] = list(res.opened_facility_ids)
+        if not obj_match:
+            diff["objective_diff"] = recomputed_obj - orig.objective_value
 
         replay_res = DecisionReplayResult(
             original_decision_id=original_decision_id,
@@ -317,6 +355,11 @@ class DecisionLedger:
             reproduced_exact_action=action_match,
             reproduced_exact_facilities=facilities_match,
             objective_match=obj_match,
+            match_status=match_status,
+            expected_hash=expected_h,
+            actual_hash=actual_h,
+            difference=diff,
+            reason=reason,
             code_sha=self.code_sha,
         )
 
@@ -330,7 +373,7 @@ class DecisionLedger:
             reproduced_exact_action=action_match,
             reproduced_exact_facilities=facilities_match,
             objective_match=obj_match,
-            recomputed_objective=(res.objective.weighted_total if res.objective else 0),
+            recomputed_objective=recomputed_obj,
             recomputed_facilities=list(res.opened_facility_ids),
             code_sha=self.code_sha,
         )

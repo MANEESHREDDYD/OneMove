@@ -92,6 +92,25 @@ class OptimizationRepository:
                     ),
                 )
                 row = cur.fetchone()
+
+                # Atomically enqueue transactional outbox event
+                outbox_payload = {
+                    "job_id": job_id,
+                    "workspace_id": workspace_id,
+                    "idempotency_key": idempotency_key,
+                    "graph_version": graph_version,
+                    "dataset_version": dataset_version,
+                }
+                cur.execute(
+                    """
+                    INSERT INTO public.optimization_outbox (
+                        aggregate_id, workspace_id, event_type, payload, status
+                    ) VALUES (
+                        %s::uuid, %s, 'OPTIMIZATION_SUBMITTED', %s::jsonb, 'PENDING'
+                    )
+                    """,
+                    (job_id, workspace_id, json.dumps(outbox_payload)),
+                )
             conn.commit()
             return row
 
@@ -255,3 +274,67 @@ class OptimizationRepository:
                     ),
                 )
             conn.commit()
+
+    def claim_pending_outbox_events(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Claim pending outbox events for publishing."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT event_id, aggregate_id, workspace_id, event_type, payload, attempts
+                    FROM public.optimization_outbox
+                    WHERE status = 'PENDING' AND next_attempt_at <= now()
+                    ORDER BY created_at ASC
+                    LIMIT %s
+                    FOR UPDATE SKIP LOCKED
+                    """,
+                    (limit,),
+                )
+                return cur.fetchall()
+
+    def mark_outbox_published(self, event_id: str, pubsub_message_id: str | None = None) -> None:
+        """Mark an outbox event as successfully published to Pub/Sub."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.optimization_outbox
+                    SET status = 'PUBLISHED',
+                        published_at = now(),
+                        pubsub_message_id = %s
+                    WHERE event_id = %s::uuid
+                    """,
+                    (pubsub_message_id, event_id),
+                )
+            conn.commit()
+
+    def mark_outbox_failed(self, event_id: str, error_message: str, backoff_seconds: int = 10) -> None:
+        """Mark an outbox event delivery attempt failed with exponential retry backoff."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.optimization_outbox
+                    SET attempts = attempts + 1,
+                        last_error = %s,
+                        next_attempt_at = now() + (%s || ' seconds')::interval,
+                        status = CASE WHEN attempts >= 5 THEN 'FAILED' ELSE 'PENDING' END
+                    WHERE event_id = %s::uuid
+                    """,
+                    (error_message[:500], backoff_seconds, event_id),
+                )
+            conn.commit()
+
+    def get_oldest_pending_outbox_age_seconds(self) -> float:
+        """Return the age in seconds of the oldest unpublished outbox event for monitoring SLOs."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COALESCE(EXTRACT(EPOCH FROM (now() - MIN(created_at))), 0.0) as age_seconds
+                    FROM public.optimization_outbox
+                    WHERE status = 'PENDING'
+                    """
+                )
+                row = cur.fetchone()
+                return float(row["age_seconds"]) if row else 0.0

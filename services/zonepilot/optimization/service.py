@@ -71,25 +71,56 @@ class OptimizationService:
 
         job_id = str(job["id"])
 
-        # 2. Dispatch message to GCP Pub/Sub topic asynchronously
+        # 2. Attempt immediate dispatch of the outbox event; if background dispatch is active, it handles retries
+        dispatch_status = "QUEUED_PENDING_DISPATCH"
+        try:
+            dispatched_count = self.dispatch_outbox_events(limit=5)
+            if dispatched_count > 0:
+                dispatch_status = "QUEUED_DISPATCHED"
+        except Exception as dispatch_err:
+            logger.debug(f"Immediate outbox dispatch deferred to background dispatcher: {dispatch_err}")
+
+        # Return QUEUED job immediately (HTTP 202 Accepted) with dispatch_status
+        result_job = dict(self.repository.get_job(job_id, workspace_id) or job)
+        result_job["dispatch_status"] = dispatch_status
+        return result_job
+
+    def dispatch_outbox_events(self, limit: int = 10) -> int:
+        """Claim and publish pending outbox events to Google Cloud Pub/Sub."""
+        pending_events = self.repository.claim_pending_outbox_events(limit=limit)
+        if not pending_events:
+            return 0
+
         topic_name = os.environ.get("PUBSUB_TOPIC_OPTIMIZATIONS", "zonepilot-opt-jobs-staging")
         gcp_project = os.environ.get("GCP_PROJECT_ID", "zonepilot-stg-9a4285")
-        try:
-            from google.cloud import pubsub_v1
+        dispatched_count = 0
 
-            publisher = pubsub_v1.PublisherClient()
-            topic_path = publisher.topic_path(gcp_project, topic_name)
-            msg_payload = json.dumps(
-                {"job_id": job_id, "workspace_id": workspace_id, "idempotency_key": idempotency_key}
-            ).encode("utf-8")
-            publisher.publish(topic_path, msg_payload, job_id=job_id, workspace_id=workspace_id)
-            logger.info(f"Published optimization job {job_id} to Pub/Sub topic {topic_name}")
-        except Exception as pub_err:
-            # In local test or offline environments where GCP credentials are not active, log dispatch
-            logger.debug(f"Pub/Sub publishing skipped or mocked: {pub_err}")
+        for event in pending_events:
+            event_id = str(event["event_id"])
+            payload = event["payload"] if isinstance(event["payload"], dict) else json.loads(event["payload"])
+            job_id = str(event["aggregate_id"])
+            workspace_id = str(event["workspace_id"])
+            attempts = int(event.get("attempts", 0))
 
-        # Return QUEUED job immediately (HTTP 202 Accepted)
-        return self.repository.get_job(job_id, workspace_id) or job
+            try:
+                from google.cloud import pubsub_v1
+
+                publisher = pubsub_v1.PublisherClient()
+                topic_path = publisher.topic_path(gcp_project, topic_name)
+                msg_bytes = json.dumps(payload).encode("utf-8")
+                future = publisher.publish(topic_path, msg_bytes, job_id=job_id, workspace_id=workspace_id)
+                msg_id = future.result(timeout=10) if hasattr(future, "result") else str(future)
+                self.repository.mark_outbox_published(event_id, pubsub_message_id=str(msg_id))
+                dispatched_count += 1
+                logger.info(f"Outbox event {event_id} for job {job_id} published to Pub/Sub msg {msg_id}")
+            except Exception as pub_err:
+                backoff = min(600, 10 * (2**attempts))
+                self.repository.mark_outbox_failed(event_id, str(pub_err), backoff_seconds=backoff)
+                logger.warning(
+                    f"Outbox publish attempt {attempts + 1} failed for event {event_id}: {pub_err}. Backoff: {backoff}s"
+                )
+
+        return dispatched_count
 
     def run_solver_for_job(
         self,

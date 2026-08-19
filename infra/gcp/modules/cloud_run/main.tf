@@ -34,6 +34,12 @@ variable "worker_sa_email" {
   description = "Service account email for Worker"
 }
 
+variable "pubsub_push_sa_email" {
+  type        = string
+  description = "Service account email for Pub/Sub push invoker"
+  default     = ""
+}
+
 variable "db_instance_connection_name" {
   type        = string
   description = "Cloud SQL instance connection name"
@@ -184,7 +190,7 @@ resource "google_cloud_run_v2_service_iam_member" "worker_invoker" {
   project  = var.project_id
   name     = google_cloud_run_v2_service.worker.name
   role     = "roles/run.invoker"
-  member   = "serviceAccount:${var.worker_sa_email}"
+  member   = "serviceAccount:${var.pubsub_push_sa_email != "" ? var.pubsub_push_sa_email : var.worker_sa_email}"
 }
 
 output "api_url" {

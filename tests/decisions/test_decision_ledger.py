@@ -43,7 +43,7 @@ def test_record_and_retrieve_decision() -> None:
 
 def test_decision_replay_verification() -> None:
     ledger = DecisionLedger()
-    t = datetime(2026, 8, 18, 12, 0, 0, tzinfo=timezone.utc)
+    t = datetime.now(timezone.utc)
     rec = ledger.record_decision(
         workspace_id="ws-blr-01",
         decision_time=t,
@@ -51,8 +51,8 @@ def test_decision_replay_verification() -> None:
         dataset_version="1.0.0",
         feature_snapshot_hash="a" * 64,
         selected_action="OPEN_FACILITIES",
-        opened_facilities=["fac:01", "fac:03"],
-        objective_value=85000,
+        opened_facilities=["fac:88618925a5fffff", "fac:88618925a7fffff", "fac:8861892ec3fffff", "fac:8861892ecbfffff"],
+        objective_value=1756300000000,
         expected_travel_seconds=500,
         p95_travel_seconds=750,
         coverage_basis_points=10000,
@@ -61,24 +61,33 @@ def test_decision_replay_verification() -> None:
         solver_version="ortools-9.11",
     )
 
-    replay_good = ledger.replay_decision(
-        rec.decision_id,
-        recomputed_action="OPEN_FACILITIES",
-        recomputed_facilities=["fac:01", "fac:03"],
-        recomputed_objective=85000,
-    )
+    replay_good = ledger.replay_decision(rec.decision_id, workspace_id="ws-blr-01")
+    assert replay_good.pit_valid is True
     assert replay_good.reproduced_exact_action is True
     assert replay_good.reproduced_exact_facilities is True
     assert replay_good.objective_match is True
+    assert replay_good.match_status == "EXACT_MATCH"
 
-    replay_diverged = ledger.replay_decision(
-        rec.decision_id,
-        recomputed_action="OPEN_FACILITIES",
-        recomputed_facilities=["fac:01", "fac:04"],
-        recomputed_objective=92000,
+    # Test diverged record
+    rec_diverged = ledger.record_decision(
+        workspace_id="ws-blr-01",
+        decision_time=t,
+        network_version="1.1",
+        dataset_version="1.0.0",
+        feature_snapshot_hash="a" * 64,
+        selected_action="OPEN_FACILITIES",
+        opened_facilities=["fac:01", "fac:04"],
+        objective_value=92000,
+        expected_travel_seconds=500,
+        p95_travel_seconds=750,
+        coverage_basis_points=10000,
+        graph_version="1.1",
+        osrm_bundle_hash="b" * 64,
+        solver_version="ortools-9.11",
     )
+    replay_diverged = ledger.replay_decision(rec_diverged.decision_id, workspace_id="ws-blr-01")
     assert replay_diverged.reproduced_exact_facilities is False
-    assert replay_diverged.objective_match is False
+    assert replay_diverged.match_status == "DRIFT"
 
 
 def test_shadow_evaluation_loop() -> None:
