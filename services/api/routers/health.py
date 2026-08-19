@@ -56,7 +56,7 @@ def readiness_probe(response: Response):
     if not cfg_valid:
         response.status_code = 503
         logger.error(f"readiness_check_failed_config: {cfg_msg}")
-        return {"status": "unready", "db_connected": False, "config_valid": False, "reason": cfg_msg}
+        return {"status": "unready", "db_connected": False, "reason": cfg_msg}
 
     db_url = get_database_dsn()
     db_connected = False
@@ -74,9 +74,9 @@ def readiness_probe(response: Response):
 
     if not db_connected:
         response.status_code = 503
-        return {"status": "unready", "db_connected": False, "config_valid": True}
+        return {"status": "unready", "db_connected": False}
 
-    return {"status": "ready", "db_connected": True, "config_valid": True}
+    return {"status": "ready", "db_connected": True}
 
 
 @router.get("/metrics", include_in_schema=False, response_class=PlainTextResponse)

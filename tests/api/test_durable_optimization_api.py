@@ -100,7 +100,6 @@ def test_readiness_probe_fails_on_environment_project_mismatch(monkeypatch):
     assert res.status_code == 503
     data = res.json()
     assert data["status"] == "unready"
-    assert data["config_valid"] is False
     assert "Environment/project mismatch" in data.get("reason", "")
 
 
