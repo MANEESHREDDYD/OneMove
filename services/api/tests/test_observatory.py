@@ -256,6 +256,8 @@ def test_invalid_h3_uses_standard_error_contract(observatory_service: Observator
             "retryable": False,
             "details": {},
             "request_id": "request-123",
+            # F-025: the canonical envelope carries trace_id for correlation.
+            "trace_id": "request-123",
         }
     finally:
         app.dependency_overrides.clear()

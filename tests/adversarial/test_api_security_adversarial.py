@@ -48,7 +48,7 @@ def test_sqli_in_path_parameter_rejected(client):
     for sqli in sqli_payloads:
         res = client.get(f"/api/v1/zones/{sqli}/state")
         assert res.status_code in {404, 422}
-        assert res.json()["error"]["code"] in {"NOT_FOUND", "INVALID_ARGUMENT", "VALIDATION_ERROR"}
+        assert res.json()["error"]["code"] in {"NOT_FOUND", "INVALID_ARGUMENT", "VALIDATION_FAILED"}
 
 
 def test_path_traversal_in_evidence_endpoint(client):
@@ -73,7 +73,7 @@ def test_malformed_type_injection_in_optimization(client, monkeypatch):
     }
     res = client.post("/api/v1/optimizations", json=bad_payload)
     assert res.status_code == 422
-    assert res.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert res.json()["error"]["code"] == "VALIDATION_FAILED"
 
 
 def test_negative_values_in_optimization_rejected(client, monkeypatch):

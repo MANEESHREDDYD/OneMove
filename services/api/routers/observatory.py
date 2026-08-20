@@ -20,7 +20,12 @@ from services.api.contracts.observatory import (
     ZoneStateResponse,
 )
 from services.api.core.auth import get_current_user
-from services.api.core.telemetry import DEPENDENCY_UNAVAILABLE, error_envelope, looks_like_dependency_failure
+from services.api.core.telemetry import (
+    DEPENDENCY_UNAVAILABLE,
+    error_envelope,
+    is_dependency_exception,
+    looks_like_dependency_failure,
+)
 from services.api.repositories.artifact_catalog import ArtifactCorrupt, ArtifactNotFound, ArtifactNotReady
 from services.api.services.observatory import ObservatoryService, get_observatory_service
 from services.zonepilot.assistant.contracts import AssistantToolCall, ToolName
@@ -69,7 +74,26 @@ def standard_error(code: str, message: str, status_code: int = 400, **details: A
     )
 
 
+def _fail_if_dependency_unavailable(exc: Exception) -> None:
+    """F-025: a dependency outage is a retryable 503, never a 4xx client error.
+
+    The broad `except Exception` blocks in this router exist to translate domain
+    errors. Without this guard a DatabaseConfigurationError or a psycopg
+    connection failure falls through them and is reported as 422
+    VALIDATION_FAILED -- telling the caller its own request was permanently
+    malformed when the real answer is "retry, the store is down".
+    """
+    if is_dependency_exception(exc):
+        standard_error(
+            DEPENDENCY_UNAVAILABLE,
+            "A backing dependency is not available to serve this request.",
+            503,
+            dependency="database",
+        )
+
+
 def _translate_artifact_error(exc: Exception) -> None:
+    _fail_if_dependency_unavailable(exc)
     if isinstance(exc, ArtifactNotReady):
         standard_error("DATASET_NOT_READY", str(exc), 503)
     if isinstance(exc, ArtifactNotFound):
@@ -447,6 +471,7 @@ def create_and_run_scenario(
     except HTTPException:
         raise
     except Exception as exc:
+        _fail_if_dependency_unavailable(exc)
         standard_error("EXECUTION_ERROR", str(exc), 422)
 
 
@@ -690,6 +715,7 @@ def replay_decision(
     except FileNotFoundError as fnf_exc:
         standard_error("MATRIX_UNAVAILABLE", str(fnf_exc), 503)
     except Exception as exc:
+        _fail_if_dependency_unavailable(exc)
         standard_error("REPLAY_ERROR", str(exc), 422)
 
 
@@ -722,6 +748,7 @@ def create_shadow_evaluation(
     except ValueError as val_err:
         standard_error("INVALID_SHADOW_WINDOW", str(val_err), 422)
     except Exception as exc:
+        _fail_if_dependency_unavailable(exc)
         standard_error("SHADOW_ERROR", str(exc), 422)
 
 
@@ -849,6 +876,23 @@ def assistant_query(
         workspace_id=ws_id,
     )
     result = registry.execute(call)
+
+    # F-025 / P0-ASSISTANT-TRUTH-001. A *domain* miss ("no such zone in the gold
+    # network", "zone_id is required") is a legitimate typed 200 answer: the
+    # assistant answered truthfully that no authoritative record backs the
+    # question. An *infrastructure* failure is not -- the tool registry flattens
+    # every handler exception into error_message, so a database outage would
+    # otherwise be served as a successful business answer carrying success=false.
+    # Those become a retryable 503 like any other dependency outage.
+    if not result.success and looks_like_dependency_failure(result.error_message):
+        standard_error(
+            DEPENDENCY_UNAVAILABLE,
+            "An authoritative source for this query is not available.",
+            503,
+            dependency="database",
+            tool_name=tool.value,
+        )
+
     return result.model_dump()
 
 

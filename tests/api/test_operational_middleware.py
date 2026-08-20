@@ -69,7 +69,7 @@ def test_metrics_are_disabled_without_explicit_activation(monkeypatch) -> None:
     response = TestClient(app).get("/metrics")
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "HTTP_404"
+    assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
 def test_validation_error_does_not_echo_sensitive_input() -> None:

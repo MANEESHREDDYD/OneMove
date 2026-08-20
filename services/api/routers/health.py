@@ -5,8 +5,8 @@ import os
 from fastapi import APIRouter, Header, HTTPException, Response
 from fastapi.responses import PlainTextResponse
 
-from services.api.core.telemetry import metrics
-from services.common.db_dsn import get_database_dsn
+from services.api.core.telemetry import DEPENDENCY_UNAVAILABLE, metrics
+from services.common.db_dsn import DatabaseConfigurationError, get_database_dsn
 
 router = APIRouter(tags=["observability"])
 logger = logging.getLogger("zonepilot.health")
@@ -64,7 +64,20 @@ def readiness_probe(response: Response):
         logger.error(f"readiness_check_failed_config: {cfg_msg}")
         return {"status": "unready", "db_connected": False, "reason": cfg_msg}
 
-    db_url = get_database_dsn()
+    # F-025: an absent/unusable DSN used to escape this probe as an uncaught
+    # DatabaseConfigurationError, which surfaced as a 500. A readiness probe must
+    # answer "not ready" in its own documented shape, never crash. The reason is
+    # logged rather than returned: this endpoint is unauthenticated.
+    try:
+        db_url = get_database_dsn()
+    except DatabaseConfigurationError:
+        response.status_code = 503
+        logger.exception(
+            "readiness_database_configuration_missing",
+            extra={"error_code": DEPENDENCY_UNAVAILABLE, "dependency": "database"},
+        )
+        return {"status": "unready", "db_connected": False}
+
     db_connected = False
 
     if db_url:

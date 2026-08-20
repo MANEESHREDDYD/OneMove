@@ -7,10 +7,12 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from services.api.core.telemetry import (
+    error_envelope,
     metrics,
     opaque_principal,
     rate_limiter,
     rate_policy,
+    resolve_trace_id,
     safe_request_id,
 )
 
@@ -23,8 +25,19 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         started = time.perf_counter()
         req_id = safe_request_id(request.headers.get("x-request-id"), lambda: str(uuid.uuid4()))
         correlation_id = safe_request_id(request.headers.get("x-correlation-id"), lambda: req_id)
+        # F-025: the error envelope carries a trace_id alongside request_id. It is
+        # derived from the inbound propagation headers (W3C traceparent, or the
+        # X-Cloud-Trace-Context Cloud Run injects) and falls back to the
+        # correlation id so the field is always populated and always joinable to
+        # the access log for this request.
+        trace_id = resolve_trace_id(
+            request.headers.get("traceparent"),
+            request.headers.get("x-cloud-trace-context"),
+            correlation_id,
+        )
         request.state.request_id = req_id
         request.state.correlation_id = correlation_id
+        request.state.trace_id = trace_id
 
         authorization = request.headers.get("authorization", "")
         authenticated = authorization.lower().startswith("bearer ")
@@ -38,16 +51,15 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             if not allowed:
                 response = JSONResponse(
                     status_code=429,
-                    content={
-                        "error": {
-                            "code": "RATE_LIMITED",
-                            "message": "Request rate limit exceeded.",
-                            "request_id": req_id,
-                            "retryable": True,
-                            "details": {"bucket": bucket, "limit_per_minute": limit},
-                        }
-                    },
-                    headers={"retry-after": str(remaining), "x-request-id": req_id},
+                    content=error_envelope(
+                        "RATE_LIMITED",
+                        "Request rate limit exceeded.",
+                        status_code=429,
+                        request_id=req_id,
+                        trace_id=trace_id,
+                        details={"bucket": bucket, "limit_per_minute": limit},
+                    ),
+                    headers={"retry-after": str(remaining), "x-request-id": req_id, "x-trace-id": trace_id},
                 )
                 self._record(request, response.status_code, started, req_id, correlation_id)
                 return response
@@ -58,30 +70,32 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             try:
                 payload_size = int(content_length)
             except ValueError:
-                return self._error_response(400, "INVALID_CONTENT_LENGTH", "Content-Length must be an integer.", req_id)
+                return self._error_response(
+                    400, "INVALID_CONTENT_LENGTH", "Content-Length must be an integer.", req_id, trace_id
+                )
             if payload_size < 0:
                 return self._error_response(
-                    400, "INVALID_CONTENT_LENGTH", "Content-Length must not be negative.", req_id
+                    400, "INVALID_CONTENT_LENGTH", "Content-Length must not be negative.", req_id, trace_id
                 )
             if payload_size > MAX_PAYLOAD_SIZE:
                 return JSONResponse(
                     status_code=413,
-                    content={
-                        "error": {
-                            "code": "PAYLOAD_TOO_LARGE",
-                            "message": f"Payload size exceeds {MAX_PAYLOAD_SIZE} bytes.",
-                            "request_id": req_id,
-                            "retryable": False,
-                            "details": {},
-                        }
-                    },
+                    content=error_envelope(
+                        "PAYLOAD_TOO_LARGE",
+                        f"Payload size exceeds {MAX_PAYLOAD_SIZE} bytes.",
+                        status_code=413,
+                        request_id=req_id,
+                        trace_id=trace_id,
+                    ),
+                    headers={"x-request-id": req_id, "x-trace-id": trace_id},
                 )
 
         try:
             response = await call_next(request)
             response.headers["x-request-id"] = req_id
             response.headers["x-correlation-id"] = correlation_id
-            self._record(request, response.status_code, started, req_id, correlation_id)
+            response.headers["x-trace-id"] = trace_id
+            self._record(request, response.status_code, started, req_id, correlation_id, trace_id)
             return response
         except Exception as exc:
             # We don't catch HTTPException here as FastAPI handles it,
@@ -91,8 +105,9 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
                 extra={
                     "request_id": req_id,
                     "correlation_id": correlation_id,
+                    "trace_id": trace_id,
                     "route": request.url.path,
-                    "error_code": "INTERNAL_SERVER_ERROR",
+                    "error_code": "INTERNAL_ERROR",
                 },
             )
             try:
@@ -103,31 +118,32 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
                 pass
             response = self._error_response(
                 500,
-                "INTERNAL_SERVER_ERROR",
+                "INTERNAL_ERROR",
                 "An unexpected error occurred.",
                 req_id,
+                trace_id,
             )
-            self._record(request, response.status_code, started, req_id, correlation_id)
+            self._record(request, response.status_code, started, req_id, correlation_id, trace_id)
             return response
 
     @staticmethod
-    def _error_response(status: int, code: str, message: str, request_id: str) -> JSONResponse:
+    def _error_response(status: int, code: str, message: str, request_id: str, trace_id: str) -> JSONResponse:
         return JSONResponse(
             status_code=status,
-            content={
-                "error": {
-                    "code": code,
-                    "message": message,
-                    "request_id": request_id,
-                    "retryable": status >= 500,
-                    "details": {},
-                }
-            },
-            headers={"x-request-id": request_id},
+            content=error_envelope(
+                code,
+                message,
+                status_code=status,
+                request_id=request_id,
+                trace_id=trace_id,
+            ),
+            headers={"x-request-id": request_id, "x-trace-id": trace_id},
         )
 
     @staticmethod
-    def _record(request: Request, status: int, started: float, request_id: str, correlation_id: str) -> None:
+    def _record(
+        request: Request, status: int, started: float, request_id: str, correlation_id: str, trace_id: str
+    ) -> None:
         latency = time.perf_counter() - started
         route = getattr(request.scope.get("route"), "path", request.url.path)
         metrics.observe_request(request.method, route, status, latency)
@@ -136,6 +152,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             extra={
                 "request_id": request_id,
                 "correlation_id": correlation_id,
+                "trace_id": trace_id,
                 "route": route,
                 "status": status,
                 "latency_ms": round(latency * 1000, 3),

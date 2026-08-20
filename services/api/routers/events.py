@@ -9,10 +9,80 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
 from services.api.core.auth import get_supabase
+from services.api.core.telemetry import DEPENDENCY_UNAVAILABLE, error_envelope, looks_like_dependency_failure
 from supabase import Client, create_client
 
 router = APIRouter()
 logger = logging.getLogger("zonepilot.events")
+
+
+def api_error(status_code: int, code: str, message: str, **details: Any) -> HTTPException:
+    """Raise-ready HTTPException carrying the canonical error envelope (F-025).
+
+    request_id and trace_id are filled in by the app-level handler in
+    services.api.main from the ids RequestIdMiddleware attached to the request,
+    so there is exactly one source for them.
+    """
+    return HTTPException(
+        status_code=status_code,
+        detail=error_envelope(code, message, status_code=status_code, details=details or None),
+    )
+
+
+# Signatures of a genuine *client* data problem: the request was accepted by the
+# schema but rejected by the store on its merits. Only these become 422.
+_CLIENT_DATA_SIGNATURES = (
+    "violates foreign key constraint",
+    "violates check constraint",
+    "violates not-null constraint",
+    "invalid input syntax",
+    "value too long",
+    "out of range",
+)
+
+# Signatures of an authorization decision made by the database (RLS).
+_FORBIDDEN_SIGNATURES = (
+    "permission denied",
+    "row-level security",
+    "row level security",
+)
+
+_DUPLICATE_SIGNATURES = (
+    "duplicate key",
+    "uq_probe_participant_client_event",
+    "unique constraint",
+)
+
+
+def _is_duplicate(message: str) -> bool:
+    return any(signature in message for signature in _DUPLICATE_SIGNATURES)
+
+
+def _persistence_error(exc: Exception, entity: str) -> HTTPException:
+    """Classify a persistence failure onto the canonical contract.
+
+    The distinction that matters is the one F-025 was raised for: a store that is
+    unreachable is a retryable 503, not a 4xx telling the client its request was
+    permanently wrong.
+    """
+    message = str(exc).lower()
+
+    if any(signature in message for signature in _FORBIDDEN_SIGNATURES):
+        return api_error(403, "FORBIDDEN", f"Not permitted to write this {entity}.")
+
+    if looks_like_dependency_failure(message):
+        return api_error(
+            503,
+            DEPENDENCY_UNAVAILABLE,
+            f"The {entity} store is not available to serve this request.",
+            dependency="database",
+        )
+
+    if any(signature in message for signature in _CLIENT_DATA_SIGNATURES):
+        return api_error(422, "VALIDATION_FAILED", f"The submitted {entity} was rejected by the store.")
+
+    # Cause unknown: report a server-side failure rather than blaming the client.
+    return api_error(500, "INTERNAL_ERROR", f"Unable to persist {entity}.")
 
 
 class OrderEventCreate(BaseModel):
@@ -49,11 +119,15 @@ async def create_event(req: Request, event: OrderEventCreate, supabase: Client =
     except Exception as exc:
         logger.exception(
             "order_event_insert_failed",
-            extra={"request_id": req.state.request_id, "error_code": "EVENT_INSERT_FAILED"},
+            extra={
+                "request_id": req.state.request_id,
+                "trace_id": getattr(req.state, "trace_id", "unknown"),
+                "error_code": "EVENT_INSERT_FAILED",
+            },
         )
-        if "duplicate key" in str(exc).lower():
-            raise HTTPException(status_code=409, detail="Duplicate client event identifier") from exc
-        raise HTTPException(status_code=400, detail="Unable to persist event") from exc
+        if _is_duplicate(str(exc).lower()):
+            raise api_error(409, "CONFLICT", "Duplicate client event identifier.") from exc
+        raise _persistence_error(exc, "event") from exc
 
 
 class ProbeObservationCreate(BaseModel):
@@ -76,7 +150,7 @@ def _get_service_client() -> Client:
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
-        raise HTTPException(status_code=500, detail="Service Role Key missing")
+        raise api_error(500, "INTERNAL_ERROR", "Server credentials are not configured.")
     return create_client(url, key)
 
 
@@ -84,7 +158,7 @@ def _get_service_client() -> Client:
 async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Client = Depends(get_supabase)):
     auth_header = req.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing auth token")
+        raise api_error(401, "UNAUTHORIZED", "A bearer token is required.")
     token = auth_header.split(" ")[1]
 
     # Cryptographic JWT verification
@@ -98,28 +172,28 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
     # Load Assignment and verify ownership
     assign_res = service_client.table("assignments").select("*").eq("id", probe.assignment_id).execute()
     if not assign_res.data or len(assign_res.data) == 0:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+        raise api_error(404, "NOT_FOUND", "Assignment not found.")
 
     assignment = assign_res.data[0]
     if assignment["participant_id"] != participant_id:
-        raise HTTPException(status_code=403, detail="Assignment does not belong to participant")
+        raise api_error(403, "FORBIDDEN", "Assignment does not belong to participant.")
     if assignment["status"] != "ACTIVE":
-        raise HTTPException(status_code=403, detail="Assignment is not ACTIVE")
+        raise api_error(403, "FORBIDDEN", "Assignment is not ACTIVE.")
 
     # Validation for Correction
     if probe.supersedes_id:
         orig_res = service_client.table("probe_observations").select("*").eq("id", probe.supersedes_id).execute()
         if not orig_res.data or len(orig_res.data) == 0:
-            raise HTTPException(status_code=404, detail="Original probe not found")
+            raise api_error(404, "NOT_FOUND", "Original probe not found.")
         orig = orig_res.data[0]
         if orig["participant_id"] != participant_id:
-            raise HTTPException(status_code=403, detail="Original probe belongs to a different participant")
+            raise api_error(403, "FORBIDDEN", "Original probe belongs to a different participant.")
         if orig["assignment_id"] != probe.assignment_id:
-            raise HTTPException(status_code=403, detail="Original probe belongs to a different assignment")
+            raise api_error(403, "FORBIDDEN", "Original probe belongs to a different assignment.")
         if orig["study_id"] != assignment["study_id"]:
-            raise HTTPException(status_code=403, detail="Original probe belongs to a different study")
+            raise api_error(403, "FORBIDDEN", "Original probe belongs to a different study.")
         if orig["record_status"] == "WITHDRAWN":
-            raise HTTPException(status_code=403, detail="Original probe is withdrawn")
+            raise api_error(403, "FORBIDDEN", "Original probe is withdrawn.")
 
     # Derive structural fields from assignment
     study_id = assignment["study_id"]
@@ -206,7 +280,7 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
         return res.data
     except Exception as e:
         err_str = str(e).lower()
-        if "duplicate key" in err_str or "uq_probe_participant_client_event" in err_str:
+        if _is_duplicate(err_str):
             # Semantic Idempotency Check using Service Role
             existing = (
                 service_client.table("probe_observations")
@@ -220,13 +294,15 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
                 if existing.data[0]["client_payload_hash"] == client_payload_hash:
                     return {"idempotent_replay": True, "message": "Exact payload duplicate ignored."}
                 else:
-                    raise HTTPException(
-                        status_code=409, detail="Conflicting reuse of client_event_id with different payload."
-                    )
-            raise HTTPException(status_code=409, detail="Duplicate client event identifier") from e
+                    raise api_error(409, "CONFLICT", "Conflicting reuse of client_event_id with a different payload.")
+            raise api_error(409, "CONFLICT", "Duplicate client event identifier.") from e
 
         logger.exception(
             "probe_insert_failed",
-            extra={"request_id": req.state.request_id, "error_code": "PROBE_INSERT_FAILED"},
+            extra={
+                "request_id": req.state.request_id,
+                "trace_id": getattr(req.state, "trace_id", "unknown"),
+                "error_code": "PROBE_INSERT_FAILED",
+            },
         )
-        raise HTTPException(status_code=400, detail="Unable to persist probe observation") from e
+        raise _persistence_error(e, "probe observation") from e

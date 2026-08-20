@@ -199,6 +199,8 @@ def test_version_route_fails_closed_without_leaking_artifact_location(tmp_path: 
             "retryable": True,
             "details": {},
             "request_id": "release-check",
+            # F-025: the canonical envelope carries trace_id for correlation.
+            "trace_id": "release-check",
         }
         assert str(tmp_path) not in response.text
     finally:
