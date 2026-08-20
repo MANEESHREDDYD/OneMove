@@ -192,17 +192,45 @@ class DecisionLedger:
         feature_snapshot_hash: str,
         selected_action: str,
         opened_facilities: Sequence[str],
-        objective_value: int,
-        expected_travel_seconds: int,
-        p95_travel_seconds: int,
-        coverage_basis_points: int,
+        objective_value: int | None,
+        expected_travel_seconds: int | None,
+        p95_travel_seconds: int | None,
+        coverage_basis_points: int | None,
         graph_version: str,
         osrm_bundle_hash: str,
         solver_version: str,
         evidence_ids: Sequence[str] = (),
         recorded_at: datetime | None = None,
         recorded_by: str | None = None,
+        decision_class: str = "OPTIMIZER_DECISION",
+        operator_rationale: str | None = None,
+        operator_claims: dict[str, Any] | None = None,
+        lineage_verified: dict[str, str] | None = None,
     ) -> DecisionRecord:
+        """Record a decision.
+
+        The metric parameters are Optional because a MANUAL_OPERATOR_DECISION has
+        no solver-derived values: NULL is the truthful entry, and the operator's
+        own figures belong in operator_claims marked UNVERIFIED (F-005). An
+        OPTIMIZER_DECISION must still supply all four; the database CHECK enforces
+        that, so nullability cannot become a loophole for the optimizer path.
+        """
+        if decision_class == "OPTIMIZER_DECISION":
+            missing = [
+                name
+                for name, value in (
+                    ("objective_value", objective_value),
+                    ("expected_travel_seconds", expected_travel_seconds),
+                    ("p95_travel_seconds", p95_travel_seconds),
+                    ("coverage_basis_points", coverage_basis_points),
+                )
+                if value is None
+            ]
+            if missing:
+                raise ValueError(
+                    "DECISION_LINEAGE_INCOMPLETE: an OPTIMIZER_DECISION requires every derived metric; "
+                    f"missing: {', '.join(missing)}"
+                )
         h = hashlib.sha256(
             f"{workspace_id}:{decision_time.isoformat()}:{feature_snapshot_hash}:{osrm_bundle_hash}:{selected_action}:{','.join(sorted(opened_facilities))}:{self.code_sha}".encode()
         ).hexdigest()[:16]

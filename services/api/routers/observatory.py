@@ -31,6 +31,11 @@ from services.api.services.observatory import ObservatoryService, get_observator
 from services.zonepilot.assistant.contracts import AssistantToolCall, ToolName
 from services.zonepilot.assistant.tools import build_assistant_registry
 from services.zonepilot.decisions.ledger import DecisionLedger
+from services.zonepilot.decisions.lineage_validation import (
+    LineageValidationUnavailable,
+    operator_claims,
+    validate_operator_lineage,
+)
 from services.zonepilot.decisions.repository import DecisionRepository
 from services.zonepilot.economics.registry import CANONICAL_EXPERIMENTS
 from services.zonepilot.forecast.contracts import BaselineModelType, ForecastTarget, PredictionRecord
@@ -636,6 +641,22 @@ def record_decision(
                 422,
             )
 
+        # Declaring the decision manual is not the same as the claims being true.
+        # A certifier posted invented facilities, an invented OSRM hash and 100%
+        # coverage and got a persisted decision, because the API required these
+        # fields without ever resolving them. Resolve them now.
+        try:
+            verdict = validate_operator_lineage(
+                opened_facilities=list(payload.opened_facilities),
+                graph_version=payload.graph_version,
+                osrm_bundle_hash=payload.osrm_bundle_hash,
+            )
+        except LineageValidationUnavailable as artifact_err:
+            standard_error("DEPENDENCY_UNAVAILABLE", str(artifact_err), 503)
+
+        if not verdict.ok:
+            standard_error("DECISION_LINEAGE_INVALID", "; ".join(verdict.rejections), 422)
+
     if payload.optimization_job_id:
         job = _opt_service.get_optimization(payload.optimization_job_id, ws_id)
         if not job:
@@ -665,10 +686,25 @@ def record_decision(
             feature_snapshot_hash=payload.feature_snapshot_hash,
             selected_action=payload.selected_action,
             opened_facilities=payload.opened_facilities,
-            objective_value=payload.objective_value,
-            expected_travel_seconds=payload.expected_travel_seconds,
-            p95_travel_seconds=payload.p95_travel_seconds,
-            coverage_basis_points=payload.coverage_basis_points,
+            # The authoritative metric columns hold ONLY solver-derived values.
+            # There is no solver run behind a hand-authored decision, so they are
+            # NULL and the operator's figures go to operator_claims marked
+            # UNVERIFIED. Copying them into the derived columns would make a
+            # typed-in coverage figure indistinguishable from a computed one to
+            # every downstream reader (F-005).
+            objective_value=None,
+            expected_travel_seconds=None,
+            p95_travel_seconds=None,
+            coverage_basis_points=None,
+            decision_class="MANUAL_OPERATOR_DECISION",
+            operator_rationale=payload.operator_rationale,
+            operator_claims=operator_claims(
+                objective_value=payload.objective_value,
+                expected_travel_seconds=payload.expected_travel_seconds,
+                p95_travel_seconds=payload.p95_travel_seconds,
+                coverage_basis_points=payload.coverage_basis_points,
+            ),
+            lineage_verified=verdict.verified,
             graph_version=payload.graph_version,
             osrm_bundle_hash=payload.osrm_bundle_hash,
             solver_version=payload.solver_version,
