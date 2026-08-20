@@ -29,6 +29,7 @@ TENANT_SCOPED_METHODS = {
     "get_decision",
     "get_shadow",
     "get_zone_forecasts",
+    "get_zone_forecasts_as_of",
     "get_scenario",
     "get_problem_snapshot",
     "get_job",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+from datetime import datetime
 from typing import Any, Callable
 
 from services.zonepilot.assistant.contracts import (
@@ -11,6 +12,7 @@ from services.zonepilot.assistant.contracts import (
     AssistantToolResult,
     ToolName,
 )
+from services.zonepilot.forecast.timeline import coerce_utc, utc_now
 
 # Prompt injection pattern protection
 _INJECTION_PATTERNS = [
@@ -144,6 +146,24 @@ def _provenance(obj: Any, workspace_id: str, entity_type: str, entity_id: str) -
     }
 
 
+def _decision_time(args: dict[str, Any]) -> datetime:
+    """Resolve the decision time a point-in-time read must be bounded by.
+
+    Callers may pin the context with ``as_of``/``decision_time``; otherwise the
+    context is now. An unparseable value is an error, never a silent fallback to
+    now, because that would quietly widen the window the caller asked to narrow.
+    """
+    for key in ("as_of", "decision_time"):
+        raw = args.get(key)
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            continue
+        resolved = coerce_utc(raw.strip() if isinstance(raw, str) else raw)
+        if resolved is None:
+            raise ValueError(f"{key} must be an ISO-8601 timestamp")
+        return resolved
+    return utc_now()
+
+
 def _measure(field_evidence: Any) -> dict[str, Any]:
     """Unwrap an authoritative FieldEvidence into value + unit. Never defaults."""
     value = getattr(field_evidence, "value", None)
@@ -208,21 +228,37 @@ def build_assistant_registry(
         zone_id = str(args.get("zone_id", "")).strip()
         if not zone_id:
             raise ValueError("zone_id is required")
-        rows = forecast_repository.get_zone_forecasts(zone_id, ws, limit=1)
+        as_of = _decision_time(args)
+
+        # Point-in-time read only. The unbounded read ordered by target_time DESC,
+        # so limit=1 returned the furthest-FUTURE forecast: a record issued after
+        # the decision time was selectable from a past context (F-020). A backing
+        # repository that cannot answer "as of" is reported UNAVAILABLE rather
+        # than fallen back to an unbounded read.
+        point_in_time_read = getattr(forecast_repository, "get_zone_forecasts_as_of", None)
+        if not callable(point_in_time_read):
+            raise AuthoritativeSourceUnavailable(
+                "Forecast repository does not support point-in-time reads; "
+                "a forecast cannot be served without an issue-time bound"
+            )
+        rows = point_in_time_read(zone_id, ws, as_of, 1)
         if not rows:
             raise AuthoritativeSourceUnavailable(
-                f"No persisted forecast record exists for zone {zone_id} in workspace {ws}"
+                f"No forecast record issued on or before {as_of.isoformat()} exists "
+                f"for zone {zone_id} in workspace {ws}"
             )
         row = rows[0]
+        issued_at = row.get("forecast_issue_time", row.get("issued_at"))
         return {
             "zone_id": zone_id,
             "workspace_id": ws,
+            "as_of": as_of.isoformat(),
             "target_metric": row.get("target_metric"),
             "predicted_value": row.get("predicted_value"),
             "model_id": row.get("model_id"),
             "model_version": row.get("model_version"),
             "horizon_minutes": row.get("horizon_minutes"),
-            "issued_at": str(row.get("issued_at")) if row.get("issued_at") is not None else None,
+            "issued_at": str(issued_at) if issued_at is not None else None,
             "source": "forecast_records",
             "record_id": str(row.get("forecast_id") or row.get("id") or ""),
             # The Evidence Inspector has no forecast branch, so there is no
