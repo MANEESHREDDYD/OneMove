@@ -26,6 +26,19 @@ resource "google_pubsub_topic" "dead_letter" {
   name    = "zonepilot-opt-dead-letter-${var.environment}"
 }
 
+# Dead Letter Subscription
+resource "google_pubsub_subscription" "dead_letter_sub" {
+  project = var.project_id
+  name    = "zonepilot-opt-dead-letter-sub-${var.environment}"
+  topic   = google_pubsub_topic.dead_letter.name
+
+  # Explicit message retention for incident inspection (7 days)
+  message_retention_duration = "604800s"
+  
+  # Ensure message ordering is preserved if needed, though for DLQ it's optional
+  # Do not configure push delivery so the DLQ remains inspectable manually
+}
+
 # Primary Optimization Jobs Topic
 resource "google_pubsub_topic" "optimization_jobs" {
   project = var.project_id
@@ -65,6 +78,24 @@ resource "google_pubsub_subscription" "worker_sub" {
   }
 }
 
+data "google_project" "project" {}
+
+# Allow Pub/Sub service agent to publish to the dead-letter topic
+resource "google_pubsub_topic_iam_member" "dlq_publisher" {
+  project = var.project_id
+  topic   = google_pubsub_topic.dead_letter.name
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+}
+
+# Allow Pub/Sub service agent to subscribe/read from the worker sub for dead lettering
+resource "google_pubsub_subscription_iam_member" "dlq_subscriber" {
+  project      = var.project_id
+  subscription = google_pubsub_subscription.worker_sub.name
+  role         = "roles/pubsub.subscriber"
+  member       = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+}
+
 output "topic_name" {
   value = google_pubsub_topic.optimization_jobs.name
 }
@@ -83,4 +114,12 @@ output "subscription_id" {
 
 output "dead_letter_topic_name" {
   value = google_pubsub_topic.dead_letter.name
+}
+
+output "dead_letter_subscription_name" {
+  value = google_pubsub_subscription.dead_letter_sub.name
+}
+
+output "dead_letter_subscription_id" {
+  value = google_pubsub_subscription.dead_letter_sub.id
 }
