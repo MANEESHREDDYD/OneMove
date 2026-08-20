@@ -1,0 +1,31 @@
+name: Audit 3 (F-023 Rate Limiting)
+on: [push, workflow_dispatch]
+
+jobs:
+  test-f023:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.113.0
+
+      - name: Start ephemeral database and apply migrations
+        run: |
+          supabase start
+          supabase db reset
+          echo "TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54332/postgres" >> $GITHUB_ENV
+          echo "ZONEPILOT_DB_URL=postgresql://postgres:postgres@127.0.0.1:54332/postgres" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: |
+          python -m pip install httpx uvicorn -r requirements.txt -r services/api/requirements.txt
+          pip install -e ./python
+
+      - name: Run F-023 Empirical Test
+        run: python scripts/test_f023_empirical.py
