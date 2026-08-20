@@ -31,6 +31,7 @@ TENANT_SCOPED_METHODS = {
     "get_zone_forecasts",
     "get_scenario",
     "get_problem_snapshot",
+    "get_job",
     "list_decisions",
     "list_scenarios",
     "list_jobs",
@@ -45,7 +46,13 @@ SYSTEM_WIDE_EXEMPTIONS = {
     "mark_outbox_failed": "Keyed by event_id, which is globally unique and already tenant-bound.",
 }
 
-_CONDITIONAL_SCOPE = re.compile(r"if\s+workspace_id\s*:\s*\n\s*query\s*\+=", re.MULTILINE)
+# Any conditional guarding a workspace-predicate append, however spelled:
+#   if workspace_id:  /  if workspace_id is not None:  /  if ws:
+#   query += ...      /  sql += ...
+_CONDITIONAL_SCOPE = re.compile(
+    r"if\s+[\w.]*(?:workspace|ws|tenant)[\w.]*\s*(?:is\s+not\s+None\s*)?:\s*\n\s*\w+\s*\+=",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def test_repository_files_were_discovered() -> None:
@@ -69,7 +76,11 @@ def test_tenant_scoped_methods_require_a_workspace(path: Path) -> None:
     offenders: list[str] = []
 
     for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef) or node.name not in TENANT_SCOPED_METHODS:
+        # async def produces AsyncFunctionDef; checking only FunctionDef let
+        # any method evade this contract by adding one keyword.
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name not in TENANT_SCOPED_METHODS:
             continue
         if node.name in SYSTEM_WIDE_EXEMPTIONS:
             continue

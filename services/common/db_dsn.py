@@ -74,11 +74,21 @@ def _assert_test_database_is_safe(dsn: str) -> None:
             "PROTECTED_DATABASE_FINGERPRINTS. The test suite performs destructive writes and will not run against it."
         )
 
-    if not _is_local_host(dsn) and os.environ.get("ALLOW_NONLOCAL_TEST_DATABASE") != "1":
+    if _is_local_host(dsn):
+        return
+
+    # A non-local target is permitted only when the operator names THIS EXACT
+    # database by fingerprint. The previous gate accepted ALLOW_NONLOCAL_TEST_DATABASE=1,
+    # which was a self-service opt-out: any CI job or .env file could set it and
+    # point the destructive suite at any host, including the production pooler
+    # (AUDIT-1 on F-001). Naming a fingerprint cannot be done accidentally, and it
+    # authorises one database rather than all of them.
+    allowed = {f.strip() for f in os.environ.get("ALLOWED_NONLOCAL_TEST_FINGERPRINTS", "").split(",") if f.strip()}
+    if fingerprint not in allowed:
         raise ProtectedDatabaseError(
-            f"TEST_DATABASE_URL points at non-local host database {fingerprint}. The test suite performs "
-            "destructive writes. Use a local/ephemeral PostgreSQL, or set ALLOW_NONLOCAL_TEST_DATABASE=1 to "
-            "acknowledge the risk explicitly."
+            f"TEST_DATABASE_URL points at non-local database {fingerprint}. The test suite performs "
+            "destructive writes. Use a local or ephemeral PostgreSQL. To authorise this specific database, "
+            f"add exactly {fingerprint} to ALLOWED_NONLOCAL_TEST_FINGERPRINTS -- there is no blanket override."
         )
 
 

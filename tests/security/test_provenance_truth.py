@@ -68,3 +68,43 @@ def test_solver_version_reports_the_installed_solver() -> None:
     assert SOLVER_VERSION.startswith("ortools-cp-sat-")
     assert SOLVER_VERSION != "ortools-cp-sat"
     assert "UNKNOWN_VERSION" not in SOLVER_VERSION
+
+
+def test_every_save_result_call_site_supplies_all_required_arguments() -> None:
+    """AUDIT-2 found a call site missing three required arguments.
+
+    Making save_result's lineage mandatory (F-011) silently broke the fail-closed
+    path in OptimizationService, which would have raised TypeError the first time
+    a solve failed in production. The suite missed it because that path only runs
+    with a database. This check is static, so it gates without one.
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    sig = inspect.signature(OptimizationRepository.save_result)
+    required = {
+        name for name, param in sig.parameters.items() if param.default is inspect.Parameter.empty and name != "self"
+    }
+
+    offenders: list[str] = []
+    for path in (root / "services").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if not (isinstance(func, ast.Attribute) and func.attr == "save_result"):
+                continue
+            # Only the optimization repository takes this contract.
+            if "optimization" not in str(path):
+                continue
+            supplied = {kw.arg for kw in node.keywords if kw.arg}
+            if any(kw.arg is None for kw in node.keywords):
+                continue  # **kwargs expansion; cannot check statically
+            missing = required - supplied
+            if missing:
+                rel = path.relative_to(root).as_posix()
+                offenders.append(f"{rel}:{node.lineno} missing {sorted(missing)}")
+
+    assert not offenders, "save_result called without required lineage: " + "; ".join(offenders)

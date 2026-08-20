@@ -42,7 +42,7 @@ def test_missing_test_database_url_fails_closed(monkeypatch) -> None:
 def test_test_runner_refuses_nonlocal_database(monkeypatch) -> None:
     """A destructive suite must not silently target a hosted database."""
     monkeypatch.setenv("TEST_DATABASE_URL", HOSTED_DSN)
-    monkeypatch.delenv("ALLOW_NONLOCAL_TEST_DATABASE", raising=False)
+    monkeypatch.delenv("ALLOWED_NONLOCAL_TEST_FINGERPRINTS", raising=False)
     with pytest.raises(ProtectedDatabaseError):
         get_database_dsn()
 
@@ -66,3 +66,26 @@ def test_fingerprint_excludes_credentials() -> None:
     b = "postgresql://user:secret-two@db.example.com:5432/postgres"
     assert database_fingerprint(a) == database_fingerprint(b)
     assert database_fingerprint(a) != database_fingerprint(LOCAL_DSN)
+
+
+def test_blanket_nonlocal_override_no_longer_exists(monkeypatch) -> None:
+    """AUDIT-1: a self-service opt-out is not a gate.
+
+    ALLOW_NONLOCAL_TEST_DATABASE=1 let any CI job or .env point the destructive
+    suite at any host. Authorisation must name one specific database.
+    """
+    monkeypatch.setenv("TEST_DATABASE_URL", HOSTED_DSN)
+    monkeypatch.setenv("ALLOW_NONLOCAL_TEST_DATABASE", "1")
+    monkeypatch.delenv("ALLOWED_NONLOCAL_TEST_FINGERPRINTS", raising=False)
+    with pytest.raises(ProtectedDatabaseError):
+        get_database_dsn()
+
+
+def test_nonlocal_requires_naming_that_exact_database(monkeypatch) -> None:
+    monkeypatch.setenv("TEST_DATABASE_URL", HOSTED_DSN)
+    monkeypatch.setenv("ALLOWED_NONLOCAL_TEST_FINGERPRINTS", "some-other-fingerprint")
+    with pytest.raises(ProtectedDatabaseError):
+        get_database_dsn()
+
+    monkeypatch.setenv("ALLOWED_NONLOCAL_TEST_FINGERPRINTS", database_fingerprint(HOSTED_DSN))
+    assert get_database_dsn() == HOSTED_DSN

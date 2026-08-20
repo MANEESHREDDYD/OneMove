@@ -212,6 +212,10 @@ class OptimizationService:
         if not job_row:
             raise LookupError(f"Optimization job {job_id} not found; cannot resolve owning workspace")
         job_workspace_id = str(job_row["workspace_id"] or "").strip()
+        # Lineage for the fail-closed path, read from the job row rather than
+        # defaulted. A solver failure must still record what it was solving.
+        job_graph_version = str(job_row.get("graph_version") or "").strip() or "UNKNOWN"
+        job_assumption_version = str(job_row.get("assumption_version") or "").strip() or "UNVERSIONED"
         if not job_workspace_id:
             raise ValueError(f"Optimization job {job_id} has no workspace_id; refusing to persist a global snapshot")
 
@@ -290,6 +294,9 @@ class OptimizationService:
                 action="NONE",
                 fail_closed=True,
                 code_sha=effective_code_sha,
+                graph_version=job_graph_version,
+                assumption_version=job_assumption_version,
+                solver_version=SOLVER_VERSION,
                 run_duration_ms=run_ms,
             )
         return self.repository.get_job_system(job_id) or {}
