@@ -7,6 +7,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, MapPin, Package, Clock, DollarSign, Activity } from "lucide-react"
 import { AdminOrderActions } from "./AdminOrderActions"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function AdminOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
@@ -14,16 +15,12 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     return <SetupRequired />
   }
 
+  await requireAdmin()
+
   const resolvedParams = await params
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    redirect('/auth/login')
-  }
-
-  // Fetch admin role
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (!profile || profile.role !== 'admin') {
     redirect('/auth/login')
   }
 

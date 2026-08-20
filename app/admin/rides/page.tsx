@@ -1,8 +1,12 @@
 import { PageHeader } from "@/components/common/PageHeader"
 import { GlassCard } from "@/components/common/GlassCard"
 import { Car } from "lucide-react"
+import { SetupRequired } from "@/components/common/SetupRequired"
+import { requireAdmin } from "@/lib/auth/dal"
 
-export default function GlobalRidesPage() {
+export default async function GlobalRidesPage() {
+  if (!(await requireAdmin())) return <SetupRequired />
+
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <PageHeader 

@@ -5,10 +5,13 @@ import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import { ShieldAlert, ShieldCheck, Shield } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function RiskCenterPage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')

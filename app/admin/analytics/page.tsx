@@ -7,12 +7,15 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { AnalyticsClient } from "./AnalyticsClient"
 import { GlassCard } from "@/components/common/GlassCard"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
   if (!supabase) {
     return <SetupRequired />
   }
+
+  await requireAdmin()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {

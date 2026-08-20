@@ -2,12 +2,15 @@ import { PageHeader } from "@/components/common/PageHeader"
 import { GlassCard } from "@/components/common/GlassCard"
 import { createClient } from "@/utils/supabase/server"
 import { SetupRequired } from "@/components/common/SetupRequired"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export const dynamic = "force-dynamic"
 
 export default async function AdminUsersPage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
 
   // Fetch profiles
   const { data: profiles, error } = await supabase

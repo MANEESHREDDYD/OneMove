@@ -6,6 +6,16 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MapMarkerLegend } from './MapMarkerLegend'
 
+/**
+ * City command map.
+ *
+ * This component previously synthesised its own contents: 19 markers (drivers, rides,
+ * eats/grocery/courier jobs) were placed at `Math.random()` offsets around NYC and three
+ * demand zones were hard-coded, so an operator would have read fabricated fleet positions
+ * as live ones. It is now purely presentational — it renders only what a caller supplies
+ * from a real source, and states plainly when it has been given nothing.
+ */
+
 // NYC Coordinates
 const NYC_CENTER: [number, number] = [40.7128, -74.0060]
 
@@ -28,29 +38,39 @@ const icons = {
   merchant: createIcon('#333333'), // dark
 }
 
-// Generate some random nearby coordinates
-const getRandomOffset = () => (Math.random() - 0.5) * 0.04
-const generateMarkers = (count: number, type: string) => {
-  return Array.from({ length: count }).map((_, i) => ({
-    id: `${type}-${i}`,
-    position: [NYC_CENTER[0] + getRandomOffset(), NYC_CENTER[1] + getRandomOffset()] as [number, number],
-    type
-  }))
+export type FleetMarkerType = keyof typeof icons
+
+export type FleetMarker = {
+  id: string
+  position: [number, number]
+  type: FleetMarkerType
+  label: string
 }
 
-const activeDrivers = generateMarkers(8, 'driver')
-const activeRides = generateMarkers(3, 'ride')
-const eatsOrders = generateMarkers(4, 'eats')
-const groceryOrders = generateMarkers(2, 'grocery')
-const courierJobs = generateMarkers(2, 'courier')
+export type DemandZone = {
+  id: string
+  center: [number, number]
+  /** metres */
+  radius: number
+  /** 0-1 fill opacity, must come from a measured demand figure */
+  intensity: number
+}
 
-const demandZones = [
-  { center: [40.7580, -73.9855] as [number, number], radius: 800, intensity: 0.5 }, // Times Square
-  { center: [40.7128, -74.0060] as [number, number], radius: 600, intensity: 0.3 }, // Financial District
-  { center: [40.7306, -73.9866] as [number, number], radius: 1000, intensity: 0.4 }, // East Village
-]
+export type CityCommandMapProps = {
+  /** Live entity positions from a real source. Omit when no source is connected. */
+  markers?: FleetMarker[]
+  /** Measured demand zones from a real source. Omit when no source is connected. */
+  demandZones?: DemandZone[]
+  center?: [number, number]
+  zoom?: number
+}
 
-export default function CityCommandMap() {
+export default function CityCommandMap({
+  markers,
+  demandZones,
+  center = NYC_CENTER,
+  zoom = 13,
+}: CityCommandMapProps) {
   // Fix Leaflet's default icon path issues in React
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -63,11 +83,13 @@ export default function CityCommandMap() {
     })
   }, [])
 
+  const hasLiveData = markers !== undefined || demandZones !== undefined
+
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden border">
-      <MapContainer 
-        center={NYC_CENTER} 
-        zoom={13} 
+      <MapContainer
+        center={center}
+        zoom={zoom}
         style={{ height: '100%', width: '100%', zIndex: 10 }}
         zoomControl={false}
       >
@@ -75,53 +97,41 @@ export default function CityCommandMap() {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        
-        {/* Demand Zones */}
-        {demandZones.map((zone, i) => (
-          <Circle 
-            key={`zone-${i}`}
-            center={zone.center} 
-            radius={zone.radius} 
-            pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: zone.intensity, weight: 0 }} 
+
+        {demandZones?.map((zone) => (
+          <Circle
+            key={zone.id}
+            center={zone.center}
+            radius={zone.radius}
+            pathOptions={{
+              color: '#ef4444',
+              fillColor: '#ef4444',
+              fillOpacity: zone.intensity,
+              weight: 0,
+            }}
           />
         ))}
 
-        {/* Drivers */}
-        {activeDrivers.map(marker => (
-          <Marker key={marker.id} position={marker.position} icon={icons.driver}>
-            <Popup>Active Driver</Popup>
-          </Marker>
-        ))}
-
-        {/* Rides */}
-        {activeRides.map(marker => (
-          <Marker key={marker.id} position={marker.position} icon={icons.ride}>
-            <Popup>Active Ride</Popup>
-          </Marker>
-        ))}
-
-        {/* Eats */}
-        {eatsOrders.map(marker => (
-          <Marker key={marker.id} position={marker.position} icon={icons.eats}>
-            <Popup>Eats Order</Popup>
-          </Marker>
-        ))}
-
-        {/* Grocery */}
-        {groceryOrders.map(marker => (
-          <Marker key={marker.id} position={marker.position} icon={icons.grocery}>
-            <Popup>Grocery Order</Popup>
-          </Marker>
-        ))}
-
-        {/* Courier */}
-        {courierJobs.map(marker => (
-          <Marker key={marker.id} position={marker.position} icon={icons.courier}>
-            <Popup>Courier Job</Popup>
+        {markers?.map((marker) => (
+          <Marker key={marker.id} position={marker.position} icon={icons[marker.type]}>
+            <Popup>{marker.label}</Popup>
           </Marker>
         ))}
       </MapContainer>
-      
+
+      {!hasLiveData && (
+        <div className="absolute inset-0 z-[500] flex items-center justify-center bg-background/80 backdrop-blur-sm text-center p-6">
+          <div className="space-y-1">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
+              Live Positions Unavailable
+            </p>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              No fleet telemetry source is connected to this map.
+            </p>
+          </div>
+        </div>
+      )}
+
       <MapMarkerLegend />
     </div>
   )

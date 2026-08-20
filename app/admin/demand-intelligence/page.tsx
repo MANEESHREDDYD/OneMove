@@ -5,10 +5,13 @@ import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import { AlertCircle, Flame, ShieldAlert, Zap } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function DemandIntelligencePage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -29,10 +32,11 @@ export default async function DemandIntelligencePage() {
       <div className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-start gap-4">
         <AlertCircle className="w-6 h-6 text-primary mt-1" />
         <div>
-          <h3 className="font-bold text-primary">Intelligence Engine Active</h3>
+          <h3 className="font-bold text-primary">Rule-Based Forecast Engine</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            This module evaluates real-time location metrics and order velocity to forecast demand across 4 standard zones. 
-            Confidence scores represent deterministic rule-weighting.
+            Demand levels come from a fixed time-of-day rule table applied to four
+            predefined zones. No model is trained and no calibration is performed, so no
+            confidence score is produced &mdash; see <code>lib/ml/demandForecast.ts</code>.
           </p>
         </div>
       </div>
@@ -59,8 +63,17 @@ export default async function DemandIntelligencePage() {
                 <p className="text-2xl font-bold">{forecast.expected_order_volume}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">ML Confidence</p>
-                <p className="text-2xl font-bold">{(forecast.confidence_score * 100).toFixed(0)}%</p>
+                <p className="text-sm text-muted-foreground">Forecast Confidence</p>
+                {forecast.confidence_score === null || forecast.confidence_score === undefined ? (
+                  <p
+                    className="text-sm font-bold text-muted-foreground uppercase tracking-wider pt-2"
+                    title="No calibrated evaluation backs this forecast, so no confidence score exists."
+                  >
+                    Unavailable
+                  </p>
+                ) : (
+                  <p className="text-2xl font-bold">{(forecast.confidence_score * 100).toFixed(0)}%</p>
+                )}
               </div>
             </div>
 
@@ -78,7 +91,7 @@ export default async function DemandIntelligencePage() {
           </GlassCard>
         ))}
 
-        {!forecasts || forecasts.length === 0 && (
+        {(!forecasts || forecasts.length === 0) && (
           <div className="col-span-full p-10 text-center text-muted-foreground bg-card/30 rounded-xl border border-border">
             No active demand forecasts. Run the intelligence pipeline.
           </div>

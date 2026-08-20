@@ -4,10 +4,13 @@ import { SetupRequired } from "@/components/common/SetupRequired"
 import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import { ShieldAlert, CarFront, CheckCircle2 } from "lucide-react"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function PartnerIntelligencePage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')

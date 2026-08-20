@@ -1,10 +1,13 @@
 import { createClient } from '@/utils/supabase/server'
 import { SetupRequired } from '@/components/common/SetupRequired'
 import { Layers, Server, Shield, Activity, Database, BrainCircuit, GitMerge, AlertCircle, TrendingUp, CheckCircle2 } from 'lucide-react'
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function ArchitecturePage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-12">

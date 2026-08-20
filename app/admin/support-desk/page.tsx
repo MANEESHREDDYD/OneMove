@@ -1,10 +1,13 @@
 import { createClient } from '@/utils/supabase/server'
 import { SetupRequired } from '@/components/common/SetupRequired'
 import { Headphones, AlertTriangle, Search, CheckCircle2 } from 'lucide-react'
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function AdminSupportDeskPage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
 
   const { data: tickets } = await supabase
     .from('support_tickets')

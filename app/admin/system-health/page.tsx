@@ -14,6 +14,7 @@ import { GlassCard } from '@/components/common/GlassCard'
 import { SetupRequired } from '@/components/common/SetupRequired'
 import { createClient } from '@/utils/supabase/server'
 import { getSystemHealthSnapshot, type HealthCheck, type HealthStatus } from '@/lib/systemHealth'
+import { requireAdmin } from "@/lib/auth/dal"
 
 export const dynamic = 'force-dynamic'
 
@@ -84,21 +85,13 @@ export default async function AdminSystemHealthPage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
 
+  await requireAdmin()
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
   if (!user) redirect('/auth/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'admin') {
-    redirect(`/${profile?.role === 'driver' ? 'partner' : profile?.role || 'customer'}`)
-  }
 
   const snapshot = await getSystemHealthSnapshot()
   const headlineStatus: HealthStatus =
