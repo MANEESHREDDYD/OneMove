@@ -26,11 +26,12 @@ Status values: `OPEN`, `IN_REMEDIATION`, `READY_FOR_RETEST`, `PASS`, `BLOCKED_EX
 | P0 | 15 |
 | P1 | 12 |
 | P2 | 1 |
-| Fixed, awaiting independent retest | 5 |
+| Fixed, awaiting independent retest | 7 |
 | In remediation | 1 |
 | Blocked external | 1 |
-| Open, untouched | 21 |
+| Open, untouched | 19 |
 | Independently verified by me | 10 |
+| Verified against a live PostgreSQL | 1 (F-002 only) |
 | Reported by an agent, unverified | 18 |
 
 No finding is `PASS`. Nothing has been certified, because certification requires an
@@ -49,6 +50,8 @@ limit before they could retest.
 | F-004 | P0 | Assistant evidence IDs did not resolve through the Inspector | `425952d` | `test_typed_assistant.py` |
 | F-005 | P0 | Decision ledger forgeable via request defaults | `5c5516f` | `test_snapshot_tenant_isolation.py` |
 | F-006 | P0 | Optional workspace predicate in five repositories | `e8e9ef5` | `test_repository_tenancy_contract.py` |
+| F-008 | P0 | Outbox claim was a no-op; no lease or fencing | `2be6f15` | `test_outbox_fencing_contract.py` |
+| F-009 | P1 | Lost-lease writer could mark PUBLISHED | `2be6f15` | `test_outbox_fencing_contract.py` |
 
 **F-001** is `BLOCKED_EXTERNAL`: the code is remediated and tested, but the credential
 itself still requires provider rotation, and it is permanently in public git history
@@ -71,7 +74,6 @@ I reproduced each of these against the code myself.
 | ID | Sev | Title | Location |
 |---|---|---|---|
 | F-007 | P0 | `GRANT ALL PRIVILEGES` on all public tables to `anon`, `authenticated` — any table without RLS is world-writable via the public anon key | `20260809000000_explicit_grants.sql:5` |
-| F-008 | P0 | Outbox claim is a no-op: `FOR UPDATE SKIP LOCKED` inside a with-block that commits and closes, releasing locks before publish; rows stay PENDING; no lease/fencing/CLAIMED state; dispatcher runs at `max_instance_count=2` | `optimization/repository.py:278` |
 | F-024 | P1 | Import-time DB singletons make the process unimportable without `DATABASE_URL`; 18 test modules fail at collection (observed directly) | `routers/observatory.py:54` |
 | F-027 | P2 | Documentation sprawl: 135 docs, 25 ZonePilot-branded including canonical `ARCHITECTURE.md`; legacy ride/checkout reports remain | `docs/` |
 
@@ -83,7 +85,6 @@ Treat as leads. Reproduce before acting.
 
 | ID | Sev | Domain | Title |
 |---|---|---|---|
-| F-009 | P1 | outbox | Lost-lease writer can still mark PUBLISHED (`WHERE event_id` only) |
 | F-010 | P0 | resilience | Synthetic travel matrix fabricated and labelled `PUBLIC_GEOGRAPHIC`, derived grade persisted |
 | F-011 | P0 | optimizer | `save_result` defaults `code_sha`/`graph_version`/`solver_version`, so replay provenance is a literal |
 | F-012 | P0 | frontend | Executive page renders HEALTHY/DEGRADED as literal JSX with fake source attribution, zero fetching |
@@ -107,7 +108,7 @@ Treat as leads. Reproduce before acting.
 ## Certification state
 
 ```
-P0_OPEN = 15   P1_OPEN = 12   P2_OPEN = 1   PASS = 0
+P0_OPEN = 14   P1_OPEN = 11   P2_OPEN = 1   PASS = 0
 STATUS  = NOT_CTO_PRODUCTION_READY
 ```
 
