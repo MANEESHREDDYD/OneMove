@@ -1,7 +1,6 @@
 """Observatory Router exposing authentic PostgreSQL-backed and evidence-bearing endpoints."""
 
 import json
-import math
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
@@ -30,6 +29,8 @@ from services.api.repositories.artifact_catalog import ArtifactCorrupt, Artifact
 from services.api.services.observatory import ObservatoryService, get_observatory_service
 from services.zonepilot.assistant.contracts import AssistantToolCall, ToolName
 from services.zonepilot.assistant.tools import build_assistant_registry
+from services.zonepilot.assumptions.application import AssumptionSetView
+from services.zonepilot.assumptions.registry import default_assumption_registry
 from services.zonepilot.decisions.ledger import DecisionLedger
 from services.zonepilot.decisions.lineage_validation import (
     LineageValidationUnavailable,
@@ -43,8 +44,6 @@ from services.zonepilot.forecast.repository import ForecastRepository
 from services.zonepilot.optimization.contracts import (
     DemandPoint,
     Facility,
-    MatrixEvidenceClass,
-    ObjectiveWeights,
     OptimizationConstraints,
     OptimizationProblem,
     SolverSettings,
@@ -246,7 +245,27 @@ class OptimizationRequest(BaseModel):
     scenarios: list[str] = ["s1_free_flow", "s2_congested", "s3_congested_outage"]
 
 
-def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem:
+def _build_real_94x12x3_problem(
+    req: OptimizationRequest,
+    assumptions: AssumptionSetView | None = None,
+) -> OptimizationProblem:
+    """Assemble the R1 problem from authentic artifacts and one sealed assumption set.
+
+    F-019: this function used to carry the pilot's economics as bare integers --
+    capacity 1500, fixed cost 1000, a 1.4x congestion multiplier, objective weights
+    5000/1000/3000/500/5000 -- and stamp the result ``assumption_version =
+    "r1-proxy-1.0.0"``, a string validated by nothing and traceable to nothing. Not
+    one of those numbers was measured, and the label made them look as though they
+    had been.
+
+    Every number now comes from a digest-sealed :class:`AssumptionSet`, and the
+    reference that identifies it (``assumption_set_id`` + ``version`` + ``sha256``)
+    is written into ``objective_weights.assumption_version``. That field is covered
+    by ``problem_fingerprint``, so it propagates unforgeably into the job row, the
+    frozen problem snapshot and the stored result -- which is what lets a replay
+    load these exact assumptions back instead of whatever is current on the day it
+    runs.
+    """
     mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
     if not mat_path.is_file():
         raise FileNotFoundError(
@@ -264,73 +283,71 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409",
     )
 
+    # A new decision is made under the currently ACTIVE set. Replay never reaches
+    # this branch; it resolves its own pinned set from frozen lineage.
+    view = assumptions or default_assumption_registry().active_view()
+
     catalog = FileSystemArtifactCatalog(default_data_root())
     gold_rows = {str(r["h3_index"]): r for r in catalog.gold_rows()}
 
     facilities = tuple(
         Facility(
             facility_id=fid,
-            capacity_units=1500,
-            fixed_cost_units=1000,
-            failure_exposure_basis_points=100 * idx,
+            capacity_units=view.facility_capacity_units,
+            fixed_cost_units=view.facility_fixed_cost_units,
+            failure_exposure_basis_points=view.facility_failure_exposure_basis_points(rank=rank),
         )
-        for idx, fid in enumerate(facility_ids)
+        for rank, fid in enumerate(facility_ids)
     )
 
     demands = tuple(
         DemandPoint(
             demand_id=did,
-            demand_units=max(
-                1,
-                int(
-                    gold_rows.get(did.split(":")[-1], {}).get("commercial_poi_count", 1) * 3
-                    + gold_rows.get(did.split(":")[-1], {}).get("intersection_count", 1)
-                ),
-            ),
+            demand_units=view.demand_units_for(did, gold_rows),
         )
         for did in demand_ids
     )
 
-    # 3 Uncertainty scenarios with authentic provenance
+    tiers = view.scenario_tiers
+    if len(req.scenarios) != len(tiers):
+        raise ValueError(
+            f"SCENARIO_LADDER_MISMATCH: assumption set {view.token} defines {len(tiers)} scenario tiers "
+            f"({', '.join(tier.role for tier in tiers)}) but {len(req.scenarios)} scenarios were requested. "
+            f"Refusing to invent probabilities or multipliers for the difference."
+        )
+
     scenarios = []
-    for s_idx, s_name in enumerate(req.scenarios):
-        mult = 1.0 if s_idx == 0 else (1.4 if s_idx == 1 else 1.6)
-        prob = 6000 if s_idx == 0 else (3000 if s_idx == 1 else 1000)
+    baseline_matrix_id: str | None = None
+    for s_name, tier in zip(req.scenarios, tiers, strict=True):
+        matrix_id = f"matrix-{s_name}"
+        if tier.is_baseline:
+            baseline_matrix_id = matrix_id
 
-        durations = tuple(
-            tuple(int(math.ceil(math_ceil_dur * mult)) for math_ceil_dur in row) for row in base_durations
-        )
-
-        evidence_cls = (
-            MatrixEvidenceClass.PUBLIC_GEOGRAPHIC
-            if s_idx == 0
-            else (MatrixEvidenceClass.DERIVED if s_idx == 1 else MatrixEvidenceClass.SIMULATED_FAILURE)
-        )
-        parent_id = None if s_idx == 0 else "matrix-s1_free_flow"
+        durations = tuple(tuple(tier.scale_duration_seconds(seconds) for seconds in row) for row in base_durations)
 
         mat = TravelMatrix(
-            matrix_id=f"matrix-{s_name}",
+            matrix_id=matrix_id,
             graph_version=graph_version,
             router=router,
             router_version=router_version,
-            evidence_class=evidence_cls,
+            evidence_class=tier.evidence_class,
             facility_ids=facility_ids,
             demand_ids=demand_ids,
             durations_seconds=durations,
-            parent_matrix_id=parent_id,
+            parent_matrix_id=None if tier.is_baseline else baseline_matrix_id,
         )
 
         scenarios.append(
             UncertaintyScenario(
                 scenario_id=s_name,
-                probability_basis_points=prob,
+                probability_basis_points=tier.probability_basis_points,
                 travel_matrix=mat,
                 capacity_adjustments=(),
             )
         )
 
     return OptimizationProblem(
-        problem_id=f"opt-94x12x3-{uuid.uuid4().hex[:8]}",
+        problem_id=f"opt-94x12x3-{uuid.uuid4().hex}",
         facilities=facilities,
         demand_points=demands,
         scenarios=tuple(scenarios),
@@ -338,18 +355,11 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
             min_open_facilities=req.min_open_facilities,
             max_open_facilities=req.max_open_facilities,
             max_travel_seconds=req.max_travel_seconds,
-            minimum_coverage_basis_points=0,
+            minimum_coverage_basis_points=view.minimum_coverage_basis_points,
             allow_uncovered_demand=req.allow_uncovered_demand,
         ),
-        objective_weights=ObjectiveWeights(
-            assumption_version="r1-proxy-1.0.0",
-            expected_travel=5000,
-            p95_travel=1000,
-            facility_cost=3000,
-            failure_exposure=500,
-            coverage_loss=5000 if req.allow_uncovered_demand else 0,
-        ),
-        solver_settings=SolverSettings(max_time_seconds=30.0, num_search_workers=1),
+        objective_weights=view.objective_weights(allow_uncovered_demand=req.allow_uncovered_demand),
+        solver_settings=SolverSettings(max_time_seconds=view.solver_max_time_seconds),
     )
 
 

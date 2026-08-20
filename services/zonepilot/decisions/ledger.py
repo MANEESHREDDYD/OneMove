@@ -8,6 +8,12 @@ from datetime import datetime, timezone
 from typing import Any, Sequence
 
 from services.temporal.contracts import OutcomeStatus
+from services.zonepilot.assumptions.application import AssumptionSetView
+from services.zonepilot.assumptions.registry import (
+    AssumptionRegistry,
+    AssumptionRegistryError,
+    default_assumption_registry,
+)
 from services.zonepilot.decisions.contracts import (
     DecisionRecord,
     DecisionReplayResult,
@@ -25,10 +31,28 @@ class DecisionLedger:
         code_sha: str | None = None,
         repository: DecisionRepository | None = None,
         opt_repository: OptimizationRepository | None = None,
+        assumption_registry: AssumptionRegistry | None = None,
     ) -> None:
         self.code_sha = code_sha or current_release_sha()
         self.repository = repository or DecisionRepository()
         self.opt_repository = opt_repository or OptimizationRepository()
+        self.assumption_registry = assumption_registry or default_assumption_registry()
+
+    def load_replay_assumptions(self, problem: Any) -> AssumptionSetView:
+        """Load the assumption set a frozen problem was actually built under (F-019).
+
+        Resolution is pinned: assumption_set_id + version + sha256, taken from the
+        frozen problem's own lineage and verified against the registry. It is not
+        "the current set", and it is not "the newest version of that set". A replay
+        that silently adopts today's assumptions has not reproduced the original
+        decision -- it has made a new one and filed it under the old decision's id,
+        which is exactly the class of false reproduction this ledger exists to
+        prevent.
+
+        Raises AssumptionRegistryError when the set cannot be recovered. The caller
+        must fail the replay closed rather than substituting anything.
+        """
+        return self.assumption_registry.resolve_view_for_token(problem.objective_weights.assumption_version)
 
     def freeze_decision_from_optimization(
         self,
@@ -414,11 +438,29 @@ class DecisionLedger:
                     code_sha=self.code_sha,
                 )
         else:
-            # Reconstruct from authentic artifacts if legacy record without explicit snapshot row
+            # Reconstruct from authentic artifacts if legacy record without explicit snapshot row.
+            # F-019: this record names no assumption set, so the set is resolved as
+            # of the frozen decision_time. A set that only became effective after
+            # the decision was made is not eligible, however current it is.
             from services.zonepilot.optimization.pubsub_worker import _reconstruct_problem_from_payload
 
             try:
-                problem = _reconstruct_problem_from_payload({})
+                as_of_assumptions = self.assumption_registry.view_as_of(orig.decision_time)
+            except AssumptionRegistryError as assumption_err:
+                return DecisionReplayResult(
+                    original_decision_id=original_decision_id,
+                    replayed_at=datetime.now(timezone.utc),
+                    pit_valid=False,
+                    reproduced_exact_action=False,
+                    reproduced_exact_facilities=False,
+                    objective_match=False,
+                    match_status="NON_REPLAYABLE",
+                    reason=f"ASSUMPTION_SET_UNRESOLVABLE: {assumption_err}",
+                    code_sha=self.code_sha,
+                )
+
+            try:
+                problem = _reconstruct_problem_from_payload({}, assumptions=as_of_assumptions)
             except Exception as rec_err:
                 return DecisionReplayResult(
                     original_decision_id=original_decision_id,
@@ -431,6 +473,45 @@ class DecisionLedger:
                     reason=f"PROBLEM_SNAPSHOT_NOT_FOUND: {rec_err}",
                     code_sha=self.code_sha,
                 )
+
+        # F-019: the assumptions this replay runs under must be the ones the frozen
+        # problem was built under, recovered by id + version + sha256. If they cannot
+        # be recovered, the honest outcome is "not replayable", never a silent
+        # substitution of whatever is current.
+        try:
+            pinned_assumptions = self.load_replay_assumptions(problem)
+        except AssumptionRegistryError as assumption_err:
+            return DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=False,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="NON_REPLAYABLE",
+                reason=f"ASSUMPTION_SET_UNRESOLVABLE: {assumption_err}",
+                code_sha=self.code_sha,
+            )
+
+        historical_weights = pinned_assumptions.objective_weights(
+            allow_uncovered_demand=problem.constraints.allow_uncovered_demand
+        )
+        if historical_weights != problem.objective_weights:
+            return DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=False,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="NON_REPLAYABLE",
+                reason=(
+                    "ASSUMPTION_SET_DRIFT: the frozen problem's objective weights do not match assumption set "
+                    f"{pinned_assumptions.assumption_set_id}@{pinned_assumptions.version} "
+                    f"(sha256 {pinned_assumptions.sha256[:16]}...) that it claims to have been built from."
+                ),
+                code_sha=self.code_sha,
+            )
 
         res = optimize_facilities(problem)
 

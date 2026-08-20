@@ -71,6 +71,10 @@ def validate_operator_lineage(
     opened_facilities: list[str],
     graph_version: str | None,
     osrm_bundle_hash: str | None,
+    network_version: str | None = None,
+    dataset_version: str | None = None,
+    feature_snapshot_hash: str | None = None,
+    solver_version: str | None = None,
 ) -> LineageVerdict:
     """Resolve operator-supplied lineage against canonical artifacts.
 
@@ -99,6 +103,31 @@ def validate_operator_lineage(
         canonical_graph = str(manifest.get("graph_version") or "")
         verdict.verified["graph_version"] = (
             VERIFIED if canonical_graph and graph_version == canonical_graph else MISMATCH
+        )
+
+    if network_version:
+        canonical_network = str(manifest.get("dataset_id") or manifest.get("schema_name") or "")
+        verdict.verified["network_version"] = (
+            VERIFIED if canonical_network and network_version == canonical_network else MISMATCH
+        )
+
+    if dataset_version:
+        canonical_dataset = str(manifest.get("dataset_version") or "")
+        verdict.verified["dataset_version"] = (
+            VERIFIED if canonical_dataset and dataset_version == canonical_dataset else MISMATCH
+        )
+
+    if feature_snapshot_hash:
+        canonical_feature = str(manifest.get("parquet_sha256") or manifest.get("pilot_boundary_hash") or "")
+        verdict.verified["feature_snapshot_hash"] = (
+            VERIFIED if canonical_feature and feature_snapshot_hash == canonical_feature else MISMATCH
+        )
+
+    if solver_version:
+        from services.zonepilot.release import current_release_sha
+        canonical_solver = current_release_sha()
+        verdict.verified["solver_version"] = (
+            VERIFIED if canonical_solver and solver_version == canonical_solver else MISMATCH
         )
 
     if osrm_bundle_hash:
