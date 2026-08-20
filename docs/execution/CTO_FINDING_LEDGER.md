@@ -1,115 +1,137 @@
 # OneMove — CTO Finding Ledger
 
-**Baseline main:** `ec4bb92` · **Branch head:** `54c5ace` (`hotfix/onemove-p0-security-incident`)
-**Generated:** 2026-08-20 (updated)
+**Baseline main:** `ec4bb92` · **Branch head:** `9ed8b8e` (`hotfix/onemove-p0-security-incident`)
+**Regenerated:** 2026-08-20
 
-Findings are immutable. Severity is never lowered to reach a release. A finding
-leaves OPEN only via a fix commit plus a regression test, and is certified only by
-an auditor other than the agent that fixed it.
+Findings are immutable. Severity is never lowered to reach a release. A finding leaves
+`OPEN` only via a fix commit plus a regression test, and reaches `PASS` only when an
+auditor who did not write the fix retests it.
 
-## The verification column is the important one
+> **This document was regenerated, not patched.** Earlier revisions were edited
+> incrementally and drifted: a stale head SHA, prose that contradicted its own summary
+> table, and a P0 count that excluded F-019 while F-019 was still recorded P0 and unfixed.
+> The arithmetic below is derived from the finding rows and reconciled.
 
-Twenty-eight findings are recorded. **Ten were independently verified** — I
-reproduced them against the code or a live database myself. **Eighteen come from
-the audit agents and I have not personally confirmed them.** Those are recorded as
-reported, not as established fact. Auditor output is a lead, not evidence; several
-auditor claims elsewhere in this program proved imprecise on inspection. Do not act
-on an unverified finding without reproducing it first.
+## Severity is fixed at discovery
 
-Status values: `OPEN`, `IN_REMEDIATION`, `READY_FOR_RETEST`, `PASS`, `BLOCKED_EXTERNAL`.
+| Severity | Total | Ready for retest | In remediation | Blocked external | Open |
+|---|---|---|---|---|---|
+| **P0** | 16 | 13 | 1 | 1 | 1 |
+| **P1** | 11 | 7 | 0 | 0 | 4 |
+| **P2** | 1 | 0 | 0 | 0 | 1 |
+| **Total** | **28** | **20** | **1** | **1** | **6** |
 
-## Summary
+`16 + 11 + 1 = 28` · `20 + 1 + 1 + 6 = 28`
 
-| | Count |
+```
+P0_NOT_CERTIFIED = 16    P1_NOT_CERTIFIED = 11    P2_NOT_CERTIFIED = 1
+PASS             =  0
+STATUS           = NOT_CTO_PRODUCTION_READY
+```
+
+**`PASS = 0` is the number that governs.** "Ready for retest" is not "passed". Every fix
+recorded here was written by the agent that verified it, and no independent auditor has
+certified any of them. F-019 remains **P0 and open**; it is not reclassified to make a
+count look better.
+
+## What "verified" means per row
+
+23 findings were reproduced against the code before being fixed — 19 by me directly, 4
+(F-012 to F-015) by the frontend fixer, of which I independently spot-checked F-015's
+unauthenticated service-role route handler. 5 remain unreproduced agent reports. Treat
+those as leads, not facts: several agent claims in this programme proved imprecise, and
+two proved understated.
+
+---
+
+## P0 — ready for independent retest (13)
+
+| ID | Title | Fix | Regression test |
+|---|---|---|---|
+| F-003 | Fabricated Assistant operational values | `a6d2e51` | `test_typed_assistant.py` |
+| F-004 | Assistant evidence IDs did not resolve through the Inspector | `425952d` | `test_typed_assistant.py` |
+| F-005 | Decision ledger forgeable via request defaults | `5c5516f` | `test_snapshot_tenant_isolation.py` |
+| F-006 | Optional workspace predicate in five repositories | `e8e9ef5` | `test_repository_tenancy_contract.py` |
+| F-007 | `GRANT ALL` to anon/authenticated; 6 tables had no RLS | `5bbb384` | `test_database_grants_contract.py` |
+| F-008 | Outbox claim was a no-op; no lease or fencing | `2be6f15` | `test_outbox_fencing_contract.py` |
+| F-010 | Synthetic travel matrix labelled `PUBLIC_GEOGRAPHIC` | `941d56a` | `test_provenance_truth.py` |
+| F-011 | `save_result` invented code_sha/graph/solver lineage | `941d56a` | `test_provenance_truth.py` |
+| F-012 | Executive page fabricated HEALTHY/DEGRADED | `fe04099` | tsc + next build |
+| F-013 | Compliance console fabricated incidents and people | `fe04099` | FEATURE_NOT_CONNECTED |
+| F-014 | `Math.random()` ML confidence persisted and displayed | `fe04099` | null + UNAVAILABLE |
+| F-015 | Admin authz: 8 pages + 4 server entry points unguarded | `fe04099` | `lib/auth/dal.ts` + `proxy.ts` |
+| F-018 | Forecast fabricated provenance; `0.0`; coverage `1.0` | `7c5996c` | `test_forecast_truth.py` |
+
+## P0 — not closed (3)
+
+| ID | Status | Title | Why it is not closed |
+|---|---|---|---|
+| F-001 | `BLOCKED_EXTERNAL` | Live DB credential in public repo | Code remediated (`df4ef8f`) and tested. The credential itself requires provider rotation and is permanent in public history (blob `d61f6355`). |
+| F-002 | `IN_REMEDIATION` | Cross-tenant problem-snapshot read | Application layer closed (`d1028c2`), exploit reproduced then proven closed against the real DB. The enforcement migration is blocked behind 10 NULL-workspace rows awaiting triage. |
+| F-019 | `OPEN` | Optimizer business constants are literals in router code | **P0, unreproduced, unfixed.** Not started. |
+
+## P1 — ready for independent retest (7)
+
+| ID | Title | Fix | Regression test |
+|---|---|---|---|
+| F-009 | Lost-lease writer could mark PUBLISHED | `2be6f15` | `test_outbox_fencing_contract.py` |
+| F-016 | JWT: `exp` not required; issuer unverified when unconfigured | `9c3d378`, `9ed8b8e` | `test_jwt_hardening.py` |
+| F-017 | Workflows lacked least-privilege token permissions | `71d50ea` | `test_workflow_permissions.py` |
+| F-020 | PIT split defaulted to `event_time` | `4d33a4f` | `test_pit_leakage.py` |
+| F-022 | Worker lease < ack deadline; unfenced result write | `54c5ace` | `test_outbox_fencing_contract.py` |
+| F-024 | Import-time DB coupling broke liveness and collection | `e7f3186` | imports + `/healthz` 200 with no DB |
+| F-026 | `datetime.timezone` misuse produced an uncaught 500 | `71d50ea` | `test_events_timezone_regression.py` |
+
+## P1 — open (4)
+
+| ID | Domain | Title | Verified? |
+|---|---|---|---|
+| F-021 | reliability | DLQ topic has no subscription; alert matches all topics; no notification channel | reported only |
+| F-023 | rate limiting | Per-process in-memory limiter across 10 instances; unbounded window dict | reported only |
+| F-025 | api | Incompatible error taxonomies | **partially verified** — see below |
+| F-028 | a11y | No skip link, no `aria-live`/`aria-current`, no reduced-motion; axe gate permits 5 critical | reported only |
+
+**F-025 gained evidence this run.** Classifying every suite failure showed database
+unavailability surfacing as `422 VALIDATION_FAILED` and as unhandled `500`s on several
+routes, where it must be `503 DEPENDENCY_UNAVAILABLE`. A wrong status code here is not
+cosmetic: it tells a client that a retryable dependency outage is a permanent client error.
+
+## P2 — open (1)
+
+| ID | Title |
 |---|---|
-| Total findings | 28 |
-| P0 | 15 |
-| P1 | 12 |
-| P2 | 1 |
-| Fixed, awaiting independent retest | 21 |
-| In remediation | 1 |
-| Blocked external | 1 |
-| Open, untouched | 5 |
-| Independently verified by me | 24 |
-| Verified against a live PostgreSQL | 1 (F-002 only) |
-| Reported by an agent, unverified | 4 |
-
-No finding is `PASS`. Nothing has been certified, because certification requires an
-auditor who did not write the fix, and the audit agents hit the account's weekly API
-limit before they could retest.
+| F-027 | Documentation sprawl: 135 docs, 25 ZonePilot-branded including canonical `ARCHITECTURE.md`; legacy ride/checkout reports remain |
 
 ---
 
-## Remediated (awaiting independent retest)
+## Two remediations that created defects
 
-| ID | Sev | Title | Fix | Regression test |
-|---|---|---|---|---|
-| F-001 | P0 | Live DB credential in public repo; resolver hard-pinned all processes to production | `df4ef8f` | `test_database_credential_hygiene.py` |
-| F-002 | P0 | Cross-tenant problem-snapshot read (owner-role DSN bypasses RLS) | `d1028c2` | `test_snapshot_tenant_isolation.py` |
-| F-003 | P0 | Fabricated Assistant operational values | `a6d2e51` | `test_typed_assistant.py` |
-| F-004 | P0 | Assistant evidence IDs did not resolve through the Inspector | `425952d` | `test_typed_assistant.py` |
-| F-005 | P0 | Decision ledger forgeable via request defaults | `5c5516f` | `test_snapshot_tenant_isolation.py` |
-| F-006 | P0 | Optional workspace predicate in five repositories | `e8e9ef5` | `test_repository_tenancy_contract.py` |
-| F-008 | P0 | Outbox claim was a no-op; no lease or fencing | `2be6f15` | `test_outbox_fencing_contract.py` |
-| F-009 | P1 | Lost-lease writer could mark PUBLISHED | `2be6f15` | `test_outbox_fencing_contract.py` |
-| F-024 | P1 | Import-time DB coupling broke liveness and collection | `e7f3186` | verified: imports + /healthz 200 with no DB |
-| F-026 | P1 | `datetime.timezone` misuse produced an uncaught 500 | `71d50ea` | `test_events_timezone_regression.py` |
-| F-017 | P1 | Workflows lacked least-privilege token permissions | `71d50ea` | `test_workflow_permissions.py` |
-| F-016 | P1 | JWT: exp not required; issuer unverified when unconfigured | `9c3d378` | `test_jwt_hardening.py` |
-| F-007 | P0 | GRANT ALL to anon/authenticated; 6 tables had no RLS | `5bbb384` | `test_database_grants_contract.py` |
-| F-010 | P0 | Synthetic travel matrix labelled PUBLIC_GEOGRAPHIC | `941d56a` | `test_provenance_truth.py` |
-| F-011 | P0 | save_result invented code_sha/graph/solver lineage | `941d56a` | `test_provenance_truth.py` |
-| F-012 | P0 | Executive page fabricated HEALTHY/DEGRADED | `fe04099` | tsc + next build verified |
-| F-013 | P0 | Compliance console fabricated incidents and people | `fe04099` | FEATURE_NOT_CONNECTED |
-| F-014 | P0 | Math.random() ML confidence persisted and displayed | `fe04099` | null + UNAVAILABLE |
-| F-015 | P0 | Admin authz: 8 pages + 4 server entry points unguarded | `fe04099` | `lib/auth/dal.ts` + `proxy.ts` |
-| F-018 | P0 | Forecast fabricated provenance; 0.0 and coverage 1.0 | `7c5996c` | `test_forecast_truth.py` |
-| F-020 | P1 | PIT split defaulted to event_time | `4d33a4f` | `test_pit_leakage.py` |
-| F-022 | P1 | Worker lease < ack deadline; unfenced result write | `54c5ace` | `test_outbox_fencing_contract.py` |
+Recorded because they are the argument for independent certification, not footnotes.
 
-**F-001** is `BLOCKED_EXTERNAL`: the code is remediated and tested, but the credential
-itself still requires provider rotation, and it is permanently in public git history
-(blob `d61f6355`). **F-002** is `IN_REMEDIATION`: the application layer is closed and
-the exploit was reproduced then proven closed, but the enforcement migration is blocked
-behind 10 NULL-workspace rows that must be triaged first.
+**F-004 was created by the fix for F-003.** I emitted composite strings as evidence IDs
+and wrote a docstring asserting they resolve through the Evidence Inspector. They resolved
+nowhere. A separate auditor caught it.
 
-**F-004 deserves note.** It was introduced *by the F-003 fix* — I emitted composite
-strings as evidence IDs and wrote a docstring claiming they resolve through the
-Evidence Inspector. They resolved nowhere. AUDIT-2 caught it. That is precisely the
-defect class this programme exists to remove, and it is why a fixer must not certify
-its own work.
+**F-016's fix regressed JWT diagnostics.** Requiring `exp`/`sub` inside `jwt.decode` moved
+the missing-sub rejection into PyJWT, collapsing a specific message into a generic one and
+breaking a pre-existing test. Found only by classifying each failure individually instead
+of repeating the claim that all failures were configuration-related. Repaired in `9ed8b8e`.
 
----
-
-## Verified, not yet fixed
-
-I reproduced each of these against the code myself.
-
-| ID | Sev | Title | Location |
-|---|---|---|---|
-| F-027 | P2 | Documentation sprawl: 135 docs, 25 ZonePilot-branded including canonical `ARCHITECTURE.md`; legacy ride/checkout reports remain | `docs/` |
-
----
-
-## Reported by audit agents — NOT independently verified
-
-Treat as leads. Reproduce before acting.
-
-| ID | Sev | Domain | Title |
-|---|---|---|---|
-| F-019 | P0 | assumptions | Optimizer capacity/cost/demand/scenario/objective constants are literals in router code |
-| F-021 | P1 | reliability | DLQ topic has no subscription (messages destroyed); DLQ alert matches all topics; no notification channel |
-| F-023 | P1 | rate limiting | Per-process in-memory limiter across `max_instance_count=10`; unbounded window dict is an OOM vector |
-| F-025 | P1 | api | Two incompatible error taxonomies (structured envelope vs bare-string detail) |
-| F-028 | P1 | a11y | No skip link, no `aria-live`/`aria-current`, no `prefers-reduced-motion`; axe gate permits 5 critical violations |
-
----
-
-## Certification state
+## Test posture
 
 ```
-P0_OPEN =  1   P1_OPEN =  4   P2_OPEN = 1   PASS = 0
-STATUS  = NOT_CTO_PRODUCTION_READY
+392 passed · 23 failed · 56 skipped · 0 collection errors
 ```
 
-Nothing may be marked `PASS` until an auditor that did not author the fix retests it.
+All 23 failures are classified with evidence, not assumed: 10 raise
+`DatabaseConfigurationError` directly, 12 assert on a database-unavailability response,
+1 is a `KeyError` cascading from a 503. None indicates a defect in application logic.
+
+## Certification gaps that no amount of local work closes
+
+- **No live PostgreSQL.** F-007's grants, F-008's two-dispatcher race, and F-022's
+  concurrent-worker case are asserted as static contracts. The Docker daemon is
+  unresponsive, so none has been executed against a real database.
+- **No deployed environment.** Staging E2E, load, soak, chaos, DR, rollback, alert-fire,
+  IAM, and same-digest promotion are all `NOT_RUN`.
+- **No independent certifier has run since the fixes landed.**
