@@ -52,6 +52,8 @@ for ($i = 1; $i -le 3; $i++) {
     # Try parsing IDs from the JSON report if available
     $runJobId = "N/A"
     $runDecisionId = "N/A"
+    $runNetworkResult = "N/A"
+    $runReplayId = "N/A"
     if (Test-Path "playwright-report\demo-results.json") {
         $json = Get-Content "playwright-report\demo-results.json" | ConvertFrom-Json
         $annotations = $json.suites.suites.specs.tests.results.steps.annotations | Select-Object -ExpandProperty annotations -ErrorAction SilentlyContinue
@@ -59,12 +61,16 @@ for ($i = 1; $i -le 3; $i++) {
             foreach ($ann in $annotations) {
                 if ($ann.type -eq "job_id") { $runJobId = $ann.description }
                 if ($ann.type -eq "decision_id") { $runDecisionId = $ann.description }
+                if ($ann.type -eq "network_result") { $runNetworkResult = $ann.description }
+                if ($ann.type -eq "replay_id") { $runReplayId = $ann.description }
             }
         }
     }
 
     $jobId = $runJobId
     $decisionId = $runDecisionId
+    $networkResult = $runNetworkResult
+    $replayId = $runReplayId
 
     Add-Content -Path $reportPath -Value "RUN_$i : $result"
     Add-Content -Path $reportPath -Value "  Duration: $([math]::Round($duration, 2))s"
@@ -111,18 +117,27 @@ Write-Host "Running CORE FAILSAFE DEMO (No Assistant)..."
 $env:INCLUDE_ASSISTANT = "false"
 if (Test-Path "test-results") { Remove-Item -Recurse -Force "test-results\*" }
 npx playwright test tests/e2e/swiggy-friday-demo.spec.ts --config=swiggy-friday-demo.config.ts | Out-Null
+$failsafeExitCode = $LASTEXITCODE
+
 $videos = Get-ChildItem -Path "test-results" -Filter "*.webm" -Recurse
 if ($videos.Count -gt 0) {
     Copy-Item -Path $videos[0].FullName -Destination "$artifactsDir\onemove-swiggy-demo-failsafe.webm" -Force
 }
 
+if ($failsafeExitCode -ne 0) {
+    Add-Content -Path $reportPath -Value "FAILSAFE: FAIL"
+    Add-Content -Path $reportPath -Value "DEMO_READY: NO"
+    exit 1
+} else {
+    Add-Content -Path $reportPath -Value "FAILSAFE: PASS"
+}
+
 Add-Content -Path $reportPath -Value ""
-Add-Content -Path $reportPath -Value "NETWORK_RESULT: OK"
-Add-Content -Path $reportPath -Value "SCENARIO_RESULT: OK"
+Add-Content -Path $reportPath -Value "NETWORK_RESULT: $networkResult"
 Add-Content -Path $reportPath -Value "OPTIMIZATION_JOB_ID: $jobId"
 Add-Content -Path $reportPath -Value "DECISION_ID: $decisionId"
-Add-Content -Path $reportPath -Value "REPLAY_ID: EXACT_MATCH"
-Add-Content -Path $reportPath -Value "ASSISTANT_INCLUDED: YES"
+Add-Content -Path $reportPath -Value "REPLAY_ID: $replayId"
+Add-Content -Path $reportPath -Value "ASSISTANT_INCLUDED: NO"
 Add-Content -Path $reportPath -Value "DEMO_READY: YES"
 
 Write-Host "Demo recording sequence complete!"

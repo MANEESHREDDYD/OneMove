@@ -2,8 +2,12 @@ import { test, expect } from '@playwright/test';
 
 // Configuration
 const API_BASE = process.env.ONEMOVE_API_URL || 'http://127.0.0.1:8000';
-const DEMO_TENANT_EMAIL = process.env.TENANT_A_EMAIL || 'admin@onemove.demo';
-const DEMO_TENANT_PASS = process.env.TENANT_A_PASSWORD || 'Demo@12345';
+const DEMO_TENANT_EMAIL = process.env.TENANT_A_EMAIL;
+const DEMO_TENANT_PASS = process.env.TENANT_A_PASSWORD;
+
+if (!DEMO_TENANT_EMAIL || !DEMO_TENANT_PASS) {
+  throw new Error("FAIL CLOSED: TENANT_A_EMAIL and TENANT_A_PASSWORD are required for the Swiggy Demo recording.");
+}
 
 let apiToken = '';
 
@@ -55,9 +59,18 @@ test.describe('Swiggy Friday Demo Path', () => {
       };
     `});
 
-    await page.evaluate(() => (window as any).showDemoOverlay('Step 1: Operator Console', 
-      '<div><strong>Status:</strong> <span style="color:#22c55e">ONLINE</span></div>'
-    ));
+    let isOnline = false;
+    try {
+      const healthRes = await request.get(`${API_BASE}/health`, { timeout: 5000 });
+      isOnline = healthRes.ok();
+    } catch (e) {
+      isOnline = false;
+    }
+    const statusText = isOnline ? '<span style="color:#22c55e">ONLINE</span>' : '<span style="color:#ef4444">UNAVAILABLE</span>';
+
+    await page.evaluate((statusHtml) => (window as any).showDemoOverlay('Step 1: Operator Console', 
+      '<div><strong>Status:</strong> ' + statusHtml + '</div>'
+    ), statusText);
     await page.waitForTimeout(2000);
 
     // 2. Bengaluru physical-commerce network

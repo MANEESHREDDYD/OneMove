@@ -6,7 +6,7 @@ This is the recommended speaking script for the deterministic Playwright recordi
 "Welcome to the OneMove operator console. We are viewing the unified platform command center. From here, we're going to dive directly into our physical-commerce digital twin."
 
 **[0:03] Bengaluru Digital Twin (`/network`)**
-"Here we see the Bengaluru network topology. This isn't a mock representation; we're loading the authentic Gold H3 Resolution 9 grid over a live OSM base map."
+"Here we see the Bengaluru network topology. This isn't a mock representation; we're loading the authentic Gold H3 Resolution 8 grid over a live OSM base map."
 
 **[0:08] Authentic Network Evidence (API Call)**
 "We begin by querying the live network evidence for a specific zone. You can see the system retrieving the actual routed baseline matrix. This is real OSRM travel duration data underpinning all our operational logic."
