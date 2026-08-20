@@ -31,6 +31,7 @@ from services.zonepilot.optimization.r1_catalog import (
     default_data_root,
 )
 from services.zonepilot.optimization.repository import OptimizationRepository
+from services.zonepilot.optimization.service import SOLVER_VERSION
 from services.zonepilot.optimization.solver import optimize_facilities
 from services.zonepilot.release import current_release_sha
 
@@ -290,13 +291,16 @@ async def process_pubsub_push(request: Request, response: Response):
         result_doc["problem_snapshot_sha256"] = snapshot.problem_snapshot_sha256
         result_doc["dataset_version"] = job.get("dataset_version") or "1.0.0"
         result_doc["network_version"] = graph_ver
-        result_doc["solver_version"] = "ortools-cp-sat"
+        result_doc["solver_version"] = SOLVER_VERSION
 
         _repository.save_result(
             job_id=job_id,
             result_document=result_doc,
             pareto_document=None,
             problem_fingerprint=snapshot.problem_snapshot_sha256,
+            graph_version=graph_ver,
+            assumption_version=job.get("assumption_version") or "UNVERSIONED",
+            solver_version=SOLVER_VERSION,
             solver_status=result.status.value,
             action=result.action.value,
             fail_closed=result.fail_closed,
@@ -335,6 +339,9 @@ async def process_pubsub_push(request: Request, response: Response):
             result_document=closed_doc,
             pareto_document=None,
             problem_fingerprint=f"err-{uuid.uuid4().hex[:8]}",
+            graph_version=(job or {}).get("graph_version") or "UNKNOWN",
+            assumption_version=(job or {}).get("assumption_version") or "UNVERSIONED",
+            solver_version=SOLVER_VERSION,
             solver_status="FAILED",
             action="NONE",
             fail_closed=True,

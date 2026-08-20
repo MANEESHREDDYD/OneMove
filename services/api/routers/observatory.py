@@ -441,6 +441,13 @@ def create_and_run_scenario(
             created_by=user_id,
         )
         return scen
+    except FileNotFoundError as matrix_err:
+        # The authentic routing matrix is absent. Fail closed with a retryable
+        # dependency error rather than grading resilience on invented travel
+        # times (F-010).
+        standard_error("MATRIX_UNAVAILABLE", str(matrix_err), 503)
+    except HTTPException:
+        raise
     except Exception as exc:
         standard_error("EXECUTION_ERROR", str(exc), 422)
 

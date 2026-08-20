@@ -22,6 +22,25 @@ from services.zonepilot.release import current_release_sha
 logger = logging.getLogger("onemove.optimization.service")
 
 
+def _resolve_solver_version() -> str:
+    """Report the solver version actually installed, not a literal.
+
+    Recording "ortools-cp-sat" told a replay nothing about which solver produced a
+    result. The installed distribution version is real provenance and changes when
+    the solver changes (F-011).
+    """
+    try:
+        from importlib.metadata import version
+
+        return f"ortools-cp-sat-{version('ortools')}"
+    except Exception:
+        # Provenance we cannot establish is reported as such, never guessed.
+        return "ortools-cp-sat-UNKNOWN_VERSION"
+
+
+SOLVER_VERSION = _resolve_solver_version()
+
+
 class OptimizationService:
     def __init__(
         self,
@@ -237,7 +256,7 @@ class OptimizationService:
             result_doc["problem_snapshot_sha256"] = snapshot.problem_snapshot_sha256
             result_doc["dataset_version"] = "1.0.0"
             result_doc["network_version"] = graph_ver
-            result_doc["solver_version"] = "ortools-cp-sat"
+            result_doc["solver_version"] = SOLVER_VERSION
 
             self.repository.save_result(
                 job_id=job_id,
@@ -248,6 +267,9 @@ class OptimizationService:
                 action=result.action.value,
                 fail_closed=result.fail_closed,
                 code_sha=effective_code_sha,
+                graph_version=graph_ver,
+                assumption_version=snapshot.assumption_version or "UNVERSIONED",
+                solver_version=SOLVER_VERSION,
                 run_duration_ms=run_ms,
             )
         except Exception as exc:

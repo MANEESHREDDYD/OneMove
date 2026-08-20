@@ -17,36 +17,39 @@ from services.zonepilot.resilience.engine import ResilienceEngine
 from services.zonepilot.resilience.repository import ResilienceRepository
 
 
-def _mock_or_real_baseline_matrix(graph_version: str = "1.1.0+bad320dd48da") -> TravelMatrix:
+def _authentic_baseline_matrix(graph_version: str = "1.1.0+bad320dd48da") -> TravelMatrix:
+    """Load the authentic OSRM travel matrix, or fail closed.
+
+    This function previously fabricated durations from an index arithmetic
+    expression when the artifact was absent, and labelled the result
+    evidence_class=PUBLIC_GEOGRAPHIC with matrix_id="matrix-canonical-r1" -- the
+    same identifiers the authentic matrix uses. A resilience grade computed from
+    invented travel times was therefore indistinguishable from a measured one and
+    was persisted to PostgreSQL as if it were evidence (F-010).
+
+    The optimization path already fails closed here and says so explicitly
+    ("Failing closed without synthetic substitution"). This path now matches it.
+
+    Simulation remains legitimate for the counterfactual disruption applied ON TOP
+    of an authentic baseline; manufacturing the baseline itself is not.
+    """
     mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
-    if mat_path.is_file():
-        doc = json.loads(mat_path.read_text(encoding="utf-8"))
-        return TravelMatrix(
-            matrix_id="matrix-canonical-r1",
-            graph_version=doc.get("graph_version", graph_version),
-            router=doc.get("router", "osrm-routed-table"),
-            router_version=doc.get("router_version", "1.0.0"),
-            evidence_class=MatrixEvidenceClass.PUBLIC_GEOGRAPHIC,
-            facility_ids=tuple(doc["facility_ids"]),
-            demand_ids=tuple(doc["demand_ids"]),
-            durations_seconds=tuple(tuple(r) for r in doc["base_durations_seconds"]),
+    if not mat_path.is_file():
+        raise FileNotFoundError(
+            "MATRIX_UNAVAILABLE: Authentic r1_osrm_travel_matrix.json is missing. "
+            "Refusing to synthesize a baseline travel matrix; no resilience result will be produced."
         )
-    # Fallback only when data root unmounted in minimal isolated test environments
-    facility_ids = tuple(f"fac:{i:02d}" for i in range(1, 13))
-    demand_ids = tuple(f"zone:{i:02d}" for i in range(1, 95))
-    durations = tuple(
-        tuple((500 + ((s_idx * 37 + d_idx * 19) % 600)) for d_idx in range(len(demand_ids)))
-        for s_idx in range(len(facility_ids))
-    )
+
+    doc = json.loads(mat_path.read_text(encoding="utf-8"))
     return TravelMatrix(
         matrix_id="matrix-canonical-r1",
-        graph_version=graph_version,
-        router="osrm-adapter",
-        router_version="1.0.0",
+        graph_version=doc.get("graph_version", graph_version),
+        router=doc.get("router", "osrm-routed-table"),
+        router_version=doc.get("router_version", "1.0.0"),
         evidence_class=MatrixEvidenceClass.PUBLIC_GEOGRAPHIC,
-        facility_ids=facility_ids,
-        demand_ids=demand_ids,
-        durations_seconds=durations,
+        facility_ids=tuple(doc["facility_ids"]),
+        demand_ids=tuple(doc["demand_ids"]),
+        durations_seconds=tuple(tuple(r) for r in doc["base_durations_seconds"]),
     )
 
 
@@ -103,7 +106,7 @@ class ResilienceService:
         )
 
         # 2. Execute resilience engine
-        base_mat = baseline_matrix or _mock_or_real_baseline_matrix(graph_version)
+        base_mat = baseline_matrix or _authentic_baseline_matrix(graph_version)
         st = (
             ScenarioType(scenario_type)
             if scenario_type in ScenarioType._value2member_map_

@@ -250,13 +250,37 @@ class OptimizationRepository:
         solver_status: str,
         action: str,
         fail_closed: bool,
-        code_sha: str = "c7e24e8d378db6a2f19048993bb3803e76f125c2",
-        graph_version: str = "1.1",
-        assumption_version: str = "r1-proxy-1.0.0",
-        solver_version: str = "ortools-cp-sat",
+        code_sha: str,
+        graph_version: str,
+        assumption_version: str,
+        solver_version: str,
         scenario_evidence_classes: list[str] | None = None,
         run_duration_ms: int = 0,
     ) -> None:
+        """Persist a solver result together with its execution lineage.
+
+        Every lineage field is REQUIRED. These previously carried literal defaults
+        -- a hard-coded code_sha, graph_version "1.1", assumption_version
+        "r1-proxy-1.0.0", solver_version "ortools-cp-sat" -- so a result recorded
+        without them claimed provenance it never had, and replay compared against
+        a build that may never have produced it (F-011).
+
+        The persistence layer does not know the execution context and must never
+        guess it. The caller supplies real lineage or the write fails closed.
+        """
+        missing = [
+            name
+            for name, value in (
+                ("code_sha", code_sha),
+                ("graph_version", graph_version),
+                ("assumption_version", assumption_version),
+                ("solver_version", solver_version),
+            )
+            if not value or not str(value).strip()
+        ]
+        if missing:
+            raise ValueError(f"save_result requires authoritative lineage; missing or empty: {', '.join(missing)}")
+
         with self._connect() as conn:
             with conn.cursor() as cur:
                 status = "SUCCESS" if not fail_closed and solver_status == "OPTIMAL" else "FAILED"
