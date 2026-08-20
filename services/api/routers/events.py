@@ -159,7 +159,7 @@ async def create_probe(req: Request, probe: ProbeObservationCreate, supabase: Cl
             sched_dt = datetime.fromisoformat(scheduled_for.replace("Z", "+00:00"))
             obs_dt = probe.observed_at_device
             if obs_dt.tzinfo is None:
-                obs_dt = obs_dt.replace(tzinfo=datetime.timezone.utc)
+                obs_dt = obs_dt.replace(tzinfo=timezone.utc)
             timing_deviation_seconds = int((obs_dt - sched_dt).total_seconds())
             # For example, +/- 5 minutes is valid
             timing_valid = abs(timing_deviation_seconds) <= 300

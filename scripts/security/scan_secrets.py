@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -40,16 +41,56 @@ _OBVIOUS_FIXTURE = re.compile(
 )
 
 RULES: list[tuple[str, re.Pattern[str]]] = [
-    ("uri-embedded-credential", re.compile(r"\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp)://([^:@/\s]+):([^@\s\"']+)@([^\s/:\"']+)")),
-    ("supabase-service-role-key", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]*(?:service_role|supabase)[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+")),
+    (
+        "uri-embedded-credential",
+        re.compile(
+            r"\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp)://([^:@/\s]+):([^@\s\"']+)@([^\s/:\"']+)"
+        ),
+    ),
+    (
+        "supabase-service-role-key",
+        re.compile(
+            r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]*(?:service_role|supabase)[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+"
+        ),
+    ),
     ("gcp-private-key", re.compile(r"-----BEGIN (?:RSA |EC )?PRIVATE KEY-----")),
     ("gcp-sa-key-json", re.compile(r'"type"\s*:\s*"service_account"')),
     ("aws-access-key-id", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
-    ("generic-bearer-token", re.compile(r"\b(?:api[_-]?key|secret|token|passwd|password)\s*[:=]\s*[\"']([A-Za-z0-9_\-]{24,})[\"']", re.IGNORECASE)),
+    (
+        "generic-bearer-token",
+        re.compile(
+            r"\b(?:api[_-]?key|secret|token|passwd|password)\s*[:=]\s*[\"']([A-Za-z0-9_\-]{24,})[\"']", re.IGNORECASE
+        ),
+    ),
 ]
 
-SKIP_DIRS = {".git", "node_modules", "__pycache__", ".next", "dist", "build", ".venv", "venv", "playwright-report", "test-results"}
-SKIP_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".zip", ".gz", ".woff", ".woff2", ".ttf", ".parquet", ".pbf"}
+SKIP_DIRS = {
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".next",
+    "dist",
+    "build",
+    ".venv",
+    "venv",
+    "playwright-report",
+    "test-results",
+}
+SKIP_SUFFIXES = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".ico",
+    ".pdf",
+    ".zip",
+    ".gz",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".parquet",
+    ".pbf",
+}
 
 
 def fingerprint(value: str) -> str:
@@ -59,11 +100,7 @@ def fingerprint(value: str) -> str:
 def _is_benign(rule: str, match: re.Match[str]) -> bool:
     if rule == "uri-embedded-credential":
         password, host = match.group(2), match.group(3)
-        return bool(
-            _BENIGN_HOSTS.match(host)
-            or _PLACEHOLDER.match(password)
-            or _OBVIOUS_FIXTURE.search(password)
-        )
+        return bool(_BENIGN_HOSTS.match(host) or _PLACEHOLDER.match(password) or _OBVIOUS_FIXTURE.search(password))
     if rule == "generic-bearer-token":
         value = match.group(1)
         return bool(_PLACEHOLDER.match(value) or _OBVIOUS_FIXTURE.search(value))
@@ -154,6 +191,21 @@ def scan_history() -> list[tuple[str, str, int, str]]:
     return results
 
 
+def load_baseline() -> dict[str, dict]:
+    """Known historical exposures, keyed by fingerprint.
+
+    A finding absent from the baseline fails the build. A finding present but not
+    yet verified-revoked ALSO fails: an exposed credential that has not been
+    rotated is an open incident, not an accepted risk. Only a credential proven
+    revoked at the provider may pass.
+    """
+    path = Path(__file__).resolve().parents[2] / "security" / "secret_baseline.json"
+    if not path.is_file():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {f["fingerprint"]: f for f in data.get("findings", [])}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--history", action="store_true", help="scan full git history (slow)")
@@ -166,23 +218,41 @@ def main() -> int:
     # is still a local handling risk -- report it without failing the CI gate.
     blocking, local_only = [], []
     for finding in findings:
-        ignored = not args.history and subprocess.run(
-            ["git", "check-ignore", "-q", finding[0]], cwd=root
-        ).returncode == 0
+        ignored = (
+            not args.history and subprocess.run(["git", "check-ignore", "-q", finding[0]], cwd=root).returncode == 0
+        )
         (local_only if ignored else blocking).append(finding)
 
     for location, rule, line_no, fp in local_only:
         print(f"  WARN (git-ignored, not committed) {location}:{line_no}  [{rule}]  fingerprint={fp}")
 
-    if not blocking:
+    # Split blocking findings against the baseline of known historical exposures.
+    baseline = load_baseline()
+    unknown, pending, revoked = [], [], []
+    for finding in blocking:
+        entry = baseline.get(finding[3])
+        if entry is None:
+            unknown.append(finding)
+        elif entry.get("revoked") is True or entry.get("never_live") is True:
+            revoked.append((finding, entry))
+        else:
+            pending.append((finding, entry))
+
+    for finding, entry in revoked:
+        label = "never live" if entry.get("never_live") else "verified revoked"
+        print(f"  BASELINED ({label}) {finding[0]}:{finding[2]} [{entry['incident']}] fingerprint={finding[3]}")
+
+    if not unknown and not pending:
         scope = "history" if args.history else "working tree"
-        print(f"secret scan: PASS ({scope}) - no committed credentials detected")
+        print(f"secret scan: PASS ({scope}) - no unbaselined credentials detected")
         return 0
 
     print("")
-    print(f"secret scan: FAIL - {len(blocking)} committed finding(s). Compare by fingerprint; values are never printed.")
-    for location, rule, line_no, fp in blocking:
-        print(f"  {location}:{line_no}  [{rule}]  fingerprint={fp}")
+    print(f"secret scan: FAIL - {len(unknown)} unbaselined, {len(pending)} awaiting rotation.")
+    for location, rule, line_no, fp in unknown:
+        print(f"  UNKNOWN SECRET   {location}:{line_no}  [{rule}]  fingerprint={fp}")
+    for (location, _rule, line_no, fp), entry in pending:
+        print(f"  ROTATION PENDING {location}:{line_no}  [{entry['incident']}]  fingerprint={fp}")
     print("")
     print("Remove the credential, rotate it at the provider, and load it from the secret store instead.")
     return 1

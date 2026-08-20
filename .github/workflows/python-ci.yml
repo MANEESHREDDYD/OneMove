@@ -1,5 +1,10 @@
 name: Python CI
 on: [push, pull_request]
+# Least privilege: this workflow only reads the repository. No job here uses
+# OIDC, uploads SARIF, publishes packages, or comments on pull requests.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -19,7 +24,7 @@ jobs:
 
     - name: Secret scan (git history)
       run: python scripts/security/scan_secrets.py --history
-      continue-on-error: true
+      # Blocking: an unbaselined secret, or a baselined one still awaiting rotation, fails the build.
 
     - name: Setup Supabase CLI
       uses: supabase/setup-cli@v3
