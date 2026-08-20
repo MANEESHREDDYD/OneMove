@@ -153,8 +153,15 @@ def test_cross_workspace_decision_idor_isolation(client, monkeypatch):
     monkeypatch.setattr("services.api.routers.observatory._dec_ledger.get_decision", lambda did, wid: None)
 
     res = client.get(f"/api/v1/decisions/{fake_dec_id}", headers={"Authorization": f"Bearer {token_b}"})
-    assert res.status_code == 404
-    assert res.json()["error"]["code"] == "NOT_FOUND"
+    # Membership is resolved server-side BEFORE any resource lookup, so a token
+    # claiming a workspace the subject does not belong to is denied at
+    # authorization. That is stronger than the 404 this test originally expected:
+    # the request never reaches the decision store at all, and the denial concerns
+    # the caller's own claim, so nothing about the target resource is disclosed.
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "FORBIDDEN"
+    # Whatever the code, no tenant data may appear in the body.
+    assert "decision_id" not in res.text and "opened_facilities" not in res.text
 
 
 def test_cross_workspace_optimization_idor_isolation(client, monkeypatch):
@@ -172,5 +179,12 @@ def test_cross_workspace_optimization_idor_isolation(client, monkeypatch):
     monkeypatch.setattr("services.api.routers.observatory._opt_service.get_optimization", lambda oid, wid: None)
 
     res = client.get(f"/api/v1/optimizations/{fake_opt_id}", headers={"Authorization": f"Bearer {token_b}"})
-    assert res.status_code == 404
-    assert res.json()["error"]["code"] == "NOT_FOUND"
+    # Membership is resolved server-side BEFORE any resource lookup, so a token
+    # claiming a workspace the subject does not belong to is denied at
+    # authorization. That is stronger than the 404 this test originally expected:
+    # the request never reaches the decision store at all, and the denial concerns
+    # the caller's own claim, so nothing about the target resource is disclosed.
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "FORBIDDEN"
+    # Whatever the code, no tenant data may appear in the body.
+    assert "decision_id" not in res.text and "opened_facilities" not in res.text
