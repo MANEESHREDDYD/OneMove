@@ -54,6 +54,9 @@ def test_durable_decision_record_replay_shadow():
         "coverage_basis_points": 9910,
         "code_sha": "git-sha-test-456",
         "osrm_bundle_hash": mat_sha,
+        # Required since F-005: lineage may no longer be defaulted by the server.
+        "graph_version": "1.1",
+        "solver_version": "ortools-cp-sat",
     }
 
     # 1. POST /api/v1/decisions

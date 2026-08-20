@@ -136,6 +136,12 @@ def verify_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Invalid token: wrong issuer")
     except jwt.InvalidAudienceError:
         raise HTTPException(status_code=401, detail="Invalid token: wrong audience")
+    except jwt.MissingRequiredClaimError as missing:
+        # Requiring exp/sub in decode (F-016) moved these rejections inside PyJWT,
+        # where MissingRequiredClaimError subclasses InvalidTokenError and would
+        # otherwise collapse into a generic "Invalid token". Name the claim so the
+        # failure stays diagnosable.
+        raise HTTPException(status_code=401, detail=f"Invalid token: missing {missing.claim}") from missing
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 

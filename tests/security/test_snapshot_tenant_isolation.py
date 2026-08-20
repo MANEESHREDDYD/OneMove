@@ -147,3 +147,35 @@ def test_decision_create_request_rejects_an_empty_body() -> None:
         "solver_version",
     ):
         assert required in missing, f"{required} must be required, not defaulted"
+
+
+def test_decision_create_rejects_partial_lineage() -> None:
+    """F-005 regression: a nearly-complete payload is still refused.
+
+    The original defect was defaults, so a test that only checks the empty body
+    would pass even if a single field silently regained one.
+    """
+    import pydantic
+
+    from services.api.routers.observatory import DecisionCreateRequest
+
+    complete = dict(
+        network_version="1.1",
+        dataset_version="1.0.0",
+        feature_snapshot_hash="a" * 64,
+        selected_action="OPEN_FACILITIES",
+        opened_facilities=["fac:01"],
+        objective_value=1,
+        expected_travel_seconds=1,
+        p95_travel_seconds=1,
+        coverage_basis_points=10000,
+        graph_version="1.1",
+        osrm_bundle_hash="b" * 64,
+        solver_version="ortools-cp-sat",
+    )
+    assert DecisionCreateRequest(**complete) is not None  # control
+
+    for omitted in complete:
+        partial = {k: v for k, v in complete.items() if k != omitted}
+        with pytest.raises(pydantic.ValidationError):
+            DecisionCreateRequest(**partial)

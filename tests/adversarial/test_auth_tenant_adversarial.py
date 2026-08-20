@@ -20,7 +20,7 @@ from __future__ import annotations
 import base64
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
@@ -46,7 +46,16 @@ def client():
 
 
 def _mint(payload: dict, secret: str = JWT_SECRET, alg: str = "HS256") -> str:
-    return jwt.encode(payload, secret, algorithm=alg)
+    """Mint a test token, defaulting `exp` so tokens are valid unless a test says otherwise.
+
+    Since F-016 the verifier requires `exp`; a token without one is rejected as
+    non-expiring. These tests exercise IDOR and tenancy, not expiry, so they need
+    a valid token. Tests that deliberately probe expiry set `exp` themselves and
+    that value is preserved.
+    """
+    claims = dict(payload)
+    claims.setdefault("exp", datetime.now(timezone.utc) + timedelta(hours=1))
+    return jwt.encode(claims, secret, algorithm=alg)
 
 
 def test_missing_auth_header(client):
