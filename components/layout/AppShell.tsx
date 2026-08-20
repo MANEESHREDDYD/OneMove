@@ -46,7 +46,27 @@ type NavSection = {
   label: string
 }
 
+/**
+ * OneMove operator navigation.
+ *
+ * /network and /executive are decision-platform routes, but they fell through to
+ * CUSTOMER_NAV, so the network view was framed by Rides / Eats / Grocery /
+ * Courier -- presenting a network-optimisation product as a delivery marketplace.
+ * Only routes that actually exist are listed here.
+ */
+const OPERATOR_NAV = [
+  { name: "Overview", href: "/executive", icon: LayoutDashboard },
+  { name: "Network", href: "/network", icon: Map },
+  { name: "Command Center", href: "/admin/command-center", icon: LineChart },
+  { name: "System Health", href: "/admin/system-health", icon: Shield },
+]
+
+const OPERATOR_PREFIXES = ["/network", "/executive"]
+
 function getNavSection(pathname: string): NavSection {
+  if (OPERATOR_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix + "/"))) {
+    return { items: OPERATOR_NAV, label: "Operator" }
+  }
   if (pathname.startsWith("/admin")) return { items: ADMIN_NAV, label: "Admin" }
   if (pathname.startsWith("/partner")) return { items: DRIVER_NAV, label: "Partner" }
   if (pathname.startsWith("/merchant")) return { items: MERCHANT_NAV, label: "Merchant" }

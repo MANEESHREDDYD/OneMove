@@ -1,0 +1,71 @@
+============================================================
+ONEMOVE — FINAL PRODUCT DEMO
+============================================================
+COMMIT:      e5f095b (hotfix/onemove-p0-security-incident)
+ENVIRONMENT: isolated local Supabase + local FastAPI. NOT production.
+             Hosted staging no longer resolves; the Supabase CLI is
+             unauthenticated, so no hosted project could be restored.
+             Truthfully described as "an isolated OneMove demonstration
+             environment backed by authentic public Bengaluru geographic
+             evidence."
+
+ENVIRONMENT ............ PASS   (15 migrations clean, /readyz db_connected)
+SMOKE .................. PASS   (full journey, non-recorded)
+
+MAP_VISIBLE ............ YES    94 authentic H3 cells, inline SVG projection
+BENGALURU_VISIBLE ...... YES
+H3_ZONES_VISIBLE ....... YES
+H3_RESOLUTION .......... 8      (read from the mounted Gold artifact)
+
+NETWORK ................ PASS   PUBLIC_GEOGRAPHIC, pilot_roads.osm.pbf
+SCENARIO ............... PASS   HEAVY_RAIN, +60% travel time, SIMULATED
+IMPACT ................. PASS   coverage 100.0%, P50/P90/P95 311/797/824s,
+                                disconnected 0, grade ROBUST, evidence DERIVED
+OPTIMIZATION ........... PASS
+SOLVER ................. ortools-cp-sat-9.15.6755
+SOLVER_STATUS .......... OPTIMAL
+DECISION_FREEZE ........ PASS   OPTIMIZER_DECISION (authoritative freeze path)
+EVIDENCE ............... PASS
+PIT_REPLAY ............. PASS
+REPLAY_RESULT .......... EXACT_MATCH (frozen hash == recomputed hash)
+ASSISTANT .............. EXCLUDED (unstable; generic chatbot UI would weaken
+                                   the deterministic story)
+
+RECORDINGS (1920x1080, production build, no dev overlays)
+  FINAL_FULL_1 ......... PASS   236.8s
+  FINAL_FULL_2 ......... PASS   236.7s
+  FINAL_FULL_3 ......... PASS   236.8s
+  FINAL_FAILSAFE ....... PASS   236.7s
+  PRIMARY_RUN .......... 1
+
+TRUTHFULNESS
+  PUBLIC_GEOGRAPHIC_VISIBLE ... YES
+  SIMULATED_VISIBLE ........... YES
+  ASSUMPTION_VISIBLE .......... YES
+  FABRICATED_VALUES ........... 0
+  SECRETS_VISIBLE ............. 0
+  DEV_UI_VISIBLE .............. 0
+  TERMINAL_VISIBLE ............ 0
+  LEGACY_DISTRACTION .......... NONE (operator nav: Overview / Network /
+                                      Command Center / System Health)
+
+  Removed during this pass: 13 fabricated overlay fallbacks
+  (mx-bng-992, v1.4.2, a8f4c2b99x, opt-123, rel-a8f4c2, Bengaluru-Q3,
+  SYNTHETIC_OVERRIDE and others), a hardcoded "SUCCESSFUL REPLAY", a
+  hardcoded "COMPLETED", fallbacks 'fac-01, fac-04' and '3142.50', an
+  invented "Monsoon Matrix Overrides Active", a fixed sentence naming a
+  non-existent facility "fac-02", and an incorrect "H3 Resolution 9" claim.
+
+KNOWN LIMITATIONS (stated, not hidden)
+  - Local Pub/Sub is unavailable, so scripts/demo/local_worker.py claims the
+    job lease and runs the real CP-SAT solver through the same repository and
+    fencing as the deployed worker. Only the transport differs.
+  - Facilities are not drawn on the map: no authentic facility coordinate set
+    exists, and inventing marker positions was not acceptable.
+  - MP4 not produced; ffmpeg is not installed. WebM plays in Chrome, Edge and
+    Firefox.
+  - Scenario IDs repeat across runs because scenarios are content-addressed;
+    job, decision and replay ids are distinct per run.
+
+DEMO_READY ............. YES
+============================================================

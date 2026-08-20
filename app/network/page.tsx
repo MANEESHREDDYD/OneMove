@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { Check, Minus } from 'lucide-react';
+import { H3NetworkMap, type Zone } from '@/components/demo/H3NetworkMap';
 
 type LayerState = {
   name: string
@@ -20,8 +21,7 @@ const LAYERS: LayerState[] = [
 ];
 
 export default function NetworkObservatory() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [networkData, setNetworkData] = useState<any>(null);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +44,7 @@ export default function NetworkObservatory() {
         const res = await fetch('/api/v1/zones', { headers });
         if (!res.ok) throw new Error(`Failed to load network topology (HTTP ${res.status})`);
         const data = await res.json();
-        setNetworkData(data.data);
+        setZones(Array.isArray(data.data) ? data.data : []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load network topology');
       } finally {
@@ -54,7 +54,7 @@ export default function NetworkObservatory() {
     void load();
   }, []);
 
-  const zoneCount = Array.isArray(networkData) ? networkData.length : null;
+  const zoneCount = zones.length > 0 ? zones.length : null;
 
   return (
     // This route is rendered inside AppShell, which already provides the page's
@@ -145,18 +145,46 @@ export default function NetworkObservatory() {
         )}
 
         {/*
-          Placeholder shown when no traffic data exists. Previously the whole
-          block sat inside `opacity-40`, which dropped the already-dim
-          neutral-500/600 text well under 3:1 against #0a0a0a. The opacity is now
-          confined to the decorative glyph and the text carries full contrast.
+          The network itself. Every polygon is an authentic H3 cell boundary
+          returned by /api/v1/zones -- no tile server, no synthetic geometry, and
+          nothing placed at an invented coordinate.
         */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <svg aria-hidden="true" focusable="false" className="w-24 h-24 text-neutral-600 mb-4 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-          </svg>
-          <p className="text-neutral-300 font-mono tracking-widest text-lg">TRAFFIC DATA NOT YET AVAILABLE</p>
-          <p className="text-neutral-400 text-xs mt-2">Waiting for canonical historical backfill or live acquisition</p>
+        <div className="absolute inset-0 flex items-center justify-center">
+          {loading && (
+            <p className="text-neutral-400 font-mono tracking-widest text-sm">LOADING NETWORK…</p>
+          )}
+
+          {!loading && !error && zones.length > 0 && (
+            <H3NetworkMap zones={zones} width={980} height={680} />
+          )}
+
+          {!loading && !error && zones.length === 0 && (
+            <p className="text-neutral-300 font-mono tracking-widest text-lg">NETWORK GEOMETRY UNAVAILABLE</p>
+          )}
         </div>
+
+        {!loading && !error && zones.length > 0 && (
+          <div className="absolute bottom-16 right-8 bg-black/80 border border-neutral-800 rounded-lg px-5 py-4 text-sm backdrop-blur">
+            <p className="text-white font-semibold mb-2">Bengaluru Pilot Network</p>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+              <dt className="text-neutral-400">Zones</dt>
+              <dd className="text-neutral-100 font-mono">{zones.length}</dd>
+              <dt className="text-neutral-400">H3 resolution</dt>
+              <dd className="text-neutral-100 font-mono">{zones[0]?.resolution ?? 'UNAVAILABLE'}</dd>
+              <dt className="text-neutral-400">Evidence</dt>
+              <dd>
+                <span className="bg-emerald-900/60 text-emerald-200 px-2 py-0.5 rounded font-mono text-[11px]">
+                  {zones[0]?.evidence_class ?? 'UNAVAILABLE'}
+                </span>
+              </dd>
+              <dt className="text-neutral-400">Source</dt>
+              <dd className="text-neutral-100 font-mono">{zones[0]?.source ?? 'UNAVAILABLE'}</dd>
+              <dt className="text-neutral-400">Graph</dt>
+              <dd className="text-neutral-100 font-mono">{zones[0]?.source_version ?? 'UNAVAILABLE'}</dd>
+            </dl>
+          </div>
+        )}
+
       </section>
     </div>
   );

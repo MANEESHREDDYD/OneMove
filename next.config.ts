@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const ONEMOVE_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 const nextConfig: NextConfig = {
+  // The dev-issue badge sits over the recorded viewport.
+  devIndicators: false,
   // Browser code calls /api/v1/* as a same-origin path, which previously hit the
   // Next.js server (404) and surfaced as "Failed to load network topology" over an
   // empty map. Proxying to the OneMove API keeps the browser same-origin while the

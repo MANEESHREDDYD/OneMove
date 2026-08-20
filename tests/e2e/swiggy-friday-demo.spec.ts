@@ -2,6 +2,14 @@ import { test, expect } from '@playwright/test';
 
 // Configuration
 const API_BASE = process.env.ONEMOVE_API_URL || 'http://127.0.0.1:8000';
+
+/** Base dwell for a readable panel. Overridable so pacing can be tuned without edits. */
+const DWELL = Number(process.env.DEMO_DWELL_MS || 9000);
+
+/** Per-step stills for visual QA. A passing exit code says nothing about how the
+ *  recording actually looks, so each key screen is captured for inspection. */
+const SHOT_DIR = 'artifacts/swiggy-demo/final/screenshots';
+
 const DEMO_TENANT_EMAIL = process.env.TENANT_A_EMAIL;
 const DEMO_TENANT_PASS = process.env.TENANT_A_PASSWORD;
 
@@ -74,12 +82,12 @@ test.describe('Swiggy Friday Demo Path', () => {
     await page.evaluate((statusHtml) => (window as any).showDemoOverlay('Step 1: Operator Console', 
       '<div><strong>Status:</strong> ' + statusHtml + '</div>'
     ), statusText);
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(Math.round(DWELL * 0.55));
 
     // 2. Bengaluru physical-commerce network
     await page.goto('/network');
     await expect(page.locator('h1')).toContainText('Bengaluru Digital Twin');
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(DWELL);
     
     // 3. Authenticate against Supabase API to get token for FastAPI
     // Note: We need a valid token to call the FastAPI backend, assuming we can get it or use the Next.js session
@@ -124,7 +132,8 @@ test.describe('Swiggy Friday Demo Path', () => {
       `;
       (window as any).showDemoOverlay('Step 3: Network Evidence Retrieved', html);
     }, data);
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(DWELL);
+    await page.screenshot({ path: `${SHOT_DIR}/02-network-evidence.png` });
 
     // 4. create one clearly-labelled SIMULATED disruption scenario
     await page.evaluate(() => (window as any).showDemoOverlay('Step 4: Create Disruption', '<div>Posting scenario...</div>'));
@@ -145,29 +154,55 @@ test.describe('Swiggy Friday Demo Path', () => {
     expect(res.ok()).toBeTruthy();
     data = await res.json();
     const scenarioId = data.scenario_id;
+    const createdScenario = data;
     await page.evaluate((d) => {
+      // Real scenario fields. The previous panel read scenario_name /
+      // matrix_identity / affected_network, none of which this response carries.
+      const bp = d.parameters && d.parameters.travel_time_inflation_basis_points;
+      const inflation = typeof bp === 'number' ? `+${(bp / 100).toFixed(0)}% travel time` : 'UNAVAILABLE';
+      const matrix = d.derivation && d.derivation.matrix_id ? d.derivation.matrix_id : 'UNAVAILABLE';
       const html = `
-        <div style="display:grid; grid-template-columns:120px 1fr; gap:8px;">
-          <strong style="color:#94a3b8">Scenario:</strong> <span>${d.scenario_name || 'UNAVAILABLE'}</span>
-          <strong style="color:#94a3b8">Type:</strong> <div><span style="background-color:#ef4444; color:white; padding:2px 6px; border-radius:4px; font-size:12px; font-weight:bold;">SIMULATED</span></div>
-          <strong style="color:#94a3b8">Matrix ID:</strong> <span style="font-family:monospace">${d.matrix_identity || 'UNAVAILABLE'}</span>
-          <strong style="color:#94a3b8">Network:</strong> <span>${d.affected_network || 'UNAVAILABLE'}</span>
-          <strong style="color:#94a3b8">Evidence:</strong> <span>${d.evidence_class || 'UNAVAILABLE'}</span>
+        <div style="display:grid; grid-template-columns:170px 1fr; gap:8px;">
+          <strong style="color:#94a3b8">Scenario:</strong> <span style="font-family:monospace; color:#38bdf8">${d.scenario_id || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Type:</strong> <span style="font-family:monospace">${d.scenario_type || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Applied disruption:</strong> <span style="color:#fbbf24; font-family:monospace">${inflation}</span>
+          <strong style="color:#94a3b8">Routing baseline:</strong> <span style="font-family:monospace; font-size:13px">${matrix}</span>
+          <strong style="color:#94a3b8">Evidence class:</strong> <div><span style="background-color:#ef4444; color:white; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold;">${d.evidence_class || 'UNAVAILABLE'}</span></div>
+          <strong style="color:#94a3b8"></strong> <span style="color:#94a3b8; font-size:12px">Counterfactual applied to an authentic public-geographic baseline.</span>
         </div>
       `;
-      (window as any).showDemoOverlay('Step 4: Scenario Created', html);
+      (window as any).showDemoOverlay('Step 4: Simulated Disruption', html);
     }, data);
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(DWELL);
+    await page.screenshot({ path: `${SHOT_DIR}/03-scenario.png` });
 
     // 5. show resulting network degradation
     res = await request.get(`${API_BASE}/api/v1/scenarios/${scenarioId}`, { headers });
     expect(res.ok()).toBeTruthy();
     data = await res.json();
     await page.evaluate((d) => {
-      const html = `<div style="color:#fbbf24">Network degradation applied (1.6x Congestion). Active restrictions on [fac-02].</div>`;
-      (window as any).showDemoOverlay('Step 5: Network Degradation Outcomes', html);
-    }, data);
-    await page.waitForTimeout(3000);
+      // Real derived metrics. The previous panel was a fixed sentence naming a
+      // facility ("fac-02") that does not exist in the catalog.
+      const pct = (v: unknown) => (typeof v === 'number' ? `${(v / 100).toFixed(1)}%` : 'UNAVAILABLE');
+      const secs = (v: unknown) => (typeof v === 'number' ? `${v}s` : 'UNAVAILABLE');
+      const unavailable = d.unavailable_metrics && Object.keys(d.unavailable_metrics).length
+        ? Object.keys(d.unavailable_metrics).join(', ')
+        : 'none';
+      const html = `
+        <div style="display:grid; grid-template-columns:190px 1fr; gap:8px;">
+          <strong style="color:#94a3b8">Coverage:</strong> <span style="font-family:monospace">${pct(d.coverage_basis_points)}</span>
+          <strong style="color:#94a3b8">P50 / P90 / P95 travel:</strong> <span style="font-family:monospace">${secs(d.p50_duration_seconds)} / ${secs(d.p90_duration_seconds)} / ${secs(d.p95_duration_seconds)}</span>
+          <strong style="color:#94a3b8">Disconnected zones:</strong> <span style="font-family:monospace">${typeof d.disconnected_zones_count === 'number' ? d.disconnected_zones_count : 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Redundancy index:</strong> <span style="font-family:monospace">${pct(d.redundancy_index_basis_points)}</span>
+          <strong style="color:#94a3b8">Degradation grade:</strong> <span style="font-family:monospace; color:#fbbf24; font-weight:700">${d.degradation_grade || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Metrics evidence:</strong> <div><span style="background-color:#3b82f6; color:white; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold;">${d.metrics_evidence_class || 'UNAVAILABLE'}</span></div>
+          <strong style="color:#94a3b8">Unavailable metrics:</strong> <span style="font-family:monospace; font-size:13px">${unavailable}</span>
+        </div>
+      `;
+      (window as any).showDemoOverlay('Step 5: Network Impact', html);
+    }, { ...data, metrics_evidence_class: createdScenario.metrics_evidence_class });
+    await page.waitForTimeout(DWELL);
+    await page.screenshot({ path: `${SHOT_DIR}/04-impact.png` });
 
     // 6. run real CP-SAT optimization
     const idemKey = `demo-job-${Date.now()}`;
@@ -197,7 +232,7 @@ test.describe('Swiggy Friday Demo Path', () => {
       </div>`;
       (window as any).showDemoOverlay('Step 6: Job Queued', html);
     }, data);
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(Math.round(DWELL * 0.55));
 
     // 7. wait for actual completed optimization result
     await page.evaluate(() => (window as any).showDemoOverlay('Step 7: Polling for Completion', '<div>Waiting for CP-SAT worker...</div>'));
@@ -211,28 +246,41 @@ test.describe('Swiggy Friday Demo Path', () => {
           finalJobData = pollData;
           break;
        }
-       await page.waitForTimeout(2000);
+       await page.waitForTimeout(Math.round(DWELL * 0.55));
     }
     expect(isComplete).toBeTruthy();
     
     // 8. show selected capacity/facilities and tradeoffs
     const resDoc = typeof finalJobData.result_document === 'string' ? JSON.parse(finalJobData.result_document) : finalJobData.result_document;
+    // Every value below comes from the solver result. The previous panel fell back
+    // to 'fac-01, fac-04' and an objective of '3142.50' when a key was missing, and
+    // hardcoded both COMPLETED and an "assumption" description that existed nowhere
+    // -- so a viewer could not tell a real solve from a placeholder.
     await page.evaluate((d) => {
-      const selected = d.selected_facilities ? d.selected_facilities.join(', ') : 'fac-01, fac-04';
-      const obj = d.objective_value ? parseFloat(d.objective_value).toFixed(2) : '3142.50';
+      const facilities = Array.isArray(d.opened_facility_ids) ? d.opened_facility_ids : [];
+      const objective = d.objective && typeof d.objective.weighted_total === 'number'
+        ? d.objective.weighted_total.toLocaleString('en-US')
+        : 'UNAVAILABLE';
+      const assumption = d.objective && d.objective.weights && d.objective.weights.assumption_version
+        ? String(d.objective.weights.assumption_version).split('+')[0]
+        : (d.assumption_version || 'UNAVAILABLE');
+      const status = d.solver_status || d.status || 'UNAVAILABLE';
+      const statusColour = status === 'OPTIMAL' ? '#22c55e' : '#fbbf24';
       const html = `
-        <div style="display:grid; grid-template-columns:120px 1fr; gap:8px;">
-          <strong style="color:#94a3b8">Job ID:</strong> <span style="font-family:monospace; color:#38bdf8">${d.id || d.job_id || 'UNAVAILABLE'}</span>
-          <strong style="color:#94a3b8">Solver:</strong> <span>Google OR-Tools CP-SAT</span>
-          <strong style="color:#94a3b8">Status:</strong> <span style="color:#22c55e">COMPLETED</span>
-          <strong style="color:#94a3b8">Selected:</strong> <span style="color:#fbbf24">${selected}</span>
-          <strong style="color:#94a3b8">Tradeoffs:</strong> <span>Objective = ${obj} (Cost vs SLA)</span>
-          <strong style="color:#94a3b8">Assumptions:</strong> <div><span style="background-color:#3b82f6; color:white; padding:2px 6px; border-radius:4px; font-size:12px; font-weight:bold;">ASSUMPTION</span> Monsoon Matrix Overrides Active</div>
+        <div style="display:grid; grid-template-columns:160px 1fr; gap:8px;">
+          <strong style="color:#94a3b8">Job ID:</strong> <span style="font-family:monospace; color:#38bdf8; font-size:13px">${d.__jobId || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Solver:</strong> <span style="font-family:monospace">${d.solver_version || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Solver status:</strong> <span style="color:${statusColour}; font-weight:700">${status}</span>
+          <strong style="color:#94a3b8">Action:</strong> <span style="font-family:monospace">${d.action || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Facilities opened:</strong> <span style="color:#fbbf24; font-family:monospace; font-size:13px">${facilities.length ? facilities.join(', ') : 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Objective:</strong> <span style="font-family:monospace">${objective}</span>
+          <strong style="color:#94a3b8">Assumption set:</strong> <div><span style="background-color:#3b82f6; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">ASSUMPTION</span> <span style="font-family:monospace; font-size:12px">${assumption}</span></div>
         </div>
       `;
-      (window as any).showDemoOverlay('Step 8: Optimization Results', html);
-    }, { ...finalJobData, ...resDoc });
-    await page.waitForTimeout(4000);
+      (window as any).showDemoOverlay('Step 8: CP-SAT Optimization Result', html);
+    }, { ...finalJobData, ...resDoc, __jobId: jobId });
+    await page.waitForTimeout(DWELL);
+    await page.screenshot({ path: `${SHOT_DIR}/05-optimization.png` });
 
     // 9. freeze decision FROM THE COMPLETED OPTIMIZATION JOB
     await page.evaluate(() => (window as any).showDemoOverlay('Step 9: Freezing Decision', '<div>Executing freeze operation...</div>'));
@@ -246,18 +294,27 @@ test.describe('Swiggy Friday Demo Path', () => {
     expect(res.ok()).toBeTruthy();
     data = await res.json();
     const decisionId = data.decision_id;
+    // The decision record carries real lineage; the previous panel read field names
+    // it does not have (optimization_job_id, release_sha) and so showed UNAVAILABLE
+    // beside a hardcoded "Verified & Secured" claim that came from nowhere.
     await page.evaluate((d) => {
+      const facilities = Array.isArray(d.opened_facilities) ? d.opened_facilities : [];
       const html = `
-        <div style="display:grid; grid-template-columns:140px 1fr; gap:8px;">
+        <div style="display:grid; grid-template-columns:150px 1fr; gap:8px;">
           <strong style="color:#94a3b8">Decision ID:</strong> <span style="font-family:monospace; color:#38bdf8">${d.decision_id}</span>
-          <strong style="color:#94a3b8">Source Job:</strong> <span style="font-family:monospace">${d.optimization_job_id || 'UNAVAILABLE'}</span>
-          <strong style="color:#94a3b8">Frozen Lineage:</strong> <span>Verified & Secured</span>
-          <strong style="color:#94a3b8">Release Identity:</strong> <span style="font-family:monospace">${d.release_sha || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Type:</strong> <span style="background:#065f46; color:#a7f3d0; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600">OPTIMIZER_DECISION</span>
+          <strong style="color:#94a3b8">Source Job:</strong> <span style="font-family:monospace; font-size:13px">${d.__jobId || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Facilities Opened:</strong> <span style="font-family:monospace; font-size:13px">${facilities.length ? facilities.join(', ') : 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Solver:</strong> <span style="font-family:monospace">${d.solver_version || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Graph Version:</strong> <span style="font-family:monospace">${d.graph_version || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Release (code_sha):</strong> <span style="font-family:monospace; font-size:12px">${d.code_sha || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Decision Time:</strong> <span style="font-family:monospace; font-size:13px">${d.decision_time || 'UNAVAILABLE'}</span>
         </div>
       `;
-      (window as any).showDemoOverlay('Step 9: Decision Frozen', html);
-    }, data);
-    await page.waitForTimeout(3000);
+      (window as any).showDemoOverlay('Step 9: Authoritative Decision Frozen', html);
+    }, { ...data, __jobId: jobId });
+    await page.waitForTimeout(DWELL);
+    await page.screenshot({ path: `${SHOT_DIR}/06-decision.png` });
 
     // 10. open decision provenance/evidence
     res = await request.get(`${API_BASE}/api/v1/decisions/${decisionId}`, { headers });
@@ -267,7 +324,8 @@ test.describe('Swiggy Friday Demo Path', () => {
       const html = `<div>Reviewing cryptographic evidence and operator rationale for decision <span style="font-family:monospace">${d.decision_id}</span>.</div>`;
       (window as any).showDemoOverlay('Step 10: Decision Provenance', html);
     }, data);
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(DWELL);
+    await page.screenshot({ path: `${SHOT_DIR}/07-evidence.png` });
 
     // 11. perform PIT replay
     await page.evaluate(() => (window as any).showDemoOverlay('Step 11: Performing PIT Replay', '<div>Re-evaluating historical state...</div>'));
@@ -280,17 +338,30 @@ test.describe('Swiggy Friday Demo Path', () => {
     expect(['EXACT_MATCH', 'SEMANTIC_MATCH', 'DRIFT', 'NON_REPLAYABLE']).toContain(data.match_status);
     
     await page.evaluate((d) => {
+      // Every field below is returned by the replay endpoint. The previous panel
+      // read as_of_timestamp and decision_id, neither of which exists on this
+      // response, so it rendered "UNAVAILABLE" and a literal "undefined".
+      const yesNo = (v: unknown) => (v === true ? 'YES' : v === false ? 'NO' : 'UNAVAILABLE');
+      const status = d.match_status || 'UNAVAILABLE';
+      const statusColour = status === 'EXACT_MATCH' ? '#22c55e' : '#fbbf24';
+      const hashesAgree = d.expected_hash && d.actual_hash && d.expected_hash === d.actual_hash;
       const html = `
-        <div style="display:grid; grid-template-columns:140px 1fr; gap:8px;">
-          <strong style="color:#94a3b8">As Of:</strong> <span>${d.as_of_timestamp || 'UNAVAILABLE'}</span>
-          <strong style="color:#94a3b8">Decision ID:</strong> <span style="font-family:monospace">${d.decision_id}</span>
-          <strong style="color:#94a3b8">Replay Outcome:</strong> <span>${d.match_status ? 'REPLAY COMPLETED' : 'UNAVAILABLE'}</span>
-          <strong style="color:#94a3b8">Result Match:</strong> <span style="background-color:#22c55e; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">${d.match_status}</span>
+        <div style="display:grid; grid-template-columns:180px 1fr; gap:8px;">
+          <strong style="color:#94a3b8">Original decision:</strong> <span style="font-family:monospace; color:#38bdf8; font-size:13px">${d.original_decision_id || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Replayed at:</strong> <span style="font-family:monospace; font-size:13px">${d.replayed_at || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Point-in-time valid:</strong> <span style="font-family:monospace">${yesNo(d.pit_valid)}</span>
+          <strong style="color:#94a3b8">Frozen hash:</strong> <span style="font-family:monospace; font-size:13px">${d.expected_hash || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Recomputed hash:</strong> <span style="font-family:monospace; font-size:13px; color:${hashesAgree ? '#22c55e' : '#fbbf24'}">${d.actual_hash || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Action reproduced:</strong> <span style="font-family:monospace">${yesNo(d.reproduced_exact_action)}</span>
+          <strong style="color:#94a3b8">Facilities reproduced:</strong> <span style="font-family:monospace">${yesNo(d.reproduced_exact_facilities)}</span>
+          <strong style="color:#94a3b8">Objective match:</strong> <span style="font-family:monospace">${yesNo(d.objective_match)}</span>
+          <strong style="color:#94a3b8">Verdict:</strong> <div><span style="background-color:${statusColour}; color:#04120a; padding:3px 10px; border-radius:4px; font-weight:800; font-size:13px">${status}</span></div>
         </div>
       `;
-      (window as any).showDemoOverlay('Step 11: PIT Replay Results', html);
+      (window as any).showDemoOverlay('Step 11: Point-in-Time Replay', html);
     }, data);
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(DWELL);
+    await page.screenshot({ path: `${SHOT_DIR}/08-replay.png` });
 
     // 12. optionally ask Assistant
     // Using the ML Lab interface for Assistant
@@ -311,7 +382,7 @@ test.describe('Swiggy Friday Demo Path', () => {
        <div><strong style="color:#94a3b8">Final Decision:</strong> <span style="font-family:monospace">${d.decisionId}</span></div>`;
        (window as any).showDemoOverlay('Step 13: Demo Complete', html);
     }, { jobId, decisionId });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(DWELL);
     
     // Dump to test annotations so wrapper script can parse them
     test.info().annotations.push({ type: 'job_id', description: jobId });
