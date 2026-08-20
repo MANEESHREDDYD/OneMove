@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import math
 import os
 import time
 import uuid
@@ -15,11 +14,11 @@ import psycopg
 from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel, Field
 
+from services.zonepilot.assumptions.application import AssumptionSetView
+from services.zonepilot.assumptions.registry import default_assumption_registry
 from services.zonepilot.optimization.contracts import (
     DemandPoint,
     Facility,
-    MatrixEvidenceClass,
-    ObjectiveWeights,
     OptimizationConstraints,
     OptimizationProblem,
     SolverSettings,
@@ -81,14 +80,27 @@ def _frozen_lineage(job: dict[str, Any] | None, field: str) -> str:
     return value
 
 
-def _reconstruct_problem_from_payload(payload: dict[str, Any]) -> OptimizationProblem:
+def _reconstruct_problem_from_payload(
+    payload: dict[str, Any],
+    *,
+    assumptions: AssumptionSetView | None = None,
+) -> OptimizationProblem:
     """Reconstruct an OptimizationProblem from saved request payload with authentic data.
 
     Fails closed if the real travel matrix or Gold network catalog is missing.
     No synthetic substitution or fallback constants.
+
+    F-019: ``assumptions`` names the sealed assumption set to rebuild under. The
+    caller supplies the set the job froze, so the problem this worker solves is
+    built from the same assumptions the submitting request recorded, rather than
+    from whatever happens to be active when the message is finally delivered --
+    a queue can outlive an assumption revision. Omitting it selects the currently
+    ACTIVE set and is only correct for a genuinely new solve.
     """
     if "facilities" in payload and "demand_points" in payload and "scenarios" in payload:
         return OptimizationProblem.model_validate(payload)
+
+    view = assumptions or default_assumption_registry().active_view()
 
     min_open = int(payload.get("min_open_facilities", 1))
     max_open = int(payload.get("max_open_facilities", 4))
@@ -119,62 +131,59 @@ def _reconstruct_problem_from_payload(payload: dict[str, Any]) -> OptimizationPr
     facilities = tuple(
         Facility(
             facility_id=fid,
-            capacity_units=1500,
-            fixed_cost_units=1000,
-            failure_exposure_basis_points=100 * idx,
+            capacity_units=view.facility_capacity_units,
+            fixed_cost_units=view.facility_fixed_cost_units,
+            failure_exposure_basis_points=view.facility_failure_exposure_basis_points(rank=rank),
         )
-        for idx, fid in enumerate(facility_ids)
+        for rank, fid in enumerate(facility_ids)
     )
 
     demands = tuple(
         DemandPoint(
             demand_id=did,
-            demand_units=max(
-                1,
-                int(
-                    gold_rows.get(did.split(":")[-1], {}).get("commercial_poi_count", 1) * 3
-                    + gold_rows.get(did.split(":")[-1], {}).get("intersection_count", 1)
-                ),
-            ),
+            demand_units=view.demand_units_for(did, gold_rows),
         )
         for did in demand_ids
     )
 
-    scenarios = []
-    for s_idx, s_name in enumerate(scenarios_list):
-        mult = 1.0 if s_idx == 0 else (1.4 if s_idx == 1 else 1.6)
-        prob = 6000 if s_idx == 0 else (3000 if s_idx == 1 else 1000)
-        durations = tuple(tuple(int(math.ceil(dur * mult)) for dur in row) for row in base_durations)
-
-        evidence_cls = (
-            MatrixEvidenceClass.PUBLIC_GEOGRAPHIC
-            if s_idx == 0
-            else (MatrixEvidenceClass.DERIVED if s_idx == 1 else MatrixEvidenceClass.SIMULATED_FAILURE)
+    tiers = view.scenario_tiers
+    if len(scenarios_list) != len(tiers):
+        raise ValueError(
+            f"SCENARIO_LADDER_MISMATCH: assumption set {view.token} defines {len(tiers)} scenario tiers "
+            f"but the frozen request carries {len(scenarios_list)}. Refusing to invent the difference."
         )
-        parent_id = None if s_idx == 0 else "matrix-s1_free_flow"
+
+    scenarios = []
+    baseline_matrix_id: str | None = None
+    for s_name, tier in zip(scenarios_list, tiers, strict=True):
+        matrix_id = f"matrix-{s_name}"
+        if tier.is_baseline:
+            baseline_matrix_id = matrix_id
+
+        durations = tuple(tuple(tier.scale_duration_seconds(seconds) for seconds in row) for row in base_durations)
 
         mat = TravelMatrix(
-            matrix_id=f"matrix-{s_name}",
+            matrix_id=matrix_id,
             graph_version=graph_version,
             router=router,
             router_version=router_version,
-            evidence_class=evidence_cls,
+            evidence_class=tier.evidence_class,
             facility_ids=facility_ids,
             demand_ids=demand_ids,
             durations_seconds=durations,
-            parent_matrix_id=parent_id,
+            parent_matrix_id=None if tier.is_baseline else baseline_matrix_id,
         )
         scenarios.append(
             UncertaintyScenario(
                 scenario_id=s_name,
-                probability_basis_points=prob,
+                probability_basis_points=tier.probability_basis_points,
                 travel_matrix=mat,
                 capacity_adjustments=(),
             )
         )
 
     return OptimizationProblem(
-        problem_id=f"opt-async-{uuid.uuid4().hex[:8]}",
+        problem_id=f"opt-async-{uuid.uuid4().hex}",
         facilities=facilities,
         demand_points=demands,
         scenarios=tuple(scenarios),
@@ -182,18 +191,11 @@ def _reconstruct_problem_from_payload(payload: dict[str, Any]) -> OptimizationPr
             min_open_facilities=min_open,
             max_open_facilities=max_open,
             max_travel_seconds=max_travel,
-            minimum_coverage_basis_points=0,
+            minimum_coverage_basis_points=view.minimum_coverage_basis_points,
             allow_uncovered_demand=allow_uncovered,
         ),
-        objective_weights=ObjectiveWeights(
-            assumption_version="r1-proxy-1.0.0",
-            expected_travel=5000,
-            p95_travel=1000,
-            facility_cost=3000,
-            failure_exposure=500,
-            coverage_loss=5000 if allow_uncovered else 0,
-        ),
-        solver_settings=SolverSettings(max_time_seconds=30.0, num_search_workers=1),
+        objective_weights=view.objective_weights(allow_uncovered_demand=allow_uncovered),
+        solver_settings=SolverSettings(max_time_seconds=view.solver_max_time_seconds),
     )
 
 
@@ -275,7 +277,14 @@ async def process_pubsub_push(request: Request, response: Response):
     payload = job.get("request_payload") or {}
 
     try:
-        problem = _reconstruct_problem_from_payload(payload)
+        # F-019: rebuild under the assumption set the JOB froze, not the one that
+        # happens to be active now. A message can sit in the queue across an
+        # assumption revision, and solving it under newer numbers would leave the
+        # job row, the snapshot and the result each claiming a different basis.
+        frozen_assumptions = default_assumption_registry().resolve_view_for_token(
+            _frozen_lineage(job, "assumption_version")
+        )
+        problem = _reconstruct_problem_from_payload(payload, assumptions=frozen_assumptions)
 
         # Create and persist immutable ProblemSnapshot for true PIT replay
         from services.zonepilot.optimization.contracts import create_problem_snapshot
