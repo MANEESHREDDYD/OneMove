@@ -1,4 +1,12 @@
-"""Resilience Service coordinating scenario persistence and engine execution."""
+"""Resilience Service coordinating scenario persistence and engine execution.
+
+Order of operations is the fix for the orphan-row half of F-010. The service
+used to write the scenario row and only then look for the authentic travel
+matrix, so a ``MATRIX_UNAVAILABLE`` failure left a scenario in PostgreSQL with
+nothing behind it. Now: validate, resolve the authentic matrix, freeze the
+inputs, evaluate, and only then persist -- scenario and evaluation together, in
+one transaction. A run that produced no result leaves no trace of having run.
+"""
 
 from __future__ import annotations
 
@@ -8,13 +16,31 @@ from typing import Any
 
 from services.zonepilot.optimization.contracts import MatrixEvidenceClass, TravelMatrix
 from services.zonepilot.optimization.r1_catalog import default_data_root
-from services.zonepilot.release import current_release_sha
 from services.zonepilot.resilience.contracts import (
+    ResilienceMetrics,
     ResilienceScenario,
     ScenarioType,
 )
+from services.zonepilot.resilience.derivation import (
+    ScenarioNotRepresentable,
+    build_frozen_inputs,
+)
 from services.zonepilot.resilience.engine import ResilienceEngine
-from services.zonepilot.resilience.repository import ResilienceRepository
+from services.zonepilot.resilience.repository import (
+    IncompleteEvaluationError,
+    ResilienceRepository,
+)
+
+__all__ = [
+    "IncompleteEvaluationError",
+    "ResilienceService",
+    "ScenarioNotRepresentable",
+    "UnknownScenarioType",
+]
+
+
+class UnknownScenarioType(ValueError):
+    """The requested scenario type is not one this system can evaluate."""
 
 
 def _authentic_baseline_matrix(graph_version: str = "1.1.0+bad320dd48da") -> TravelMatrix:
@@ -53,12 +79,22 @@ def _authentic_baseline_matrix(graph_version: str = "1.1.0+bad320dd48da") -> Tra
     )
 
 
-def _compute_grade(metrics: Any) -> str:
-    if metrics.coverage_basis_points >= 9500 and metrics.p95_duration_seconds <= 1200:
+def _compute_grade(metrics: ResilienceMetrics) -> str:
+    """Grade the evaluation, or decline to grade it.
+
+    A grade summarises coverage and p95 travel. If either is UNAVAILABLE there is
+    nothing to summarise, and emitting the worst or best bucket would invent a
+    judgement the data does not support.
+    """
+    coverage = metrics.coverage_basis_points
+    p95 = metrics.p95_duration_seconds
+    if coverage is None or p95 is None:
+        return "UNAVAILABLE"
+    if coverage >= 9500 and p95 <= 1200:
         return "ROBUST"
-    elif metrics.coverage_basis_points >= 8500 and metrics.p95_duration_seconds <= 1800:
+    if coverage >= 8500 and p95 <= 1800:
         return "MODERATE_DEGRADATION"
-    elif metrics.coverage_basis_points >= 7000:
+    if coverage >= 7000:
         return "SEVERE_DEGRADATION"
     return "CRITICAL_FAILURE"
 
@@ -85,66 +121,77 @@ class ResilienceService:
         baseline_matrix: TravelMatrix | None = None,
         code_sha: str | None = None,
     ) -> dict[str, Any]:
-        """Execute a resilience failure scenario, evaluate metrics, and persist to PostgreSQL."""
-        effective_code_sha = code_sha or current_release_sha()
+        """Execute a resilience failure scenario, evaluate metrics, and persist.
+
+        Nothing is written until a complete, derived evaluation exists. Every
+        failure mode below -- unknown scenario type, missing authentic matrix,
+        a disruption that cannot be expressed against that matrix, or a metric
+        that could not be derived -- raises before the first INSERT.
+        """
+        # 1. Validate the request. An unrecognised scenario type used to be
+        #    silently rewritten to ROAD_CLOSURE while the caller's original
+        #    string was persisted, so the stored type and the evaluated type
+        #    disagreed.
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("execute_scenario requires a non-empty workspace_id")
+        try:
+            resolved_type = ScenarioType(scenario_type)
+        except ValueError as exc:
+            supported = sorted(member.value for member in ScenarioType)
+            raise UnknownScenarioType(f"unsupported scenario_type {scenario_type!r}; supported: {supported}") from exc
+
+        params = dict(parameters or {})
         h = hashlib.sha256(f"{workspace_id}:{scenario_type}:{description}:{seed}".encode()).hexdigest()[:12]
         scenario_id = f"scen-{h}"
-        eval_id = f"eval-{h}"
-        desc = description or f"Scenario {scenario_type}"
+        desc = description or f"Scenario {resolved_type.value}"
 
-        # 1. Save scenario definition
-        self.repository.save_scenario(
+        res_scen = ResilienceScenario(
+            scenario_id=scenario_id,
+            scenario_type=resolved_type,
+            description=desc,
+            parameters=params,
+            seed=seed,
+            graph_version=graph_version,
+        )
+
+        # 2. Resolve the authentic routing base (PUBLIC_GEOGRAPHIC). Raises
+        #    FileNotFoundError when absent, before anything is persisted.
+        base_mat = baseline_matrix or _authentic_baseline_matrix(graph_version)
+
+        # 3. Freeze the inputs: authentic matrix + SIMULATED disruption +
+        #    declared assumptions. Raises ScenarioNotRepresentable when the
+        #    requested disruption cannot be applied to that matrix.
+        inputs = build_frozen_inputs(base_mat, scenario_type=resolved_type, parameters=params)
+
+        # 4. Evaluate. Every metric is DERIVED from the frozen inputs or is
+        #    reported UNAVAILABLE with a reason.
+        engine = self.engine if code_sha is None else ResilienceEngine(code_sha=code_sha)
+        res_eval = engine.evaluate_scenario(res_scen, inputs)
+        metrics = res_eval.metrics
+        grade = _compute_grade(metrics)
+
+        # 5. Persist scenario + evaluation in one transaction, or not at all.
+        self.repository.save_evaluation(
             scenario_id=scenario_id,
             workspace_id=workspace_id,
-            scenario_type=scenario_type,
+            scenario_type=resolved_type.value,
             description=desc,
-            evidence_class="SIMULATED",
-            parameters=parameters,
+            parameters=params,
             seed=seed,
             graph_version=graph_version,
             created_by=created_by,
-        )
-
-        # 2. Execute resilience engine
-        base_mat = baseline_matrix or _authentic_baseline_matrix(graph_version)
-        st = (
-            ScenarioType(scenario_type)
-            if scenario_type in ScenarioType._value2member_map_
-            else ScenarioType.ROAD_CLOSURE
-        )
-        res_scen = ResilienceScenario(
-            scenario_id=scenario_id,
-            scenario_type=st,
-            description=desc,
-            parameters=parameters or {},
-            seed=seed,
-            graph_version=graph_version,
-        )
-
-        flat_durations = [int(dur) for row in base_mat.durations_seconds for dur in row]
-        res_eval = self.engine.evaluate_scenario(res_scen, flat_durations)
-        m = res_eval.metrics
-        grade = _compute_grade(m)
-
-        # 3. Save result to PostgreSQL
-        self.repository.save_result(
-            evaluation_id=eval_id,
-            scenario_id=scenario_id,
-            workspace_id=workspace_id,
-            coverage_basis_points=m.coverage_basis_points,
-            p50_duration_seconds=m.p50_duration_seconds,
-            p90_duration_seconds=m.p90_duration_seconds,
-            p95_duration_seconds=m.p95_duration_seconds,
-            disconnected_zones_count=m.disconnected_zones_count,
-            redundancy_index_basis_points=m.redundancy_index_basis_points,
-            failure_exposure_score=m.failure_exposure_score,
-            capacity_loss_basis_points=m.capacity_loss_basis_points,
+            evaluation_id=res_eval.evaluation_id,
+            metrics=metrics,
             degradation_grade=grade,
-            baseline_comparison=None,
-            code_sha=effective_code_sha,
+            code_sha=res_eval.code_sha,
+            evidence_class=res_scen.evidence_class.value,
         )
 
-        return self.repository.get_scenario(scenario_id, workspace_id) or {}
+        stored = self.repository.get_scenario(scenario_id, workspace_id) or {}
+        stored["derivation"] = res_eval.inputs.lineage()
+        stored["metrics_evidence_class"] = metrics.evidence_class.value
+        stored["unavailable_metrics"] = metrics.unavailable_reasons()
+        return stored
 
     def get_scenario(self, scenario_id: str, workspace_id: str | None = None) -> dict[str, Any] | None:
         """Fetch scenario and evaluated metrics from PostgreSQL."""
