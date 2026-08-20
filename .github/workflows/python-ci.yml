@@ -1,54 +1,64 @@
 name: Python CI
 on: [push, pull_request]
+
 # Least privilege: this workflow only reads the repository. No job here uses
 # OIDC, uploads SARIF, publishes packages, or comments on pull requests.
 permissions:
   contents: read
 
 jobs:
+  # Secret scanning is a SEPARATE job on purpose. It is blocking, and the history
+  # scan currently fails by design while P0-CREDENTIAL-001 awaits rotation. Run as
+  # a step inside the test job it would abort the job before any test executed,
+  # costing all database integration signal for as long as rotation is outstanding.
+  # As its own job the gate still blocks the workflow while tests keep reporting.
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Secret scan (working tree)
+        run: python scripts/security/scan_secrets.py
+      - name: Secret scan (git history)
+        run: python scripts/security/scan_secrets.py --history
+
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
 
-    - uses: actions/setup-python@v7
-      with:
-        python-version: '3.11'
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.113.0
 
-    # P0-CREDENTIAL-001: block credentials from entering the tree, and audit
-    # history. Runs before anything else so a leak fails fast.
-    - name: Secret scan (working tree)
-      run: python scripts/security/scan_secrets.py
+      # The suite performs destructive writes. It runs against an ephemeral local
+      # database only -- never a hosted one. TEST_DATABASE_URL is mandatory; there
+      # is no built-in fallback. PROTECTED_DATABASE_FINGERPRINTS is set in CI, not
+      # only in tests, so the guard is live in the environment that matters.
+      - name: Start ephemeral database and apply migrations
+        run: |
+          supabase start
+          supabase db reset
+          echo "TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+          echo "ZONEPILOT_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
 
-    - name: Secret scan (git history)
-      run: python scripts/security/scan_secrets.py --history
-      # Blocking: an unbaselined secret, or a baselined one still awaiting rotation, fails the build.
+      - run: python -m pip install ruff==0.16.3 -r requirements.txt -r services/api/requirements.txt
+      - run: pip install -e ./python
+      - run: ruff check .
 
-    - name: Setup Supabase CLI
-      uses: supabase/setup-cli@v3
-      with:
-        version: 2.113.0
+      - name: Bootstrap Release Artifacts Supply Chain
+        run: python scripts/bootstrap_ci_artifacts.py
 
-    # The suite performs destructive writes. It runs against an ephemeral local
-    # database only -- never a hosted one. TEST_DATABASE_URL is mandatory; there
-    # is no built-in fallback any more.
-    - name: Start ephemeral database and apply migrations
-      run: |
-        supabase start
-        supabase db reset
-        echo "TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
-        echo "ZONEPILOT_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
-
-    - run: python -m pip install ruff==0.16.3 -r requirements.txt -r services/api/requirements.txt
-    - run: pip install -e ./python
-    - run: ruff check .
-
-    - name: Bootstrap Release Artifacts Supply Chain
-      run: python scripts/bootstrap_ci_artifacts.py
-
-    - name: Run Pytest Test Suite
-      env:
-        ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/data_root
-      run: pytest -m "not r1_evidence"
+      - name: Run Pytest Test Suite
+        env:
+          ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/data_root
+          PROTECTED_DATABASE_FINGERPRINTS: ${{ secrets.PROTECTED_DATABASE_FINGERPRINTS }}
+        run: pytest -m "not r1_evidence"
