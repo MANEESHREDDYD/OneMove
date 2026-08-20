@@ -1,6 +1,5 @@
 """Observatory Router exposing authentic PostgreSQL-backed and evidence-bearing endpoints."""
 
-import hashlib
 import json
 import math
 import uuid
@@ -744,12 +743,17 @@ def predict_forecast(
         lower_bound=None,
         upper_bound=None,
         baseline_model=bm,
-        model_version="onemove-forecast-baseline-1.0.0",
-        feature_snapshot_hash=f"snap-{hashlib.sha256(payload.zone_id.encode()).hexdigest()[:8]}",
-        dataset_version="1.0.0",
-        graph_version="1.1",
+        # No forecast is produced yet, so no model, snapshot, dataset or graph
+        # backs this record. Previously these were literals and the snapshot hash
+        # was sha256(zone_id) -- a hash of the request, not of any feature
+        # snapshot -- and the evidence id resolved nowhere (F-018). Recording
+        # nothing is the truthful answer while the state is EVIDENCE_ACCUMULATING.
+        model_version=None,
+        feature_snapshot_hash=None,
+        dataset_version=None,
+        graph_version=None,
         code_sha=current_release_sha(),
-        evidence_ids=(f"ev-weather-{payload.zone_id}",),
+        evidence_ids=(),
     )
 
     try:

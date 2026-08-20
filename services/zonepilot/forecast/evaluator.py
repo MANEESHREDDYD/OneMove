@@ -30,7 +30,9 @@ def evaluate_chronological(
             sample_count=0,
             mae=0.0,
             rmse=0.0,
-            coverage_rate=1.0,
+            # Not measured: prediction intervals are not produced, so interval
+            # coverage cannot be computed. 1.0 asserted perfect calibration (F-018).
+            coverage_rate=None,
             chronological_split_cutoff=split_cutoff,
             evaluation_status="ENGINEERING_COMPLETE_EVIDENCE_ACCUMULATING",
         )
@@ -39,6 +41,10 @@ def evaluate_chronological(
     sq_errors = []
     for actual in test:
         pred = BaselineForecaster.predict(train, actual["observation_time"], model_type)
+        if pred is None:
+            # No history available at this point in the walk-forward; the
+            # sample is skipped rather than scored against a fabricated 0.0.
+            continue
         err = abs(actual["value"] - pred)
         errors.append(err)
         sq_errors.append(err**2)
@@ -52,7 +58,8 @@ def evaluate_chronological(
         sample_count=len(test),
         mae=round(mae, 4),
         rmse=round(rmse, 4),
-        coverage_rate=1.0,
+        # Not measured; see above.
+        coverage_rate=None,
         chronological_split_cutoff=split_cutoff,
         evaluation_status="ENGINEERING_COMPLETE_EVIDENCE_ACCUMULATING",
     )

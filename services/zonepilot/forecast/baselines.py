@@ -15,9 +15,15 @@ class BaselineForecaster:
         history: Sequence[dict[str, Any]],
         target_time: datetime,
         model_type: BaselineModelType = BaselineModelType.LAST_OBSERVATION,
-    ) -> float:
+    ) -> float | None:
+        """Return a baseline prediction, or None when there is no history.
+
+        This returned 0.0 on empty history (F-018). Zero is a measurement, and an
+        operator cannot distinguish "we predict zero" from "we have no data".
+        None forces the caller to surface UNAVAILABLE.
+        """
         if not history:
-            return 0.0
+            return None
 
         if model_type == BaselineModelType.LAST_OBSERVATION:
             return float(history[-1]["value"])
