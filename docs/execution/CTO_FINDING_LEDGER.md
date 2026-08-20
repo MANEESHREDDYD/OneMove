@@ -1,7 +1,7 @@
 # OneMove — CTO Finding Ledger
 
-**Baseline main:** `ec4bb92` · **Branch head:** `e8e9ef5` (`hotfix/onemove-p0-security-incident`)
-**Generated:** 2026-08-20
+**Baseline main:** `ec4bb92` · **Branch head:** `9c3d378` (`hotfix/onemove-p0-security-incident`)
+**Generated:** 2026-08-20 (updated)
 
 Findings are immutable. Severity is never lowered to reach a release. A finding
 leaves OPEN only via a fix commit plus a regression test, and is certified only by
@@ -26,13 +26,13 @@ Status values: `OPEN`, `IN_REMEDIATION`, `READY_FOR_RETEST`, `PASS`, `BLOCKED_EX
 | P0 | 15 |
 | P1 | 12 |
 | P2 | 1 |
-| Fixed, awaiting independent retest | 7 |
+| Fixed, awaiting independent retest | 11 |
 | In remediation | 1 |
 | Blocked external | 1 |
-| Open, untouched | 19 |
-| Independently verified by me | 10 |
+| Open, untouched | 15 |
+| Independently verified by me | 14 |
 | Verified against a live PostgreSQL | 1 (F-002 only) |
-| Reported by an agent, unverified | 18 |
+| Reported by an agent, unverified | 14 |
 
 No finding is `PASS`. Nothing has been certified, because certification requires an
 auditor who did not write the fix, and the audit agents hit the account's weekly API
@@ -52,6 +52,10 @@ limit before they could retest.
 | F-006 | P0 | Optional workspace predicate in five repositories | `e8e9ef5` | `test_repository_tenancy_contract.py` |
 | F-008 | P0 | Outbox claim was a no-op; no lease or fencing | `2be6f15` | `test_outbox_fencing_contract.py` |
 | F-009 | P1 | Lost-lease writer could mark PUBLISHED | `2be6f15` | `test_outbox_fencing_contract.py` |
+| F-024 | P1 | Import-time DB coupling broke liveness and collection | `e7f3186` | verified: imports + /healthz 200 with no DB |
+| F-026 | P1 | `datetime.timezone` misuse produced an uncaught 500 | `71d50ea` | `test_events_timezone_regression.py` |
+| F-017 | P1 | Workflows lacked least-privilege token permissions | `71d50ea` | `test_workflow_permissions.py` |
+| F-016 | P1 | JWT: exp not required; issuer unverified when unconfigured | `9c3d378` | `test_jwt_hardening.py` |
 
 **F-001** is `BLOCKED_EXTERNAL`: the code is remediated and tested, but the credential
 itself still requires provider rotation, and it is permanently in public git history
@@ -74,7 +78,6 @@ I reproduced each of these against the code myself.
 | ID | Sev | Title | Location |
 |---|---|---|---|
 | F-007 | P0 | `GRANT ALL PRIVILEGES` on all public tables to `anon`, `authenticated` — any table without RLS is world-writable via the public anon key | `20260809000000_explicit_grants.sql:5` |
-| F-024 | P1 | Import-time DB singletons make the process unimportable without `DATABASE_URL`; 18 test modules fail at collection (observed directly) | `routers/observatory.py:54` |
 | F-027 | P2 | Documentation sprawl: 135 docs, 25 ZonePilot-branded including canonical `ARCHITECTURE.md`; legacy ride/checkout reports remain | `docs/` |
 
 ---
@@ -91,8 +94,6 @@ Treat as leads. Reproduce before acting.
 | F-013 | P0 | frontend | Compliance console fabricates incidents and named individuals behind live enforcement buttons |
 | F-014 | P0 | frontend | `Math.random()` confidence score persisted to `demand_forecasts` and shown as a percentage |
 | F-015 | P0 | authz | 25 of 27 admin pages check authentication but not role; no root `middleware.ts` |
-| F-016 | P1 | auth | JWT issuer silently optional; `exp` not required, so non-expiring tokens validate |
-| F-017 | P1 | ci/cd | 5 of 8 workflows lack a `permissions:` block (default write-scoped token) |
 | F-018 | P0 | forecast | `EVIDENCE_ACCUMULATING` masks an unwired forecaster; fabricated snapshot hash and versions persisted |
 | F-019 | P0 | assumptions | Optimizer capacity/cost/demand/scenario/objective constants are literals in router code |
 | F-020 | P1 | temporal | PIT split defaults to `event_time`, leaking records whose `information_available_at` postdates the cutoff |
@@ -100,7 +101,6 @@ Treat as leads. Reproduce before acting.
 | F-022 | P1 | reliability | 120s worker lease vs 300s ack deadline permits concurrent duplicate solves; `renew_optimization_job_lease` never called |
 | F-023 | P1 | rate limiting | Per-process in-memory limiter across `max_instance_count=10`; unbounded window dict is an OOM vector |
 | F-025 | P1 | api | Two incompatible error taxonomies (structured envelope vs bare-string detail) |
-| F-026 | P1 | api | `datetime.timezone` misuse produces an uncaught `AttributeError` → 500 |
 | F-028 | P1 | a11y | No skip link, no `aria-live`/`aria-current`, no `prefers-reduced-motion`; axe gate permits 5 critical violations |
 
 ---
@@ -108,7 +108,7 @@ Treat as leads. Reproduce before acting.
 ## Certification state
 
 ```
-P0_OPEN = 14   P1_OPEN = 11   P2_OPEN = 1   PASS = 0
+P0_OPEN = 13   P1_OPEN =  7   P2_OPEN = 1   PASS = 0
 STATUS  = NOT_CTO_PRODUCTION_READY
 ```
 
