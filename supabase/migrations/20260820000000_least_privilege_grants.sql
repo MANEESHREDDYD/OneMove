@@ -23,15 +23,34 @@
 -- browser role at all, in any mode.
 
 -- ---------------------------------------------------------------------------
--- 1. Revoke the blanket grants.
+-- 1. Revoke privileges on the OneMove tables this finding is about.
 -- ---------------------------------------------------------------------------
-REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
-REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
-REVOKE ALL PRIVILEGES ON ALL ROUTINES IN SCHEMA public FROM anon, authenticated;
+-- A blanket `REVOKE ALL ... ON ALL TABLES` was the first attempt here and it was
+-- wrong. Re-granting only the ten tables enumerated below stripped every OTHER
+-- table in the schema -- workspaces, workspace_members, profiles, weather -- and
+-- broke legitimate tenant access. The live-database run surfaced 30
+-- InsufficientPrivilege failures across the RLS suite, including on `profiles`,
+-- which the admin authorization check reads. A static review had passed this
+-- migration; only executing it against a real database found the defect.
+--
+-- The finding is about internal OneMove machinery being reachable from a browser
+-- role. The revoke is therefore scoped to exactly those tables. Pre-existing
+-- consumer tables keep the grants they had; narrowing those is a separate piece
+-- of work with its own blast radius, and doing it silently here is how the
+-- regression happened.
 
--- Stop future tables from inheriting broad rights by default.
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON
+    public.decision_records,
+    public.decision_replays,
+    public.forecast_records,
+    public.resilience_results,
+    public.resilience_scenarios,
+    public.shadow_evaluations,
+    public.optimization_jobs,
+    public.optimization_results,
+    public.optimization_outbox,
+    public.optimization_problem_snapshots
+FROM anon, authenticated;
 
 -- Schema usage is still required for PostgREST to resolve anything at all.
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;

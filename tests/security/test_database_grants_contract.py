@@ -41,19 +41,43 @@ def test_migrations_were_discovered() -> None:
     assert MIGRATIONS, "no migrations found; the glob is wrong"
 
 
-def test_blanket_grants_are_revoked_after_being_issued() -> None:
-    """A later migration must revoke the blanket grant; order matters."""
-    granted_at = next(
-        (i for i, p in enumerate(MIGRATIONS) if "GRANT ALL PRIVILEGES ON ALL TABLES" in p.read_text(encoding="utf-8")),
-        None,
-    )
-    revoked_at = next(
-        (i for i, p in enumerate(MIGRATIONS) if "REVOKE ALL PRIVILEGES ON ALL TABLES" in p.read_text(encoding="utf-8")),
-        None,
-    )
-    assert granted_at is not None, "expected the historical blanket grant to still be present"
-    assert revoked_at is not None, "no migration revokes the blanket grant"
-    assert revoked_at > granted_at, "the revoke must be ordered after the grant it undoes"
+def test_onemove_tables_are_revoked_from_browser_roles() -> None:
+    """The revoke must name the OneMove tables, not sweep the whole schema.
+
+    A blanket `REVOKE ALL ... ON ALL TABLES IN SCHEMA public` was the first
+    attempt. It stripped workspaces, workspace_members, profiles and weather too,
+    producing 30 InsufficientPrivilege failures against a live database -- a
+    regression a static review had passed. Scope is the safeguard.
+    """
+    # Match the statement that revokes from the browser roles specifically; an
+    # unrelated migration revokes schema privileges from the collector role.
+    revoke = None
+    for path in MIGRATIONS:
+        text = path.read_text(encoding="utf-8")
+        for start in range(len(text)):
+            start = text.find("REVOKE ALL PRIVILEGES ON", start)
+            if start == -1:
+                break
+            statement = text[start : text.index(";", start)]
+            if "anon" in statement and "authenticated" in statement:
+                revoke = statement
+                break
+        if revoke:
+            break
+    assert revoke is not None, "no migration revokes browser-role privileges on the OneMove tables"
+    for table in sorted(TENANT_TABLES):
+        assert table in revoke, f"{table} is not revoked from browser roles"
+    assert "FROM anon, authenticated" in revoke
+
+
+def test_revoke_does_not_sweep_the_whole_schema() -> None:
+    """Collateral damage guard: never revoke across every table at once."""
+    for path in MIGRATIONS:
+        text = path.read_text(encoding="utf-8")
+        assert "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM anon" not in text, (
+            f"{path.name} revokes across the whole schema, which strips unrelated tables "
+            "such as workspaces, profiles and weather"
+        )
 
 
 @pytest.mark.parametrize("table", sorted(TENANT_TABLES))
