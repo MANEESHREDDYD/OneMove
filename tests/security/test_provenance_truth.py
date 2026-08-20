@@ -108,3 +108,45 @@ def test_every_save_result_call_site_supplies_all_required_arguments() -> None:
                 offenders.append(f"{rel}:{node.lineno} missing {sorted(missing)}")
 
     assert not offenders, "save_result called without required lineage: " + "; ".join(offenders)
+
+
+# --- F-011 round 2: placeholders forbidden, code_sha actually persisted ---------
+
+
+def test_no_placeholder_lineage_is_ever_persisted() -> None:
+    """AUDIT-2 reopened F-011: "UNKNOWN"/"UNVERSIONED" are invented provenance."""
+    from services.zonepilot.optimization import pubsub_worker, service
+
+    for module in (service, pubsub_worker):
+        src = inspect.getsource(module)
+        # Strip docstrings/comments: the words may legitimately appear explaining the rule.
+        code = "\n".join(line for line in src.splitlines() if not line.lstrip().startswith("#") and '"""' not in line)
+        for placeholder in ('or "UNKNOWN"', 'or "UNVERSIONED"'):
+            assert placeholder not in code, f"{module.__name__} still defaults lineage with {placeholder}"
+
+
+def test_worker_lineage_read_fails_closed() -> None:
+    from services.zonepilot.optimization.pubsub_worker import _frozen_lineage
+
+    assert _frozen_lineage({"graph_version": "1.1"}, "graph_version") == "1.1"
+    for absent in (None, {}, {"graph_version": ""}, {"graph_version": "   "}):
+        with pytest.raises(ValueError):
+            _frozen_lineage(absent, "graph_version")
+
+
+def test_code_sha_is_actually_persisted() -> None:
+    """The contract required code_sha and then discarded it before the INSERT."""
+    save = inspect.getsource(OptimizationRepository.save_result)
+    insert = save[save.index("INSERT INTO public.optimization_results") :]
+    columns = insert[: insert.index("VALUES")]
+    assert "code_sha" in columns, "code_sha is required by the signature but absent from the INSERT"
+    assert "code_sha = EXCLUDED.code_sha" in insert, "a re-run must not leave stale provenance"
+
+
+def test_results_table_has_lineage_columns() -> None:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    migrations = "\n".join(p.read_text(encoding="utf-8") for p in (root / "supabase" / "migrations").glob("*.sql"))
+    for column in ("code_sha", "problem_snapshot_sha256", "matrix_sha256"):
+        assert f"ADD COLUMN IF NOT EXISTS {column}" in migrations, f"optimization_results lacks {column}"

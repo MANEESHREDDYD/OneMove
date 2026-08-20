@@ -63,6 +63,24 @@ PUBSUB_ACK_DEADLINE_SECONDS = 300
 JOB_LEASE_SECONDS = PUBSUB_ACK_DEADLINE_SECONDS + 120
 
 
+def _frozen_lineage(job: dict[str, Any] | None, field: str) -> str:
+    """Read one lineage value from the frozen job row, or fail closed.
+
+    Placeholders like "UNKNOWN" and "UNVERSIONED" are invented provenance: they
+    make a stored result look attributable when it is not, which is precisely what
+    F-011 forbids. A failure record may be persisted, but it must reference the
+    real frozen job context -- and it always can, because job_id is an FK to it.
+    If the job row itself lacks lineage, that is an upstream data defect and the
+    write must not proceed.
+    """
+    value = str((job or {}).get(field) or "").strip()
+    if not value:
+        raise ValueError(
+            f"Frozen job lineage is missing '{field}'; refusing to persist a result with invented provenance."
+        )
+    return value
+
+
 def _reconstruct_problem_from_payload(payload: dict[str, Any]) -> OptimizationProblem:
     """Reconstruct an OptimizationProblem from saved request payload with authentic data.
 
@@ -308,7 +326,7 @@ async def process_pubsub_push(request: Request, response: Response):
             pareto_document=None,
             problem_fingerprint=snapshot.problem_snapshot_sha256,
             graph_version=graph_ver,
-            assumption_version=job.get("assumption_version") or "UNVERSIONED",
+            assumption_version=_frozen_lineage(job, "assumption_version"),
             solver_version=SOLVER_VERSION,
             lease_owner=worker_id,
             solver_status=result.status.value,
@@ -349,8 +367,8 @@ async def process_pubsub_push(request: Request, response: Response):
             result_document=closed_doc,
             pareto_document=None,
             problem_fingerprint=f"err-{uuid.uuid4().hex[:8]}",
-            graph_version=(job or {}).get("graph_version") or "UNKNOWN",
-            assumption_version=(job or {}).get("assumption_version") or "UNVERSIONED",
+            graph_version=_frozen_lineage(job, "graph_version"),
+            assumption_version=_frozen_lineage(job, "assumption_version"),
             solver_version=SOLVER_VERSION,
             lease_owner=worker_id,
             solver_status="FAILED",

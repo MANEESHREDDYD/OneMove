@@ -212,10 +212,26 @@ class OptimizationService:
         if not job_row:
             raise LookupError(f"Optimization job {job_id} not found; cannot resolve owning workspace")
         job_workspace_id = str(job_row["workspace_id"] or "").strip()
-        # Lineage for the fail-closed path, read from the job row rather than
-        # defaulted. A solver failure must still record what it was solving.
-        job_graph_version = str(job_row.get("graph_version") or "").strip() or "UNKNOWN"
-        job_assumption_version = str(job_row.get("assumption_version") or "").strip() or "UNVERSIONED"
+        # Lineage comes from the frozen job context. A solver failure may still be
+        # recorded, but it must reference the REAL context it was solving -- a
+        # placeholder like "UNKNOWN"/"UNVERSIONED" is invented provenance and is
+        # exactly what F-011 exists to forbid. If the job row lacks lineage, that is
+        # a data defect upstream, so fail closed rather than paper over it.
+        job_graph_version = str(job_row.get("graph_version") or "").strip()
+        job_assumption_version = str(job_row.get("assumption_version") or "").strip()
+        missing_lineage = [
+            name
+            for name, value in (
+                ("graph_version", job_graph_version),
+                ("assumption_version", job_assumption_version),
+            )
+            if not value
+        ]
+        if missing_lineage:
+            raise ValueError(
+                f"Optimization job {job_id} is missing frozen lineage: {', '.join(missing_lineage)}. "
+                "Refusing to persist a result with invented provenance."
+            )
         if not job_workspace_id:
             raise ValueError(f"Optimization job {job_id} has no workspace_id; refusing to persist a global snapshot")
 
@@ -249,6 +265,12 @@ class OptimizationService:
                 gold_manifest_sha256=gold_sha,
                 evidence_ids=evidence_ids,
             )
+            # The snapshot is the authoritative frozen assumption reference. If it
+            # carries none, the result cannot claim one.
+            snapshot_assumption_version = str(getattr(snapshot, "assumption_version", "") or "").strip()
+            if not snapshot_assumption_version:
+                snapshot_assumption_version = job_assumption_version
+
             self.repository.save_problem_snapshot(snapshot, workspace_id=job_workspace_id)
 
             result = optimize_facilities(problem)
@@ -272,7 +294,7 @@ class OptimizationService:
                 fail_closed=result.fail_closed,
                 code_sha=effective_code_sha,
                 graph_version=graph_ver,
-                assumption_version=snapshot.assumption_version or "UNVERSIONED",
+                assumption_version=snapshot_assumption_version,
                 solver_version=SOLVER_VERSION,
                 run_duration_ms=run_ms,
             )

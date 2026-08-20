@@ -318,18 +318,19 @@ class OptimizationRepository:
                         job_id, result_document, pareto_document, problem_fingerprint,
                         solver_status, action, fail_closed, graph_version,
                         assumption_version, solver_version, scenario_evidence_classes,
-                        solver_wall_time_seconds
+                        solver_wall_time_seconds, code_sha
                     ) VALUES (
                         %s::uuid, %s::jsonb, %s::jsonb, %s,
                         %s, %s, %s, %s,
                         %s, %s, %s,
-                        %s
+                        %s, %s
                     )
                     ON CONFLICT (job_id) DO UPDATE SET
                         result_document = EXCLUDED.result_document,
                         solver_status = EXCLUDED.solver_status,
                         action = EXCLUDED.action,
-                        fail_closed = EXCLUDED.fail_closed
+                        fail_closed = EXCLUDED.fail_closed,
+                        code_sha = EXCLUDED.code_sha
                     """,
                     (
                         job_id,
@@ -344,6 +345,7 @@ class OptimizationRepository:
                         solver_version,
                         scenario_evidence_classes or ["PUBLIC_GEOGRAPHIC"],
                         round(run_duration_ms / 1000.0, 4),
+                        code_sha,
                     ),
                 )
             conn.commit()
