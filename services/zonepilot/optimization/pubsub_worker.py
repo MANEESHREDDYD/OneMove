@@ -320,7 +320,7 @@ async def process_pubsub_push(request: Request, response: Response):
         result_doc["network_version"] = graph_ver
         result_doc["solver_version"] = SOLVER_VERSION
 
-        _repository.save_result(
+        persisted = _repository.save_result(
             job_id=job_id,
             result_document=result_doc,
             pareto_document=None,
@@ -335,12 +335,49 @@ async def process_pubsub_push(request: Request, response: Response):
             code_sha=effective_code_sha,
             run_duration_ms=run_ms,
         )
+
+        if not persisted:
+            # The fence rejected the write: this worker's lease expired and another
+            # instance reclaimed the job while the solve was still running. The
+            # solve DID happen, it simply is not authoritative. Reporting it as
+            # "solved successfully" hid a duplicate solve from monitoring entirely
+            # -- the very signal an operator needs to size leases correctly.
+            logger.warning(
+                "WORKER_RESULT_FENCE_REJECTED",
+                extra={
+                    "event": "WORKER_RESULT_FENCE_REJECTED",
+                    "job_id": job_id,
+                    "worker_id": worker_id,
+                    "run_duration_ms": run_ms,
+                    "solver_status": result.status.value,
+                    "reason": "lease lost during solve; another worker owns this job",
+                },
+            )
+            logger.warning(
+                "DUPLICATE_SOLVE_DISCARDED",
+                extra={
+                    "event": "DUPLICATE_SOLVE_DISCARDED",
+                    "job_id": job_id,
+                    "worker_id": worker_id,
+                    "run_duration_ms": run_ms,
+                },
+            )
+            # Ack regardless: the message is being handled by the lease holder, so
+            # redelivering it to us would only repeat the discarded work.
+            return {
+                "status": "ack",
+                "job_id": job_id,
+                "result_persisted": False,
+                "reason": "lease_lost",
+            }
+
         logger.info(
             f"Job {job_id} solved successfully in {run_ms}ms (status={result.status.value}, snapshot={snapshot.problem_snapshot_id})"
         )
         return {
             "status": "ack",
             "job_id": job_id,
+            "result_persisted": True,
             "solver_status": result.status.value,
             "problem_snapshot_id": snapshot.problem_snapshot_id,
         }

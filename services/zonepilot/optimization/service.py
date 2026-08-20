@@ -138,11 +138,40 @@ class OptimizationService:
 
         for event in pending_events:
             event_id = str(event["event_id"])
-            payload = event["payload"] if isinstance(event["payload"], dict) else json.loads(event["payload"])
-            job_id = str(event["aggregate_id"])
-            workspace_id = str(event["workspace_id"])
             attempts = int(event.get("attempt_count", event.get("attempts", 0)))
             fencing_token = str(event.get("fencing_token") or "")
+
+            # Per-event isolation. Payload decoding used to sit outside the try
+            # below, so a single malformed row raised out of the whole loop and
+            # abandoned every sibling this dispatcher had already CLAIMED --
+            # each one holding a lease and a burned attempt, publishable by
+            # nobody until the lease expired. One poison event must not take a
+            # batch with it.
+            try:
+                raw = event["payload"]
+                payload = raw if isinstance(raw, dict) else json.loads(raw)
+                job_id = str(event["aggregate_id"])
+                workspace_id = str(event["workspace_id"])
+            except (TypeError, ValueError, KeyError) as decode_err:
+                logger.error(
+                    "OUTBOX_POISON_PAYLOAD",
+                    extra={
+                        "event": "OUTBOX_POISON_PAYLOAD",
+                        "event_id": event_id,
+                        "attempts": attempts,
+                        "error": str(decode_err),
+                    },
+                )
+                # Release the lease so the row is not stranded, and let the normal
+                # attempt ceiling dead-letter it rather than retrying forever.
+                self.repository.mark_outbox_failed(
+                    event_id,
+                    f"POISON_PAYLOAD: {decode_err}",
+                    fencing_token=fencing_token,
+                    lease_owner=lease_owner,
+                    backoff_seconds=600,
+                )
+                continue
 
             # Rows the claim transaction dead-lettered are returned for
             # observability only. They hold no lease and must not be published.

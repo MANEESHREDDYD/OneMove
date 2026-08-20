@@ -109,3 +109,41 @@ def test_result_writes_are_fenced_on_the_worker_lease() -> None:
 def test_save_result_reports_whether_it_won() -> None:
     sig = inspect.signature(repo_module.OptimizationRepository.save_result)
     assert sig.return_annotation in (bool, "bool")
+
+
+# --- Certifier residuals: poison payload and lost-lease reporting ---------------
+
+
+def test_poison_payload_cannot_abort_the_batch() -> None:
+    """One malformed event must not strand its already-claimed siblings.
+
+    Payload decoding used to sit outside the try, so a single bad row raised out
+    of the whole loop leaving every sibling leased with a burned attempt and
+    publishable by nobody until the lease expired.
+    """
+    dispatch = inspect.getsource(service_module.OptimizationService.dispatch_outbox_events)
+    body = dispatch[dispatch.index("for event in pending_events:") :]
+
+    decode_at = body.index("json.loads")
+    first_try = body.index("try:")
+    assert first_try < decode_at, "payload decoding must be inside a per-event try"
+
+    assert "OUTBOX_POISON_PAYLOAD" in body
+    # The bad event must release its lease rather than being abandoned mid-lease.
+    poison = body[body.index("OUTBOX_POISON_PAYLOAD") :]
+    assert "mark_outbox_failed" in poison
+    assert "continue" in poison, "the loop must carry on to the remaining events"
+
+
+def test_lost_lease_is_not_reported_as_success() -> None:
+    """A discarded duplicate solve must be visible to monitoring."""
+    worker = inspect.getsource(pubsub_worker_module.process_pubsub_push)
+
+    assert "persisted = _repository.save_result" in worker, "the fence result must be inspected"
+    assert "WORKER_RESULT_FENCE_REJECTED" in worker
+    assert "DUPLICATE_SOLVE_DISCARDED" in worker
+
+    rejected = worker[worker.index("if not persisted:") :]
+    success_at = worker.index("solved successfully")
+    assert worker.index("if not persisted:") < success_at, "the fence check must precede the success log"
+    assert "result_persisted" in rejected
