@@ -1,6 +1,6 @@
 # OneMove — CTO Finding Ledger
 
-**Baseline main:** `ec4bb92` · **Branch head:** `9c3d378` (`hotfix/onemove-p0-security-incident`)
+**Baseline main:** `ec4bb92` · **Branch head:** `54c5ace` (`hotfix/onemove-p0-security-incident`)
 **Generated:** 2026-08-20 (updated)
 
 Findings are immutable. Severity is never lowered to reach a release. A finding
@@ -26,13 +26,13 @@ Status values: `OPEN`, `IN_REMEDIATION`, `READY_FOR_RETEST`, `PASS`, `BLOCKED_EX
 | P0 | 15 |
 | P1 | 12 |
 | P2 | 1 |
-| Fixed, awaiting independent retest | 11 |
+| Fixed, awaiting independent retest | 21 |
 | In remediation | 1 |
 | Blocked external | 1 |
-| Open, untouched | 15 |
-| Independently verified by me | 14 |
+| Open, untouched | 5 |
+| Independently verified by me | 24 |
 | Verified against a live PostgreSQL | 1 (F-002 only) |
-| Reported by an agent, unverified | 14 |
+| Reported by an agent, unverified | 4 |
 
 No finding is `PASS`. Nothing has been certified, because certification requires an
 auditor who did not write the fix, and the audit agents hit the account's weekly API
@@ -56,6 +56,16 @@ limit before they could retest.
 | F-026 | P1 | `datetime.timezone` misuse produced an uncaught 500 | `71d50ea` | `test_events_timezone_regression.py` |
 | F-017 | P1 | Workflows lacked least-privilege token permissions | `71d50ea` | `test_workflow_permissions.py` |
 | F-016 | P1 | JWT: exp not required; issuer unverified when unconfigured | `9c3d378` | `test_jwt_hardening.py` |
+| F-007 | P0 | GRANT ALL to anon/authenticated; 6 tables had no RLS | `5bbb384` | `test_database_grants_contract.py` |
+| F-010 | P0 | Synthetic travel matrix labelled PUBLIC_GEOGRAPHIC | `941d56a` | `test_provenance_truth.py` |
+| F-011 | P0 | save_result invented code_sha/graph/solver lineage | `941d56a` | `test_provenance_truth.py` |
+| F-012 | P0 | Executive page fabricated HEALTHY/DEGRADED | `fe04099` | tsc + next build verified |
+| F-013 | P0 | Compliance console fabricated incidents and people | `fe04099` | FEATURE_NOT_CONNECTED |
+| F-014 | P0 | Math.random() ML confidence persisted and displayed | `fe04099` | null + UNAVAILABLE |
+| F-015 | P0 | Admin authz: 8 pages + 4 server entry points unguarded | `fe04099` | `lib/auth/dal.ts` + `proxy.ts` |
+| F-018 | P0 | Forecast fabricated provenance; 0.0 and coverage 1.0 | `7c5996c` | `test_forecast_truth.py` |
+| F-020 | P1 | PIT split defaulted to event_time | `4d33a4f` | `test_pit_leakage.py` |
+| F-022 | P1 | Worker lease < ack deadline; unfenced result write | `54c5ace` | `test_outbox_fencing_contract.py` |
 
 **F-001** is `BLOCKED_EXTERNAL`: the code is remediated and tested, but the credential
 itself still requires provider rotation, and it is permanently in public git history
@@ -77,7 +87,6 @@ I reproduced each of these against the code myself.
 
 | ID | Sev | Title | Location |
 |---|---|---|---|
-| F-007 | P0 | `GRANT ALL PRIVILEGES` on all public tables to `anon`, `authenticated` — any table without RLS is world-writable via the public anon key | `20260809000000_explicit_grants.sql:5` |
 | F-027 | P2 | Documentation sprawl: 135 docs, 25 ZonePilot-branded including canonical `ARCHITECTURE.md`; legacy ride/checkout reports remain | `docs/` |
 
 ---
@@ -88,17 +97,8 @@ Treat as leads. Reproduce before acting.
 
 | ID | Sev | Domain | Title |
 |---|---|---|---|
-| F-010 | P0 | resilience | Synthetic travel matrix fabricated and labelled `PUBLIC_GEOGRAPHIC`, derived grade persisted |
-| F-011 | P0 | optimizer | `save_result` defaults `code_sha`/`graph_version`/`solver_version`, so replay provenance is a literal |
-| F-012 | P0 | frontend | Executive page renders HEALTHY/DEGRADED as literal JSX with fake source attribution, zero fetching |
-| F-013 | P0 | frontend | Compliance console fabricates incidents and named individuals behind live enforcement buttons |
-| F-014 | P0 | frontend | `Math.random()` confidence score persisted to `demand_forecasts` and shown as a percentage |
-| F-015 | P0 | authz | 25 of 27 admin pages check authentication but not role; no root `middleware.ts` |
-| F-018 | P0 | forecast | `EVIDENCE_ACCUMULATING` masks an unwired forecaster; fabricated snapshot hash and versions persisted |
 | F-019 | P0 | assumptions | Optimizer capacity/cost/demand/scenario/objective constants are literals in router code |
-| F-020 | P1 | temporal | PIT split defaults to `event_time`, leaking records whose `information_available_at` postdates the cutoff |
 | F-021 | P1 | reliability | DLQ topic has no subscription (messages destroyed); DLQ alert matches all topics; no notification channel |
-| F-022 | P1 | reliability | 120s worker lease vs 300s ack deadline permits concurrent duplicate solves; `renew_optimization_job_lease` never called |
 | F-023 | P1 | rate limiting | Per-process in-memory limiter across `max_instance_count=10`; unbounded window dict is an OOM vector |
 | F-025 | P1 | api | Two incompatible error taxonomies (structured envelope vs bare-string detail) |
 | F-028 | P1 | a11y | No skip link, no `aria-live`/`aria-current`, no `prefers-reduced-motion`; axe gate permits 5 critical violations |
@@ -108,7 +108,7 @@ Treat as leads. Reproduce before acting.
 ## Certification state
 
 ```
-P0_OPEN = 13   P1_OPEN =  7   P2_OPEN = 1   PASS = 0
+P0_OPEN =  1   P1_OPEN =  4   P2_OPEN = 1   PASS = 0
 STATUS  = NOT_CTO_PRODUCTION_READY
 ```
 
