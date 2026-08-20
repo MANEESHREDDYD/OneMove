@@ -1,6 +1,6 @@
 # OneMove — CTO Finding Ledger
 
-**Baseline main:** `ec4bb92` · **Branch head:** `9ed8b8e` (`hotfix/onemove-p0-security-incident`)
+**Baseline main:** `ec4bb92` · **Branch head:** `75da167` (`hotfix/onemove-p0-security-incident`)
 **Regenerated:** 2026-08-20
 
 Findings are immutable. Severity is never lowered to reach a release. A finding leaves
@@ -24,9 +24,10 @@ auditor who did not write the fix retests it.
 `16 + 11 + 1 = 28` · `20 + 1 + 1 + 6 = 28`
 
 ```
-P0_NOT_CERTIFIED = 16    P1_NOT_CERTIFIED = 11    P2_NOT_CERTIFIED = 1
-PASS             =  0
-STATUS           = NOT_CTO_PRODUCTION_READY
+PASS = 10    REOPENED_BY_CERTIFICATION = 3    AWAITING_RE-CERTIFICATION = 2
+BLOCKED_EXTERNAL = 1    OPEN (never started) = 6    IN_REMEDIATION = 1
+P0_NOT_CERTIFIED = 8     P1_NOT_CERTIFIED = 5     P2_NOT_CERTIFIED = 1
+STATUS = NOT_CTO_PRODUCTION_READY
 ```
 
 **`PASS = 0` is the number that governs.** "Ready for retest" is not "passed". Every fix
@@ -135,3 +136,57 @@ All 23 failures are classified with evidence, not assumed: 10 raise
 - **No deployed environment.** Staging E2E, load, soak, chaos, DR, rollback, alert-fire,
   IAM, and same-digest promotion are all `NOT_RUN`.
 - **No independent certifier has run since the fixes landed.**
+
+---
+
+## Certification wave 1 — 2026-08-20, at `b3406f6`
+
+Three read-only certifiers retested the fixed state. Not one of them wrote the code
+it reviewed. Result: **6 PASS, 5 FAIL** on first pass.
+
+### PASS (10 findings)
+
+F-003, F-004 (Assistant evidence round-trip traced end-to-end through the real
+Inspector), F-007 (all 11 tables enable RLS; REVOKE ordering correct), F-008, F-009
+(claim atomicity and fencing hold; no overlap interleaving could be constructed),
+F-015 (all 7 admin server entry points guarded — the certifier found a 5th file the
+fix list had missed and confirmed it too), F-016, F-017, F-022, F-024.
+
+### FAIL — and what they caught
+
+| ID | Verdict | Defect found in the *fix* |
+|---|---|---|
+| F-001 | FAIL | Rotation outstanding; `ALLOW_NONLOCAL_TEST_DATABASE=1` was a self-service opt-out; `PROTECTED_DATABASE_FINGERPRINTS` empty by default and therefore inert |
+| F-006 | FAIL | **The contract test was evadable**: `get_job` absent from the checked set, `async def` skipped the walk entirely, regex matched one literal spelling |
+| F-011 | FAIL | **Hard regression**: the fail-closed call site omitted three now-required arguments → `TypeError` on the first solver failure. Also placeholder lineage, and `code_sha` never persisted |
+| F-010 | FAIL | Scenario row persisted *before* the matrix check (orphan rows); `ResilienceEngine` hardcodes coverage/capacity/zone counts, so grades are invented — same defect class as the deleted matrix generator |
+| F-018 | FAIL | `mae`/`rmse` set to `0.0` when zero samples were scored, with `sample_count` counting skipped samples — a perfect-accuracy claim over no measurement |
+| F-020 | FAIL | `evaluator.py` still splits on `observation_time`; `get_zone_forecasts` has no `forecast_issue_time <= decision_time` filter, so a future-issued forecast is selectable |
+
+### Repaired in `75da167`, awaiting re-certification
+
+**F-011** and **F-006**. The F-006 repair was verified against each of the three
+bypasses the certifier named. F-001's blanket override is gone, but F-001 stays
+`BLOCKED_EXTERNAL` on rotation.
+
+### Reopened, not yet fixed
+
+**F-010**, **F-018**, **F-020**. Severity unchanged; they revert to open rather than
+becoming new findings, because a defect surviving its own remediation is the same
+defect.
+
+### Residuals the certifiers flagged (not yet findings)
+
+- Outbox: a poison payload aborts a whole claimed batch, stranding siblings with
+  burned attempts; when Pub/Sub is unconfigured locally, claimed rows exhaust all
+  attempts and dead-letter without a publish ever being attempted.
+- Worker: `save_result`'s boolean is discarded, so a lost-lease worker still logs
+  "solved successfully" — hiding a duplicate solve from monitoring.
+- `/readyz` returns 500 rather than 503 when `DATABASE_URL` is unset and
+  `ENVIRONMENT` is not staging/production.
+
+### Standing conclusion
+
+Five of eleven certified fixes were defective, and two of those defects were
+*created* by the remediation itself. No fix in this programme should be trusted
+because its author tested it.
