@@ -32,11 +32,6 @@ def validate_cloud_configuration() -> tuple[bool, str]:
     if not gcp_project or not pubsub_topic:
         return False, "Missing required cloud configuration: GCP_PROJECT_ID or PUBSUB_TOPIC_OPTIMIZATIONS"
 
-    # P0-CREDENTIAL-001: there is no built-in database credential any more. If the
-    # platform did not inject DATABASE_URL, the service must fail readiness rather
-    # than start and fail on first query.
-    if not (os.environ.get("DATABASE_URL") or os.environ.get("EXECUTION_DATABASE_URL")):
-        return False, "Missing required database configuration: DATABASE_URL is not set"
 
     expected_projects = {
         "staging": "zonepilot-stg-9a4285",
@@ -49,6 +44,13 @@ def validate_cloud_configuration() -> tuple[bool, str]:
             False,
             f"Environment/project mismatch: ENVIRONMENT='{env}' requires GCP_PROJECT_ID='{expected_project}', got '{gcp_project}'",
         )
+
+    # P0-CREDENTIAL-001: there is no built-in database credential any more. Checked
+    # AFTER the project match: deploying against the wrong GCP project is the more
+    # specific misconfiguration, and reporting the generic database message first
+    # masked it.
+    if not (os.environ.get("DATABASE_URL") or os.environ.get("EXECUTION_DATABASE_URL")):
+        return False, "Missing required database configuration: DATABASE_URL is not set"
 
     return True, "valid"
 

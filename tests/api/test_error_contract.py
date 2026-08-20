@@ -281,8 +281,19 @@ def test_assistant_domain_miss_stays_a_typed_200_response(
 # --- Readiness probe -----------------------------------------------------------
 
 
-def test_readyz_returns_a_typed_503_when_the_dsn_is_unconfigured(client: TestClient) -> None:
-    """Residual on F-025: this raised DatabaseConfigurationError uncaught and 500'd."""
+def test_readyz_returns_a_typed_503_when_the_dsn_is_unconfigured(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Residual on F-025: this raised DatabaseConfigurationError uncaught and 500'd.
+
+    The unconfigured state is created explicitly. Relying on the ambient
+    environment made this pass locally (no DSN set) and fail in CI, where an
+    ephemeral database IS configured -- so it was asserting the environment rather
+    than the behaviour.
+    """
+    for var in ("DATABASE_URL", "EXECUTION_DATABASE_URL", "TEST_DATABASE_URL"):
+        monkeypatch.delenv(var, raising=False)
+
     response = client.get("/readyz")
 
     assert response.status_code == 503

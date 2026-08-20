@@ -122,7 +122,7 @@ def test_shadow_evaluation_loop() -> None:
     assert shadow.shadow_state == ShadowState.FROZEN_AWAITING_FUTURE
     assert shadow.outcome_status == OutcomeStatus.PENDING
 
-    evaluated = ledger.evaluate_shadow(shadow.shadow_id, actual_observed_p95_seconds=650)
+    evaluated = ledger.evaluate_shadow(shadow.shadow_id, "ws-blr-01", actual_observed_p95_seconds=650)
     assert evaluated.shadow_state == ShadowState.EVALUATED
     assert evaluated.outcome_status == OutcomeStatus.EVALUATED
     assert evaluated.regret_seconds == 50
