@@ -21,7 +21,9 @@ from services.common.db_dsn import (
 )
 
 LOCAL_DSN = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-HOSTED_DSN = "postgresql://postgres.someproject:fake-fixture-password@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
+HOSTED_DSN = (
+    "postgresql://postgres.someproject:fake-fixture-password@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
+)
 
 
 def test_module_source_contains_no_embedded_credential() -> None:

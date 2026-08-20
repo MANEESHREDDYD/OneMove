@@ -6,7 +6,9 @@ import hashlib
 import json
 import logging
 import os
+import socket
 import time
+import uuid
 from typing import Any
 
 from services.zonepilot.optimization.contracts import (
@@ -85,9 +87,18 @@ class OptimizationService:
         result_job["dispatch_status"] = dispatch_status
         return result_job
 
-    def dispatch_outbox_events(self, limit: int = 10) -> int:
-        """Claim and publish pending outbox events to Google Cloud Pub/Sub."""
-        pending_events = self.repository.claim_pending_outbox_events(limit=limit)
+    def dispatch_outbox_events(self, limit: int = 10, lease_seconds: int = 60) -> int:
+        """Claim and publish pending outbox events to Google Cloud Pub/Sub.
+
+        Claiming and publishing are strictly ordered: the claim transaction commits
+        before any publish happens, and every finalize carries the fencing token
+        issued at claim time. A dispatcher whose lease expired and was stolen sees
+        a False return and leaves the row alone (AUDIT-3 / F-008, F-009).
+        """
+        lease_owner = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+        pending_events = self.repository.claim_pending_outbox_events(
+            limit=limit, owner=lease_owner, lease_seconds=lease_seconds
+        )
         if not pending_events:
             return 0
 
@@ -111,7 +122,16 @@ class OptimizationService:
             payload = event["payload"] if isinstance(event["payload"], dict) else json.loads(event["payload"])
             job_id = str(event["aggregate_id"])
             workspace_id = str(event["workspace_id"])
-            attempts = int(event.get("attempts", 0))
+            attempts = int(event.get("attempt_count", event.get("attempts", 0)))
+            fencing_token = str(event.get("fencing_token") or "")
+
+            # Rows the claim transaction dead-lettered are returned for
+            # observability only. They hold no lease and must not be published.
+            if str(event.get("status")) == "DEAD":
+                logger.error(
+                    f"Outbox event {event_id} for job {job_id} dead-lettered after {attempts} attempts; not publishing."
+                )
+                continue
 
             try:
                 from google.cloud import pubsub_v1
@@ -121,14 +141,37 @@ class OptimizationService:
                 msg_bytes = json.dumps(payload).encode("utf-8")
                 future = publisher.publish(topic_path, msg_bytes, job_id=job_id, workspace_id=workspace_id)
                 msg_id = future.result(timeout=10) if hasattr(future, "result") else str(future)
-                self.repository.mark_outbox_published(event_id, pubsub_message_id=str(msg_id))
+                finalized = self.repository.mark_outbox_published(
+                    event_id,
+                    fencing_token=fencing_token,
+                    lease_owner=lease_owner,
+                    pubsub_message_id=str(msg_id),
+                )
+                if not finalized:
+                    # Published, but the lease was lost before we could record it.
+                    # The new holder will publish again; the worker is idempotent.
+                    # Never mutate the row - it belongs to another dispatcher now.
+                    logger.error(
+                        f"LOST_LEASE finalizing outbox event {event_id} (job {job_id}); "
+                        f"published as {msg_id} but the row was re-claimed. Possible duplicate delivery."
+                    )
+                    continue
                 dispatched_count += 1
                 logger.info(f"Outbox event {event_id} for job {job_id} published to Pub/Sub msg {msg_id}")
             except Exception as pub_err:
                 backoff = min(600, 10 * (2**attempts))
-                self.repository.mark_outbox_failed(event_id, str(pub_err), backoff_seconds=backoff)
+                released = self.repository.mark_outbox_failed(
+                    event_id,
+                    str(pub_err),
+                    fencing_token=fencing_token,
+                    lease_owner=lease_owner,
+                    backoff_seconds=backoff,
+                )
+                if not released:
+                    logger.error(f"LOST_LEASE releasing outbox event {event_id}; leaving it to the new holder.")
+                    continue
                 logger.warning(
-                    f"Outbox publish attempt {attempts + 1} failed for event {event_id}: {pub_err}. Backoff: {backoff}s"
+                    f"Outbox publish attempt {attempts} failed for event {event_id}: {pub_err}. Backoff: {backoff}s"
                 )
 
         return dispatched_count
