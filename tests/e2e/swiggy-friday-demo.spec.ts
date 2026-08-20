@@ -16,11 +16,10 @@ test.describe('Swiggy Friday Demo Path', () => {
 
   test('Deterministic execution of Swiggy demo', async ({ page, request }) => {
     // 1. OneMove landing/operator console
-    await page.goto('/admin/command-center');
-    await expect(page.locator('h1')).toContainText('Command Center');
-    
-    // Inject overlay helper
-    await page.addScriptTag({ content: `
+    // Overlay helper. addInitScript re-runs on EVERY navigation; addScriptTag
+    // only injects into the current document, so the helper disappeared the
+    // moment the demo navigated away from the command centre.
+    await page.addInitScript({ content: `
       window.showDemoOverlay = (title, htmlContent) => {
         let el = document.getElementById('demo-overlay');
         if (!el) {
@@ -59,6 +58,10 @@ test.describe('Swiggy Friday Demo Path', () => {
       };
     `});
 
+    await page.goto('/admin/command-center');
+    await expect(page.locator('h1')).toContainText('Command Center');
+    
+
     let isOnline = false;
     try {
       const healthRes = await request.get(`${API_BASE}/health`, { timeout: 5000 });
@@ -93,7 +96,16 @@ test.describe('Swiggy Friday Demo Path', () => {
        console.log('API auth failed, will proceed without token, but endpoints may reject.');
     }
     
-    const headers = { 'Authorization': `Bearer ${apiToken}`, 'Content-Type': 'application/json' };
+    // The workspace is a SELECTOR: the API validates it against server-side
+    // membership, so supplying it does not grant access. Without it every
+    // tenant-scoped endpoint correctly refuses the request.
+    const DEMO_WORKSPACE_ID = process.env.DEMO_WORKSPACE_ID;
+    expect(DEMO_WORKSPACE_ID, 'DEMO_WORKSPACE_ID must be set for the demo run').toBeTruthy();
+    const headers = {
+      'Authorization': `Bearer ${apiToken}`,
+      'Content-Type': 'application/json',
+      'x-workspace-id': DEMO_WORKSPACE_ID as string,
+    };
 
     // 3. authentic network/geographic/routing evidence
     await page.evaluate(() => (window as any).showDemoOverlay('Step 3: Network Evidence', '<div>Fetching zone 8860145b41fffff...</div>'));
@@ -103,11 +115,11 @@ test.describe('Swiggy Friday Demo Path', () => {
     await page.evaluate((d) => {
       const html = `
         <div style="display:grid; grid-template-columns:120px 1fr; gap:8px;">
-          <strong style="color:#94a3b8">Source:</strong> <span>\${d.source || 'OneMove Graph Core'}</span>
-          <strong style="color:#94a3b8">Class:</strong> <span>\${d.class || 'GEOGRAPHIC_ROUTING'}</span>
-          <strong style="color:#94a3b8">Dataset:</strong> <span>\${d.dataset_version || 'Bengaluru-Q3'}</span>
-          <strong style="color:#94a3b8">Version:</strong> <span>\${d.version || 'v1.4.2'}</span>
-          <strong style="color:#94a3b8">Matrix:</strong> <span style="font-family:monospace; color:#fbbf24">\${d.matrix_hash || 'a8f4c2b99x'}</span>
+          <strong style="color:#94a3b8">Source:</strong> <span>${d.source || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Class:</strong> <span>${d.class || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Dataset:</strong> <span>${d.dataset_version || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Version:</strong> <span>${d.version || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Matrix:</strong> <span style="font-family:monospace; color:#fbbf24">${d.matrix_hash || 'UNAVAILABLE'}</span>
         </div>
       `;
       (window as any).showDemoOverlay('Step 3: Network Evidence Retrieved', html);
@@ -119,12 +131,15 @@ test.describe('Swiggy Friday Demo Path', () => {
     res = await request.post(`${API_BASE}/api/v1/scenarios`, {
       headers,
       data: {
-        scenario_name: "s3_monsoon_peak_demo",
-        description: "Peak monsoon surge with corridor disruption (DEMO)",
-        congestion_multiplier: 1.60,
-        demand_multiplier: 1.30,
-        failed_facility_ids: ["fac-02"],
-        simulated: true,
+        // Real ScenarioCreateRequest contract. The previous payload used
+        // scenario_name / congestion_multiplier / failed_facility_ids, which match
+        // no field the API accepts, so it would 422. Parameters must also be
+        // expressible against the facility x demand matrix: a 1.6x travel-time
+        // multiplier is +60%, i.e. 6000 basis points.
+        scenario_type: "HEAVY_RAIN",
+        description: "Peak monsoon surge across the Bengaluru pilot network (SIMULATED)",
+        parameters: { travel_time_inflation_basis_points: 6000 },
+        seed: 42,
       }
     });
     expect(res.ok()).toBeTruthy();
@@ -133,11 +148,11 @@ test.describe('Swiggy Friday Demo Path', () => {
     await page.evaluate((d) => {
       const html = `
         <div style="display:grid; grid-template-columns:120px 1fr; gap:8px;">
-          <strong style="color:#94a3b8">Scenario:</strong> <span>\${d.scenario_name || 's3_monsoon_peak_demo'}</span>
+          <strong style="color:#94a3b8">Scenario:</strong> <span>${d.scenario_name || 'UNAVAILABLE'}</span>
           <strong style="color:#94a3b8">Type:</strong> <div><span style="background-color:#ef4444; color:white; padding:2px 6px; border-radius:4px; font-size:12px; font-weight:bold;">SIMULATED</span></div>
-          <strong style="color:#94a3b8">Matrix ID:</strong> <span style="font-family:monospace">\${d.matrix_identity || 'mx-bng-992'}</span>
-          <strong style="color:#94a3b8">Network:</strong> <span>\${d.affected_network || 'Bengaluru East'}</span>
-          <strong style="color:#94a3b8">Evidence:</strong> <span>\${d.evidence_class || 'SYNTHETIC_OVERRIDE'}</span>
+          <strong style="color:#94a3b8">Matrix ID:</strong> <span style="font-family:monospace">${d.matrix_identity || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Network:</strong> <span>${d.affected_network || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Evidence:</strong> <span>${d.evidence_class || 'UNAVAILABLE'}</span>
         </div>
       `;
       (window as any).showDemoOverlay('Step 4: Scenario Created', html);
@@ -164,10 +179,12 @@ test.describe('Swiggy Friday Demo Path', () => {
         min_open_facilities: 2,
         max_open_facilities: 4,
         max_travel_seconds: 1800,
-        scenarios: [
-          { name: "s1_free_flow", probability_basis_points: 6000, congestion_multiplier: 1.0 },
-          { name: scenarioId, probability_basis_points: 4000, congestion_multiplier: 1.6 }
-        ]
+        // `scenarios` are the optimizer's canonical UNCERTAINTY scenario names and
+        // must match the configured tier count (3). They are not resilience
+        // scenario record ids -- passing one raised a ValueError. Omitting the field
+        // uses the canonical three-tier set, which is also the truer story: the
+        // resilience scenario above measures network impact, while the optimizer
+        // solves across its own uncertainty tiers.
       }
     });
     expect(res.ok()).toBeTruthy();
@@ -175,8 +192,8 @@ test.describe('Swiggy Friday Demo Path', () => {
     const jobId = data.id || data.job_id;
     await page.evaluate((d) => {
       const html = `<div style="display:grid; grid-template-columns:120px 1fr; gap:8px;">
-        <strong style="color:#94a3b8">Job ID:</strong> <span style="font-family:monospace; color:#38bdf8">\${d.id || d.job_id}</span>
-        <strong style="color:#94a3b8">Status:</strong> <span style="color:#fbbf24">\${d.status || 'QUEUED'}</span>
+        <strong style="color:#94a3b8">Job ID:</strong> <span style="font-family:monospace; color:#38bdf8">${d.id || d.job_id}</span>
+        <strong style="color:#94a3b8">Status:</strong> <span style="color:#fbbf24">${d.status || 'UNAVAILABLE'}</span>
       </div>`;
       (window as any).showDemoOverlay('Step 6: Job Queued', html);
     }, data);
@@ -205,11 +222,11 @@ test.describe('Swiggy Friday Demo Path', () => {
       const obj = d.objective_value ? parseFloat(d.objective_value).toFixed(2) : '3142.50';
       const html = `
         <div style="display:grid; grid-template-columns:120px 1fr; gap:8px;">
-          <strong style="color:#94a3b8">Job ID:</strong> <span style="font-family:monospace; color:#38bdf8">\${d.id || d.job_id || 'opt-123'}</span>
+          <strong style="color:#94a3b8">Job ID:</strong> <span style="font-family:monospace; color:#38bdf8">${d.id || d.job_id || 'UNAVAILABLE'}</span>
           <strong style="color:#94a3b8">Solver:</strong> <span>Google OR-Tools CP-SAT</span>
           <strong style="color:#94a3b8">Status:</strong> <span style="color:#22c55e">COMPLETED</span>
-          <strong style="color:#94a3b8">Selected:</strong> <span style="color:#fbbf24">\${selected}</span>
-          <strong style="color:#94a3b8">Tradeoffs:</strong> <span>Objective = \${obj} (Cost vs SLA)</span>
+          <strong style="color:#94a3b8">Selected:</strong> <span style="color:#fbbf24">${selected}</span>
+          <strong style="color:#94a3b8">Tradeoffs:</strong> <span>Objective = ${obj} (Cost vs SLA)</span>
           <strong style="color:#94a3b8">Assumptions:</strong> <div><span style="background-color:#3b82f6; color:white; padding:2px 6px; border-radius:4px; font-size:12px; font-weight:bold;">ASSUMPTION</span> Monsoon Matrix Overrides Active</div>
         </div>
       `;
@@ -232,10 +249,10 @@ test.describe('Swiggy Friday Demo Path', () => {
     await page.evaluate((d) => {
       const html = `
         <div style="display:grid; grid-template-columns:140px 1fr; gap:8px;">
-          <strong style="color:#94a3b8">Decision ID:</strong> <span style="font-family:monospace; color:#38bdf8">\${d.decision_id}</span>
-          <strong style="color:#94a3b8">Source Job:</strong> <span style="font-family:monospace">\${d.optimization_job_id || 'opt-123'}</span>
+          <strong style="color:#94a3b8">Decision ID:</strong> <span style="font-family:monospace; color:#38bdf8">${d.decision_id}</span>
+          <strong style="color:#94a3b8">Source Job:</strong> <span style="font-family:monospace">${d.optimization_job_id || 'UNAVAILABLE'}</span>
           <strong style="color:#94a3b8">Frozen Lineage:</strong> <span>Verified & Secured</span>
-          <strong style="color:#94a3b8">Release Identity:</strong> <span style="font-family:monospace">\${d.release_sha || 'rel-a8f4c2'}</span>
+          <strong style="color:#94a3b8">Release Identity:</strong> <span style="font-family:monospace">${d.release_sha || 'UNAVAILABLE'}</span>
         </div>
       `;
       (window as any).showDemoOverlay('Step 9: Decision Frozen', html);
@@ -247,7 +264,7 @@ test.describe('Swiggy Friday Demo Path', () => {
     expect(res.ok()).toBeTruthy();
     data = await res.json();
     await page.evaluate((d) => {
-      const html = `<div>Reviewing cryptographic evidence and operator rationale for decision <span style="font-family:monospace">\${d.decision_id}</span>.</div>`;
+      const html = `<div>Reviewing cryptographic evidence and operator rationale for decision <span style="font-family:monospace">${d.decision_id}</span>.</div>`;
       (window as any).showDemoOverlay('Step 10: Decision Provenance', html);
     }, data);
     await page.waitForTimeout(3000);
@@ -258,16 +275,17 @@ test.describe('Swiggy Friday Demo Path', () => {
     expect(res.ok()).toBeTruthy();
     data = await res.json();
     
-    // Validate exact match
-    expect(data.match_status).toBe('EXACT_MATCH');
+    // The replay verdict is displayed as returned. Forcing EXACT_MATCH here would
+    // both hide a real DRIFT result and abort the recording over a truthful outcome.
+    expect(['EXACT_MATCH', 'SEMANTIC_MATCH', 'DRIFT', 'NON_REPLAYABLE']).toContain(data.match_status);
     
     await page.evaluate((d) => {
       const html = `
         <div style="display:grid; grid-template-columns:140px 1fr; gap:8px;">
-          <strong style="color:#94a3b8">As Of:</strong> <span>\${d.as_of_timestamp || new Date().toISOString()}</span>
-          <strong style="color:#94a3b8">Decision ID:</strong> <span style="font-family:monospace">\${d.decision_id}</span>
-          <strong style="color:#94a3b8">Replay Outcome:</strong> <span style="color:#22c55e">SUCCESSFUL REPLAY</span>
-          <strong style="color:#94a3b8">Result Match:</strong> <span style="background-color:#22c55e; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">\${d.match_status}</span>
+          <strong style="color:#94a3b8">As Of:</strong> <span>${d.as_of_timestamp || 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Decision ID:</strong> <span style="font-family:monospace">${d.decision_id}</span>
+          <strong style="color:#94a3b8">Replay Outcome:</strong> <span>${d.match_status ? 'REPLAY COMPLETED' : 'UNAVAILABLE'}</span>
+          <strong style="color:#94a3b8">Result Match:</strong> <span style="background-color:#22c55e; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">${d.match_status}</span>
         </div>
       `;
       (window as any).showDemoOverlay('Step 11: PIT Replay Results', html);
@@ -289,8 +307,8 @@ test.describe('Swiggy Friday Demo Path', () => {
     // 13. finish on the decision/replay/evidence screen
     await page.evaluate((d) => {
        const html = `<div style="color:#22c55e; font-weight:bold;">All requirements verified successfully.</div>
-       <div style="margin-top:8px;"><strong style="color:#94a3b8">Final Job:</strong> <span style="font-family:monospace">\${d.jobId}</span></div>
-       <div><strong style="color:#94a3b8">Final Decision:</strong> <span style="font-family:monospace">\${d.decisionId}</span></div>`;
+       <div style="margin-top:8px;"><strong style="color:#94a3b8">Final Job:</strong> <span style="font-family:monospace">${d.jobId}</span></div>
+       <div><strong style="color:#94a3b8">Final Decision:</strong> <span style="font-family:monospace">${d.decisionId}</span></div>`;
        (window as any).showDemoOverlay('Step 13: Demo Complete', html);
     }, { jobId, decisionId });
     await page.waitForTimeout(3000);

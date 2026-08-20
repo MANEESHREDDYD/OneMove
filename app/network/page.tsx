@@ -1,5 +1,6 @@
 'use client';
 import React, { useEffect, useState } from 'react';
+import { createClient } from '@/utils/supabase/client';
 import { Check, Minus } from 'lucide-react';
 
 type LayerState = {
@@ -12,7 +13,9 @@ type LayerState = {
 
 const LAYERS: LayerState[] = [
   { name: 'OSM Gold Base Map', active: true },
-  { name: 'H3 Resolution 9 Grid', active: true },
+  // The mounted Gold artifact reports h3_resolution 8, not 9. Naming the wrong
+  // resolution on screen is a factual error a reviewer would catch immediately.
+  { name: 'H3 Resolution 8 Grid', active: true },
   { name: 'Live Traffic Flow', active: false, reason: 'no traffic source connected' },
 ];
 
@@ -23,20 +26,32 @@ export default function NetworkObservatory() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Attempt to fetch actual network state
-    fetch('/api/v1/zones')
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to load network topology');
-        return res.json();
-      })
-      .then(data => {
+    // The zones endpoint is tenant-scoped, so the request needs the caller's
+    // session and a workspace selector. Fetching it bare returned 401 and the page
+    // rendered "Failed to load network topology" over an empty map.
+    const load = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Sign in to load the network');
+
+        const workspaceId = process.env.NEXT_PUBLIC_DEMO_WORKSPACE_ID;
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${session.access_token}`,
+        };
+        if (workspaceId) headers['x-workspace-id'] = workspaceId;
+
+        const res = await fetch('/api/v1/zones', { headers });
+        if (!res.ok) throw new Error(`Failed to load network topology (HTTP ${res.status})`);
+        const data = await res.json();
         setNetworkData(data.data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load network topology');
+      } finally {
         setLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setLoading(false);
-      });
+      }
+    };
+    void load();
   }, []);
 
   const zoneCount = Array.isArray(networkData) ? networkData.length : null;
