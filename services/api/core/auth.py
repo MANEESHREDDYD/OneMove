@@ -33,6 +33,16 @@ def _allowed_algorithms() -> set[str]:
     return {"ES256", "RS256", "HS256"}
 
 
+# Tokens are rejected outside this tolerance for clock drift between the issuer
+# and this service. Explicit, so it is reviewable rather than an implicit default.
+_CLOCK_SKEW_SECONDS = 30
+
+
+def _require_strict_auth_configuration() -> bool:
+    """True when incomplete auth configuration must fail closed rather than degrade."""
+    return os.environ.get("ENVIRONMENT", "").lower() in {"staging", "production"}
+
+
 def _expected_issuer() -> str | None:
     configured = os.environ.get("SUPABASE_JWT_ISSUER")
     if configured:
@@ -97,9 +107,22 @@ def verify_token(token: str) -> dict:
         decode_kwargs = {
             "algorithms": [algorithm],
             "audience": expected_audience,
+            # exp is REQUIRED. PyJWT does not reject a token that simply omits it,
+            # so without this a token with no expiry validates forever (F-016).
+            "options": {"require": ["exp", "sub"], "verify_exp": True, "verify_aud": True},
+            # Explicit, bounded clock skew rather than an implicit default.
+            "leeway": _CLOCK_SKEW_SECONDS,
         }
         if expected_issuer:
             decode_kwargs["issuer"] = expected_issuer
+        elif _require_strict_auth_configuration():
+            # Fail closed: outside local/test an unset issuer means the issuer
+            # claim would go unverified, so any token signed with a known key
+            # from any issuer would be accepted.
+            raise HTTPException(
+                status_code=503,
+                detail="Auth misconfigured: SUPABASE_JWT_ISSUER or SUPABASE_URL must be set outside local environments",
+            )
 
         payload = jwt.decode(token, verification_key, **decode_kwargs)
 
