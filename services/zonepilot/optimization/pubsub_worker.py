@@ -231,7 +231,7 @@ async def process_pubsub_push(request: Request, response: Response):
 
     # 2. Fetch full job details
     try:
-        job = _repository.get_job(job_id)
+        job = _repository.get_job_system(job_id)
     except psycopg.OperationalError as db_err:
         logger.error(f"Transient DB error reading job {job_id}: {db_err}")
         response.status_code = 503

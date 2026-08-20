@@ -64,7 +64,11 @@ class ResilienceRepository:
             conn.commit()
             return row
 
-    def get_scenario(self, scenario_id: str, workspace_id: str | None = None) -> dict[str, Any] | None:
+    def get_scenario(self, scenario_id: str, workspace_id: str) -> dict[str, Any] | None:
+        """Fetch a scenario, strictly scoped to the owning workspace."""
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("get_scenario requires a non-empty workspace_id")
+
         with self._connect() as conn:
             with conn.cursor() as cur:
                 query = """
@@ -76,10 +80,8 @@ class ResilienceRepository:
                     LEFT JOIN public.resilience_results r ON r.scenario_id = s.scenario_id
                     WHERE s.scenario_id = %s
                 """
-                params: list[Any] = [scenario_id]
-                if workspace_id:
-                    query += " AND s.workspace_id = %s"
-                    params.append(workspace_id)
+                query += " AND s.workspace_id = %s"
+                params: list[Any] = [scenario_id, workspace_id]
                 cur.execute(query, params)
                 return cur.fetchone()
 

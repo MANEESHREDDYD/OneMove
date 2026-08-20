@@ -58,17 +58,19 @@ class ForecastRepository:
                 )
             conn.commit()
 
-    def get_zone_forecasts(
-        self, zone_id: str, workspace_id: str | None = None, limit: int = 24
-    ) -> list[dict[str, Any]]:
+    def get_zone_forecasts(self, zone_id: str, workspace_id: str, limit: int = 24) -> list[dict[str, Any]]:
+        """Fetch persisted forecasts for a zone, strictly scoped to the workspace."""
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("get_zone_forecasts requires a non-empty workspace_id")
+
         with self._connect() as conn:
             with conn.cursor() as cur:
-                query = "SELECT * FROM public.forecast_records WHERE zone_id = %s"
-                params: list[Any] = [zone_id]
-                if workspace_id:
-                    query += " AND workspace_id = %s"
-                    params.append(workspace_id)
-                query += " ORDER BY target_time DESC LIMIT %s"
-                params.append(limit)
-                cur.execute(query, params)
+                cur.execute(
+                    """
+                    SELECT * FROM public.forecast_records
+                    WHERE zone_id = %s AND workspace_id = %s
+                    ORDER BY target_time DESC LIMIT %s
+                    """,
+                    [zone_id, workspace_id, limit],
+                )
                 return cur.fetchall()

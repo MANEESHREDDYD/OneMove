@@ -146,7 +146,7 @@ class OptimizationService:
         # Resolve the owning tenant from the authoritative job row rather than trusting
         # a caller-supplied value. Snapshots must never be persisted unscoped
         # (P0-AUTH-SNAPSHOT-001).
-        job_row = self.repository.get_job(job_id)
+        job_row = self.repository.get_job_system(job_id)
         if not job_row:
             raise LookupError(f"Optimization job {job_id} not found; cannot resolve owning workspace")
         job_workspace_id = str(job_row["workspace_id"] or "").strip()
@@ -227,8 +227,8 @@ class OptimizationService:
                 code_sha=effective_code_sha,
                 run_duration_ms=run_ms,
             )
-        return self.repository.get_job(job_id) or {}
+        return self.repository.get_job_system(job_id) or {}
 
-    def get_optimization(self, job_id: str, workspace_id: str | None = None) -> dict[str, Any] | None:
+    def get_optimization(self, job_id: str, workspace_id: str) -> dict[str, Any] | None:
         """Fetch verbatim job state and stored result from PostgreSQL."""
         return self.repository.get_job(job_id, workspace_id)

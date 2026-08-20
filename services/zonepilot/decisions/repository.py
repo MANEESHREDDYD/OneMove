@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Sequence
+from typing import Sequence
 
 import psycopg
 from psycopg.rows import dict_row
@@ -94,15 +94,22 @@ class DecisionRepository:
             conn.commit()
             return decision
 
-    def get_decision(self, decision_id: str, workspace_id: str | None = None) -> DecisionRecord | None:
+    def get_decision(self, decision_id: str, workspace_id: str) -> DecisionRecord | None:
+        """Fetch a decision, strictly scoped to the owning workspace.
+
+        The backend connects with an owner-role DSN, so RLS is not in force here
+        and this predicate is the only tenant-isolation control. It is therefore
+        mandatory, never conditional.
+        """
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("get_decision requires a non-empty workspace_id")
+
         with self._connect() as conn:
             with conn.cursor() as cur:
-                query = "SELECT * FROM public.decision_records WHERE decision_id = %s"
-                params: list[Any] = [decision_id]
-                if workspace_id:
-                    query += " AND workspace_id = %s"
-                    params.append(workspace_id)
-                cur.execute(query, params)
+                cur.execute(
+                    "SELECT * FROM public.decision_records WHERE decision_id = %s AND workspace_id = %s",
+                    [decision_id, workspace_id],
+                )
                 row = cur.fetchone()
                 if not row:
                     return None
@@ -245,15 +252,17 @@ class DecisionRepository:
             conn.commit()
             return shadow
 
-    def get_shadow(self, shadow_id: str, workspace_id: str | None = None) -> ShadowEvaluation | None:
+    def get_shadow(self, shadow_id: str, workspace_id: str) -> ShadowEvaluation | None:
+        """Fetch a shadow evaluation, strictly scoped to the owning workspace."""
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("get_shadow requires a non-empty workspace_id")
+
         with self._connect() as conn:
             with conn.cursor() as cur:
-                query = "SELECT * FROM public.shadow_evaluations WHERE shadow_id = %s"
-                params: list[Any] = [shadow_id]
-                if workspace_id:
-                    query += " AND workspace_id = %s"
-                    params.append(workspace_id)
-                cur.execute(query, params)
+                cur.execute(
+                    "SELECT * FROM public.shadow_evaluations WHERE shadow_id = %s AND workspace_id = %s",
+                    [shadow_id, workspace_id],
+                )
                 row = cur.fetchone()
                 if not row:
                     return None

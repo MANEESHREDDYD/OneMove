@@ -234,7 +234,8 @@ class DecisionLedger:
         self.repository.record_decision(rec, recorded_by=recorded_by)
         return rec
 
-    def get_decision(self, decision_id: str, workspace_id: str | None = None) -> DecisionRecord | None:
+    def get_decision(self, decision_id: str, workspace_id: str) -> DecisionRecord | None:
+        """Workspace scope is mandatory; the repository enforces it."""
         return self.repository.get_decision(decision_id, workspace_id)
 
     def list_decisions(self, workspace_id: str, limit: int = 50) -> list[DecisionRecord]:
@@ -522,13 +523,14 @@ class DecisionLedger:
         self.repository.create_shadow(shadow, workspace_id=ws_id)
         return shadow
 
-    def get_shadow(self, shadow_id: str, workspace_id: str | None = None) -> ShadowEvaluation | None:
+    def get_shadow(self, shadow_id: str, workspace_id: str) -> ShadowEvaluation | None:
+        """Workspace scope is mandatory; the repository enforces it."""
         return self.repository.get_shadow(shadow_id, workspace_id)
 
     def evaluate_shadow(
         self,
         shadow_id: str,
-        workspace_id: str | None = None,
+        workspace_id: str,
         *,
         actual_observed_p95_seconds: int,
         observation_valid_time: datetime | None = None,

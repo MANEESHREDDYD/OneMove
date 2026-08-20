@@ -36,7 +36,7 @@ def test_record_and_retrieve_decision() -> None:
     assert rec.workspace_id == "ws-blr-01"
     assert len(rec.opened_facilities) == 3
 
-    fetched = ledger.get_decision(rec.decision_id)
+    fetched = ledger.get_decision(rec.decision_id, "ws-blr-01")
     assert fetched is not None
     assert fetched.decision_id == rec.decision_id
 
