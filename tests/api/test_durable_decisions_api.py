@@ -57,6 +57,12 @@ def test_durable_decision_record_replay_shadow():
         # Required since F-005: lineage may no longer be defaulted by the server.
         "graph_version": "1.1",
         "solver_version": "ortools-cp-sat",
+        # AUDIT-0: this payload is hand-authored, not derived from a solver run.
+        # Adding the lineage fields alone made a forged decision return 201 and
+        # pinned that forgery as intended behaviour. A hand-authored decision must
+        # now declare itself.
+        "decision_class": "MANUAL_OPERATOR_DECISION",
+        "operator_rationale": "Regression fixture: hand-authored decision recorded by the durable ledger test.",
     }
 
     # 1. POST /api/v1/decisions

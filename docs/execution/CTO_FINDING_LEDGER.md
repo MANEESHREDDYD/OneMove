@@ -1,6 +1,6 @@
 # OneMove — CTO Finding Ledger
 
-**Baseline main:** `ec4bb92` · **Branch head:** `75da167` (`hotfix/onemove-p0-security-incident`)
+**Baseline main:** `ec4bb92` · **Branch head:** `5b11cc5` (`hotfix/onemove-p0-security-incident`)
 **Regenerated:** 2026-08-20, after certification wave 1
 
 Findings are immutable. Severity is fixed at discovery and never lowered to reach a
@@ -59,12 +59,28 @@ None of them wrote the code it reviewed. **First-pass result: 6 PASS, 5 FAIL.**
 | F-018 | P0 | `mae`/`rmse` set to `0.0` when zero samples scored, `sample_count` counting skipped samples — perfect accuracy claimed over no measurement |
 | F-020 | P1 | `evaluator.py` still splits on `observation_time`; `get_zone_forecasts` has no `forecast_issue_time <= decision_time` filter, so a future-issued forecast is selectable |
 
-### Repaired in `75da167` — awaiting re-certification (2)
+### Repaired — awaiting re-certification (1)
 
-**F-006** and **F-011**. The F-006 repair was verified against each of the three
-bypasses the certifier named; a static AST check now asserts every `save_result` call
-site is complete, confirmed non-vacuous against all 4 call sites. Neither is `PASS`:
-the same agent wrote and verified the repair.
+**F-006** (`75da167`). Verified against each of the three bypasses the certifier named.
+Not `PASS`: the same agent wrote and verified the repair.
+
+### F-011 — returned to remediation, then repaired again (`46b7395`)
+
+The `75da167` repair fixed only the `TypeError`. It did **not** close the provenance
+defect, so F-011 was correctly returned to `IN_REMEDIATION` rather than left awaiting
+re-certification. Two defects survived that repair:
+
+  * `"UNKNOWN"` / `"UNVERSIONED"` were substituted whenever the job row lacked a value,
+    in the service fail-closed path and both worker paths. Invented provenance wearing
+    the shape of real provenance — worse than a null, because it looks attributable.
+  * `code_sha` was required by `save_result` and then discarded: the column did not
+    exist on `optimization_results` and was absent from the INSERT.
+
+Both closed in `46b7395`. Migration `20260820001000` adds `code_sha`,
+`dataset_version`, `matrix_id`, `matrix_sha256`, `problem_snapshot_id/sha256` and
+`solver_config_hash` to `optimization_results`, denormalised deliberately: the result
+is immutable evidence, the job row is not. All four call sites now fail closed on
+missing frozen lineage. Awaiting re-certification.
 
 `ALLOW_NONLOCAL_TEST_DATABASE` is gone, replaced by per-database fingerprint
 authorisation, but **F-001 stays blocked on rotation**.

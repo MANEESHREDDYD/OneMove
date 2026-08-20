@@ -4,7 +4,7 @@ import json
 import math
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
@@ -20,6 +20,7 @@ from services.api.contracts.observatory import (
     ZoneStateResponse,
 )
 from services.api.core.auth import get_current_user
+from services.api.core.telemetry import DEPENDENCY_UNAVAILABLE, error_envelope, looks_like_dependency_failure
 from services.api.repositories.artifact_catalog import ArtifactCorrupt, ArtifactNotFound, ArtifactNotReady
 from services.api.services.observatory import ObservatoryService, get_observatory_service
 from services.zonepilot.assistant.contracts import AssistantToolCall, ToolName
@@ -56,17 +57,15 @@ _dec_ledger = DecisionLedger(repository=DecisionRepository())
 _forecast_repo = ForecastRepository()
 
 
-def standard_error(code: str, message: str, status_code: int = 400):
+def standard_error(code: str, message: str, status_code: int = 400, **details: Any):
+    """Raise the canonical error envelope (F-025).
+
+    request_id and trace_id are injected by the app-level handler in
+    services.api.main from the ids RequestIdMiddleware put on the request.
+    """
     raise HTTPException(
         status_code=status_code,
-        detail={
-            "error": {
-                "code": code,
-                "message": message,
-                "retryable": status_code in (408, 429, 500, 502, 503, 504),
-                "details": {},
-            }
-        },
+        detail=error_envelope(code, message, status_code=status_code, details=details or None),
     )
 
 
@@ -510,6 +509,19 @@ class DecisionCreateRequest(BaseModel):
     """
 
     optimization_job_id: str | None = None
+
+    # Without an optimization_job_id this endpoint writes caller-supplied numbers
+    # straight into the durable ledger. Requiring the fields (F-005) stopped an
+    # EMPTY body but not a well-formed fiction: an independent certifier posted
+    # invented facilities, an invented OSRM hash and 100% coverage and received a
+    # 201. Required is not the same as validated.
+    #
+    # A caller may therefore no longer author a decision implicitly. Recording one
+    # by hand is a legitimate operator action, but it must be declared as such and
+    # must never be indistinguishable from optimizer output.
+    decision_class: Literal["MANUAL_OPERATOR_DECISION"] | None = None
+    operator_rationale: str | None = Field(default=None, min_length=20)
+
     decision_time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     network_version: str = Field(min_length=1)
     dataset_version: str = Field(min_length=1)
@@ -559,8 +571,28 @@ def record_decision(
     payload: DecisionCreateRequest,
     _user: dict = Depends(get_current_user),
 ):
-    """Record or freeze an immutable decision into PostgreSQL ledger."""
+    """Record or freeze an immutable decision into PostgreSQL ledger.
+
+    Prefer POST /decisions/freeze, which reconstructs every field from authoritative
+    optimization state. The hand-authored path below is retained for genuine operator
+    decisions but must be declared explicitly.
+    """
     user_id, ws_id = _resolve_user_context(_user)
+
+    if not payload.optimization_job_id:
+        # Fail closed: an undeclared hand-authored decision is indistinguishable
+        # from optimizer output once it is in the ledger.
+        if payload.decision_class != "MANUAL_OPERATOR_DECISION" or not payload.operator_rationale:
+            standard_error(
+                "DECISION_LINEAGE_INCOMPLETE",
+                "A decision without optimization_job_id is not derived from a solver run. "
+                "Supply optimization_job_id to freeze from authoritative optimization state, or declare "
+                'decision_class="MANUAL_OPERATOR_DECISION" with an operator_rationale of at least 20 '
+                "characters. Hand-authored decisions are recorded as such and are never presented as "
+                "optimizer output.",
+                422,
+            )
+
     if payload.optimization_job_id:
         job = _opt_service.get_optimization(payload.optimization_job_id, ws_id)
         if not job:
@@ -597,7 +629,10 @@ def record_decision(
             graph_version=payload.graph_version,
             osrm_bundle_hash=payload.osrm_bundle_hash,
             solver_version=payload.solver_version,
-            evidence_ids=payload.evidence_ids,
+            # Mark provenance on the record itself. The declaration must survive
+            # into the ledger, not merely gate the request, or a later reader
+            # cannot tell a hand-authored decision from a solver-derived one.
+            evidence_ids=tuple(payload.evidence_ids) + ("provenance:MANUAL_OPERATOR_DECISION",),
             recorded_by=user_id,
         )
         return rec.model_dump()
