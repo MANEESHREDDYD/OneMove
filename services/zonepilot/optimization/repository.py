@@ -256,7 +256,8 @@ class OptimizationRepository:
         solver_version: str,
         scenario_evidence_classes: list[str] | None = None,
         run_duration_ms: int = 0,
-    ) -> None:
+        lease_owner: str | None = None,
+    ) -> bool:
         """Persist a solver result together with its execution lineage.
 
         Every lineage field is REQUIRED. These previously carried literal defaults
@@ -267,6 +268,12 @@ class OptimizationRepository:
 
         The persistence layer does not know the execution context and must never
         guess it. The caller supplies real lineage or the write fails closed.
+
+        When ``lease_owner`` is supplied the write is fenced: it only applies while
+        this worker still holds the job lease. A worker whose lease expired and was
+        reclaimed by another instance updates zero rows and returns False, so a
+        stale late-finishing solve cannot overwrite the authoritative result
+        (F-022). Returns True when the result was written.
         """
         missing = [
             name
@@ -296,9 +303,15 @@ class OptimizationRepository:
                         run_duration_ms = %s,
                         updated_at = now()
                     WHERE id = %s::uuid
+                      AND (%s::text IS NULL OR lease_owner = %s::text)
                     """,
-                    (status, solver_status, fail_closed, run_duration_ms, job_id),
+                    (status, solver_status, fail_closed, run_duration_ms, job_id, lease_owner, lease_owner),
                 )
+                if cur.rowcount == 0:
+                    # Lease lost (or job absent). The row belongs to another worker
+                    # now; do not write a result for it.
+                    conn.rollback()
+                    return False
                 cur.execute(
                     """
                     INSERT INTO public.optimization_results (
@@ -334,6 +347,7 @@ class OptimizationRepository:
                     ),
                 )
             conn.commit()
+            return True
 
     # ------------------------------------------------------------------
     # Transactional outbox: durable claim protocol with lease fencing

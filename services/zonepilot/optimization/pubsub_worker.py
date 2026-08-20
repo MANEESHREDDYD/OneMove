@@ -54,6 +54,15 @@ class PubSubPushRequest(BaseModel):
     subscription: str | None = None
 
 
+# The subscription ack deadline is 300s. A lease shorter than that lets Pub/Sub
+# redeliver while the first solve is still running, so a second worker claims the
+# expired lease and two CP-SAT runs execute concurrently (F-022). The lease must
+# outlive the redelivery window; result writes are additionally fenced on
+# lease_owner so a late finisher cannot overwrite the authoritative result.
+PUBSUB_ACK_DEADLINE_SECONDS = 300
+JOB_LEASE_SECONDS = PUBSUB_ACK_DEADLINE_SECONDS + 120
+
+
 def _reconstruct_problem_from_payload(payload: dict[str, Any]) -> OptimizationProblem:
     """Reconstruct an OptimizationProblem from saved request payload with authentic data.
 
@@ -220,7 +229,7 @@ async def process_pubsub_push(request: Request, response: Response):
 
     # 1. Atomic lease acquisition
     try:
-        lease = _repository.claim_job_lease(job_id=job_id, lease_owner=worker_id, lease_seconds=120)
+        lease = _repository.claim_job_lease(job_id=job_id, lease_owner=worker_id, lease_seconds=JOB_LEASE_SECONDS)
     except psycopg.OperationalError as db_err:
         logger.error(f"Transient DB operational error claiming lease for job {job_id}: {db_err}")
         response.status_code = 503
@@ -301,6 +310,7 @@ async def process_pubsub_push(request: Request, response: Response):
             graph_version=graph_ver,
             assumption_version=job.get("assumption_version") or "UNVERSIONED",
             solver_version=SOLVER_VERSION,
+            lease_owner=worker_id,
             solver_status=result.status.value,
             action=result.action.value,
             fail_closed=result.fail_closed,
@@ -342,6 +352,7 @@ async def process_pubsub_push(request: Request, response: Response):
             graph_version=(job or {}).get("graph_version") or "UNKNOWN",
             assumption_version=(job or {}).get("assumption_version") or "UNVERSIONED",
             solver_version=SOLVER_VERSION,
+            lease_owner=worker_id,
             solver_status="FAILED",
             action="NONE",
             fail_closed=True,

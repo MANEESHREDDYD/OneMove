@@ -14,6 +14,7 @@ from __future__ import annotations
 import inspect
 import re
 
+from services.zonepilot.optimization import pubsub_worker as pubsub_worker_module
 from services.zonepilot.optimization import repository as repo_module
 from services.zonepilot.optimization import service as service_module
 
@@ -82,3 +83,29 @@ def test_claim_commits_before_publishing() -> None:
     assert claim_at < publish_at
     claim_src = inspect.getsource(repo_module.OptimizationRepository.claim_pending_outbox_events)
     assert "conn.commit()" in claim_src
+
+
+# --- F-022: worker lease fencing -------------------------------------------
+
+
+def test_worker_lease_outlives_the_pubsub_ack_deadline() -> None:
+    """A lease shorter than the ack deadline lets a redelivery run a second solve."""
+    from services.zonepilot.optimization import pubsub_worker
+
+    assert pubsub_worker.JOB_LEASE_SECONDS > pubsub_worker.PUBSUB_ACK_DEADLINE_SECONDS
+
+
+def test_result_writes_are_fenced_on_the_worker_lease() -> None:
+    """A worker whose lease was reclaimed must not overwrite the result."""
+    save = inspect.getsource(repo_module.OptimizationRepository.save_result)
+    assert "lease_owner" in inspect.signature(repo_module.OptimizationRepository.save_result).parameters
+    assert "lease_owner = %s::text" in save, "the job update must match the holder's lease"
+    assert "return False" in save, "a lost lease must report failure rather than writing"
+
+    worker = inspect.getsource(pubsub_worker_module.process_pubsub_push)
+    assert worker.count("lease_owner=worker_id") >= 2, "both result paths must pass the fence"
+
+
+def test_save_result_reports_whether_it_won() -> None:
+    sig = inspect.signature(repo_module.OptimizationRepository.save_result)
+    assert sig.return_annotation in (bool, "bool")
