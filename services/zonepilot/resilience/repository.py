@@ -70,16 +70,19 @@ class ResilienceRepository:
                 evaluation_id, scenario_id, workspace_id, coverage_basis_points,
                 p50_duration_seconds, p90_duration_seconds, p95_duration_seconds,
                 disconnected_zones_count, redundancy_index_basis_points, failure_exposure_score,
-                capacity_loss_basis_points, degradation_grade, baseline_comparison, code_sha
+                capacity_loss_basis_points, degradation_grade, baseline_comparison, code_sha,
+                metric_unavailable
             ) VALUES (
                 %s, %s, %s, %s,
                 %s, %s, %s,
                 %s, %s, %s,
-                %s, %s, %s::jsonb, %s
+                %s, %s, %s::jsonb, %s,
+                %s::jsonb
             )
             ON CONFLICT (evaluation_id) DO UPDATE SET
                 degradation_grade = EXCLUDED.degradation_grade,
-                code_sha = EXCLUDED.code_sha
+                code_sha = EXCLUDED.code_sha,
+                metric_unavailable = EXCLUDED.metric_unavailable
             RETURNING *
         """
 
@@ -110,15 +113,32 @@ class ResilienceRepository:
         )
 
     @staticmethod
-    def _require_complete(metrics: ResilienceMetrics) -> None:
-        if metrics.is_complete:
-            return
-        reasons = "; ".join(f"{entry.metric}: {entry.reason}" for entry in metrics.unavailable)
-        raise IncompleteEvaluationError(
-            "METRICS_UNAVAILABLE: refusing to persist a resilience evaluation with uncomputed metrics. "
-            "resilience_results has no NULL representation for an unavailable metric and a zero would be "
-            f"indistinguishable from a measurement. Unavailable -> {reasons}"
-        )
+    def _unavailability_map(metrics: ResilienceMetrics) -> str:
+        """Serialise why each uncomputed metric is uncomputed.
+
+        Migration 20260820002000 made the metric columns nullable and added
+        metric_unavailable. Before it, every column was NOT NULL, so an evaluation
+        that legitimately could not compute a metric had nowhere to say so -- the
+        old code filled the gap with invented constants, and removing the invention
+        left this repository refusing to persist anything at all, discarding the
+        metrics it HAD derived.
+
+        NULL now means "not computed" and this map records why, per metric. The two
+        are written together: a NULL with no reason would be indistinguishable from
+        a bug, so the pairing is enforced here rather than left to convention.
+        """
+        return json.dumps({entry.metric: entry.reason for entry in metrics.unavailable})
+
+    @staticmethod
+    def _require_explained(metrics: ResilienceMetrics) -> None:
+        """A gap may be persisted; an UNEXPLAINED gap may not."""
+        explained = {entry.metric for entry in metrics.unavailable}
+        unexplained = [field for field in METRIC_FIELDS if getattr(metrics, field) is None and field not in explained]
+        if unexplained:
+            raise IncompleteEvaluationError(
+                "METRICS_UNAVAILABLE: refusing to persist an evaluation whose missing metrics carry no "
+                f"reason: {', '.join(sorted(unexplained))}. An unexplained NULL is a defect, not an absence."
+            )
 
     @staticmethod
     def _require_code_sha(code_sha: str) -> str:
@@ -150,7 +170,7 @@ class ResilienceRepository:
         scenario row behind. Validation happens before the connection is opened
         so an unpersistable evaluation never reaches the database at all.
         """
-        self._require_complete(metrics)
+        self._require_explained(metrics)
         sha = self._require_code_sha(code_sha)
 
         with self._connect() as conn:
@@ -180,6 +200,7 @@ class ResilienceRepository:
                         degradation_grade,
                         json.dumps(baseline_comparison) if baseline_comparison else None,
                         sha,
+                        self._unavailability_map(metrics),
                     ),
                 )
                 result_row = cur.fetchone()
@@ -245,7 +266,7 @@ class ResilienceRepository:
         default -- it previously carried a literal SHA, which is invented
         provenance (F-011).
         """
-        self._require_complete(metrics)
+        self._require_explained(metrics)
         sha = self._require_code_sha(code_sha)
 
         with self._connect() as conn:
@@ -260,6 +281,7 @@ class ResilienceRepository:
                         degradation_grade,
                         json.dumps(baseline_comparison) if baseline_comparison else None,
                         sha,
+                        self._unavailability_map(metrics),
                     ),
                 )
                 row = cur.fetchone()

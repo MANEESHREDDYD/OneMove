@@ -50,8 +50,12 @@ from services.zonepilot.optimization.r1_catalog import FileSystemArtifactCatalog
 from services.zonepilot.optimization.repository import OptimizationRepository
 from services.zonepilot.optimization.service import OptimizationService
 from services.zonepilot.release import current_release_sha
-from services.zonepilot.resilience.repository import ResilienceRepository
-from services.zonepilot.resilience.service import ResilienceService
+from services.zonepilot.resilience.derivation import ScenarioNotRepresentable
+from services.zonepilot.resilience.repository import (
+    IncompleteEvaluationError,
+    ResilienceRepository,
+)
+from services.zonepilot.resilience.service import ResilienceService, UnknownScenarioType
 
 router = APIRouter(prefix="/api/v1", tags=["observatory"])
 
@@ -468,6 +472,20 @@ def create_and_run_scenario(
         # dependency error rather than grading resilience on invented travel
         # times (F-010).
         standard_error("MATRIX_UNAVAILABLE", str(matrix_err), 503)
+    except UnknownScenarioType as unknown_err:
+        # Previously an unrecognised type was silently rewritten to ROAD_CLOSURE
+        # while the caller's original string was persisted, so the stored type
+        # disagreed with the evaluated one.
+        standard_error("SCENARIO_TYPE_UNKNOWN", str(unknown_err), 422)
+    except ScenarioNotRepresentable as shape_err:
+        # The scenario describes no effect expressible against the facility x
+        # demand matrix. Evaluating it would report the undisturbed baseline as
+        # though it were the failure.
+        standard_error("SCENARIO_NOT_REPRESENTABLE", str(shape_err), 422)
+    except IncompleteEvaluationError as incomplete_err:
+        # A metric is missing with no stated reason. That is a defect, not an
+        # absence, and must not be persisted.
+        standard_error("EVALUATION_INCOMPLETE", str(incomplete_err), 500)
     except HTTPException:
         raise
     except Exception as exc:

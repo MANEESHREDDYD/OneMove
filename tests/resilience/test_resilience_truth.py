@@ -229,24 +229,33 @@ def test_successful_run_persists_scenario_and_evaluation_together(recorder) -> N
     assert stored["metrics_evidence_class"] == "DERIVED"
 
 
-def test_repository_refuses_incomplete_evaluations_before_connecting() -> None:
-    """resilience_results has no NULL column for UNAVAILABLE; refuse, do not zero-fill.
+def test_repository_refuses_unexplained_gaps_before_connecting() -> None:
+    """An EXPLAINED gap is persistable; an UNEXPLAINED one is a defect.
+
+    Migration 20260820002000 made the metric columns nullable and added
+    metric_unavailable, so UNAVAILABLE now has a representation and a partial
+    evaluation no longer has to be discarded. What must still be refused is a NULL
+    with no stated reason: that is indistinguishable from a bug.
 
     The DSN points nowhere. If validation happened after connecting, this would
     raise a connection error instead.
     """
     repo = ResilienceRepository(dsn="postgresql://unused:unused@127.0.0.1:1/none")
-    incomplete = ResilienceMetrics(
+
+    # ResilienceMetrics' own validator makes an unexplained gap unconstructible, so
+    # this fixture is built with model_construct to bypass it. The repository guard
+    # is therefore genuine defence in depth rather than a restatement of the
+    # contract: it still holds for an object that reached it another way.
+    incomplete = ResilienceMetrics.model_construct(
         coverage_basis_points=10_000,
         p50_duration_seconds=1,
         p90_duration_seconds=2,
         p95_duration_seconds=3,
         disconnected_zones_count=0,
         redundancy_index_basis_points=5_000,
-        unavailable=(
-            MetricUnavailable(metric="failure_exposure_score", reason="capacity unavailable"),
-            MetricUnavailable(metric="capacity_loss_basis_points", reason="no capacity assumption"),
-        ),
+        failure_exposure_score=None,  # unexplained: no matching reason entry
+        capacity_loss_basis_points=None,
+        unavailable=(MetricUnavailable(metric="capacity_loss_basis_points", reason="no capacity assumption"),),
     )
 
     with pytest.raises(IncompleteEvaluationError) as exc:
@@ -264,8 +273,13 @@ def test_repository_refuses_incomplete_evaluations_before_connecting() -> None:
             degradation_grade="ROBUST",
             code_sha=current_release_sha(),
         )
-    assert "METRICS_UNAVAILABLE" in str(exc.value)
-    assert "capacity_loss_basis_points" in str(exc.value)
+    message = str(exc.value)
+    assert "METRICS_UNAVAILABLE" in message
+    # Names the UNEXPLAINED metric only. capacity_loss_basis_points is missing too,
+    # but it carries a reason, so it is a legitimate recorded gap rather than a
+    # defect -- and naming it would send an operator after the wrong thing.
+    assert "failure_exposure_score" in message
+    assert "capacity_loss_basis_points" not in message
 
 
 def test_result_insert_columns_match_metric_field_order() -> None:
