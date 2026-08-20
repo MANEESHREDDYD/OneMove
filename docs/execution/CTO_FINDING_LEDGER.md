@@ -1,6 +1,6 @@
 # OneMove — CTO Finding Ledger
 
-**Baseline main:** `ec4bb92` · **Branch head:** `7490ae3` (`hotfix/onemove-p0-security-incident`)
+**Baseline main:** `ec4bb92` · **Branch head:** `ca177b7` (`hotfix/onemove-p0-security-incident`)
 **Regenerated:** 2026-08-20, after certification wave 1
 
 Findings are immutable. Severity is fixed at discovery and never lowered to reach a
@@ -15,17 +15,53 @@ retests it and fails to break it.
 
 | Severity | Total | PASS | Awaiting re-cert | Reopened | Ready, uncertified | In remediation | Blocked ext. | Open |
 |---|---|---|---|---|---|---|---|---|
-| **P0** | 16 | 8 | 2 | 3 | 0 | 1 | 1 | 1 |
-| **P1** | 11 | 6 | 0 | 1 | 0 | 0 | 0 | 4 |
+| **P0** | 16 | 5 | 8 | 0 | 0 | 1 | 1 | 1 |
+| **P1** | 11 | 4 | 5 | 0 | 0 | 0 | 0 | 2 |
 | **P2** | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
-| **Total** | **28** | **14** | **2** | **4** | **0** | **1** | **1** | **6** |
+| **Total** | **28** | **9** | **13** | **0** | **0** | **1** | **1** | **4** |
 
-`16 + 11 + 1 = 28` · `14 + 2 + 4 + 0 + 1 + 1 + 6 = 28`
+`16 + 11 + 1 = 28` · `9 + 13 + 0 + 0 + 1 + 1 + 4 = 28`
 
 ```
-PASS = 14        P0_NOT_CERTIFIED = 8    P1_NOT_CERTIFIED = 5    P2_NOT_CERTIFIED = 1
+PASS = 9         P0_NOT_CERTIFIED = 11   P1_NOT_CERTIFIED = 7    P2_NOT_CERTIFIED = 1
 STATUS = NOT_CTO_PRODUCTION_READY
 ```
+
+## Wave 3 — repairs since wave 2, all awaiting certification
+
+| ID | Sev | Fix | What changed |
+|---|---|---|---|
+| F-005 | P0 | `7490ae3` | Hand-authored decisions must declare `MANUAL_OPERATOR_DECISION` + rationale; marker persisted. Values still unvalidated — **stays open** |
+| F-007 | P0 | `818f8dc` | **PASS revoked.** Blanket revoke broke `profiles`/`workspaces`/`weather`; now scoped to the ten OneMove tables |
+| F-010 | P0 | `ca177b7` | Metrics derived from the frozen matrix or unavailable; invented constants gone; ordering fixed |
+| F-011 | P0 | `46b7395` | `code_sha` persisted; placeholder lineage removed; fails closed |
+| F-018 | P0 | `2b9148c` | Zero scored samples ⇒ mae/rmse/coverage null, not 0.0; observed 0.0 still distinguishable |
+| F-020 | P1 | `2b9148c` | Evaluation and reads bounded by `information_available_at` / `forecast_issue_time` |
+| F-025 | P1 | `db31871` | One canonical envelope; DB outage ⇒ 503 centrally, not 422/500 |
+| F-006 | P0 | `75da167` | Contract test hardened against all three bypasses |
+
+### F-007 demoted from PASS — the most important entry here
+
+F-007 was certified PASS on **static** review. Executing the migration against a live
+PostgreSQL in CI produced **30 `InsufficientPrivilege` failures**, 16 across the
+RLS/tenancy suite, on `weather`, `workspaces`, `workspace_members` and `profiles`.
+`REVOKE ALL ON ALL TABLES` followed by re-granting only ten tables stripped everything
+else — including `profiles`, which the admin-role check reads.
+
+**A static certification that a live database contradicts was not a certification.**
+
+### F-016 and F-015 → NEEDS_RECERTIFICATION
+
+Not defects. The canonical error contract changed auth error RESPONSE bodies
+(`trace_id` added; `HTTP_500`/`HTTP_503` → `INTERNAL_ERROR`/`DEPENDENCY_UNAVAILABLE`).
+No authorization decision changed and `auth.py` is untouched, but their certification
+evidence pinned response bodies, so the prior PASS cannot be assumed to survive.
+
+### Live-database evidence, first time in this programme
+
+CI ran the suite against ephemeral PostgreSQL: **443 passed, 23 failed, 17 skipped**
+(local, no DB: 501/22/56). Splitting the secret scan into its own job is what made this
+possible — as a step it aborted the job before any test ran.
 
 ## Certification wave 2 — AUDIT-0 and AUDIT-4, at `46b7395`
 
