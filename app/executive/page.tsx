@@ -48,7 +48,7 @@ function MetricCard({
     <div className="bg-neutral-800 p-6 rounded-lg border border-neutral-700">
       <h2 className="text-sm uppercase tracking-wider text-neutral-400 mb-1">{label}</h2>
       {children}
-      <div className="text-xs text-neutral-500 mt-2">{source}</div>
+      <div className="text-xs text-neutral-400 mt-2">{source}</div>
     </div>
   )
 }
@@ -56,8 +56,8 @@ function MetricCard({
 function Unavailable({ reason }: { reason: string }) {
   return (
     <>
-      <div className="text-2xl font-semibold text-neutral-500">UNAVAILABLE</div>
-      <p className="text-xs text-neutral-500 mt-1">{reason}</p>
+      <div className="text-2xl font-semibold text-neutral-400">UNAVAILABLE</div>
+      <p className="text-xs text-neutral-400 mt-1">{reason}</p>
     </>
   )
 }
@@ -95,7 +95,7 @@ export default async function ExecutiveDashboard() {
           source are marked UNAVAILABLE rather than estimated.
         </p>
         {snapshot && (
-          <p className="text-xs text-neutral-500 mt-2">
+          <p className="text-xs text-neutral-400 mt-2">
             Snapshot generated {snapshot.generatedAt} &middot; build {snapshot.commitHash}
           </p>
         )}
@@ -108,7 +108,7 @@ export default async function ExecutiveDashboard() {
               <div className={`text-2xl font-semibold ${STATUS_CLASS[overall]}`}>
                 {STATUS_LABEL[overall]}
               </div>
-              <p className="text-xs text-neutral-500 mt-1">
+              <p className="text-xs text-neutral-400 mt-1">
                 {snapshot.summary.pass} pass &middot; {snapshot.summary.warn} warn &middot;{' '}
                 {snapshot.summary.fail} fail
               </p>
@@ -128,7 +128,7 @@ export default async function ExecutiveDashboard() {
               <div className={`text-2xl font-semibold ${STATUS_CLASS[dataQuality.status]}`}>
                 {STATUS_LABEL[dataQuality.status]}
               </div>
-              <p className="text-xs text-neutral-500 mt-1">{dataQuality.detail}</p>
+              <p className="text-xs text-neutral-400 mt-1">{dataQuality.detail}</p>
             </>
           ) : (
             <Unavailable reason={snapshotError ?? 'Health probe returned no snapshot.'} />
@@ -138,8 +138,8 @@ export default async function ExecutiveDashboard() {
 
       <section className="bg-neutral-800 rounded-lg border border-neutral-700 p-6">
         <h2 className="text-xl font-semibold mb-4">Latest Decision Outcomes</h2>
-        <div className="text-2xl font-semibold text-neutral-500">UNAVAILABLE</div>
-        <p className="text-neutral-500 text-sm mt-1">
+        <div className="text-2xl font-semibold text-neutral-400">UNAVAILABLE</div>
+        <p className="text-neutral-400 text-sm mt-1">
           No decision-outcome source is wired to this view. This panel previously asserted
           that no decisions had been frozen; nothing here queried a decision store, so that
           claim could not be made.

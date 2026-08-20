@@ -21,16 +21,45 @@ export default async function LoginPage({
             <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
             <p className="text-muted-foreground">Enter your credentials to sign in to OneMove</p>
           </div>
-          
+
           <form className="space-y-4" action={login}>
-            {error && <div className="text-sm font-medium text-red-500 bg-red-500/10 p-3 rounded-md">{error}</div>}
+            {/*
+              A sign-in failure was rendered as a coloured box with no role, so
+              nothing was announced and the fields gave no indication that they
+              were the ones rejected. role="alert" announces it, and
+              aria-invalid + aria-describedby tie the message to both fields —
+              the server cannot tell which of the two was wrong, so both are
+              marked rather than guessing.
+            */}
+            {error && (
+              <div id="login-error" role="alert" className="text-sm font-medium text-red-400 bg-red-500/10 p-3 rounded-md">
+                {error}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" placeholder="name@example.com" required />
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="name@example.com"
+                required
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? "login-error" : undefined}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" required />
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? "login-error" : undefined}
+              />
             </div>
             <Button type="submit" className="w-full">Sign In</Button>
           </form>

@@ -46,7 +46,7 @@ export default async function CompliancePage() {
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
           Feature Not Connected
         </p>
-        <h3 className="text-xl font-semibold">No compliance data source is wired up</h3>
+        <h2 className="text-xl font-semibold">No compliance data source is wired up</h2>
         <p className="text-muted-foreground max-w-lg text-sm leading-relaxed">
           Safety incidents and partner background checks are not produced by any system
           in this deployment. There is no incident store, no background-check provider

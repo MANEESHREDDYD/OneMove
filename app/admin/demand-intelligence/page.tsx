@@ -32,7 +32,7 @@ export default async function DemandIntelligencePage() {
       <div className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-start gap-4">
         <AlertCircle className="w-6 h-6 text-primary mt-1" />
         <div>
-          <h3 className="font-bold text-primary">Rule-Based Forecast Engine</h3>
+          <h2 className="font-bold text-primary">Rule-Based Forecast Engine</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Demand levels come from a fixed time-of-day rule table applied to four
             predefined zones. No model is trained and no calibration is performed, so no

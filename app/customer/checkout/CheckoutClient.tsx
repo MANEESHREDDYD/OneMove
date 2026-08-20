@@ -10,11 +10,11 @@ import { CreditCard, Wallet, Coins, MapPin, Receipt, ArrowRight, Loader2 } from 
 import { placeMarketplaceOrder } from "./actions"
 import { generateIdempotencyKey } from "@/utils/idempotency"
 
-export function CheckoutClient({ 
-  userId, 
+export function CheckoutClient({
+  userId,
   userName,
-  userPhone 
-}: { 
+  userPhone
+}: {
   userId: string
   userName: string
   userPhone: string
@@ -31,7 +31,7 @@ export function CheckoutClient({
   const [tipAmount, setTipAmount] = useState(3.00)
   const [idempotencyKey, setIdempotencyKey] = useState<string>('')
 
-   
+
   useEffect(() => {
     // Client-only initialization (mount flag + idempotency key) to avoid
     // hydration mismatch from a server-rendered random value.
@@ -55,7 +55,7 @@ export function CheckoutClient({
   const merchantId = cartStore.getMerchantId()
   const serviceType = cartStore.getServiceType() || 'eats'
   const subtotal = cartStore.getSubtotal()
-  
+
   const deliveryFee = 2.99
   const serviceFee = subtotal * 0.10 // 10%
   const smallOrderFee = subtotal < 10 ? 2.00 : 0
@@ -65,7 +65,7 @@ export function CheckoutClient({
   const handlePlaceOrder = async () => {
     setIsSubmitting(true)
     setError(null)
-    
+
     try {
       const res = await placeMarketplaceOrder({
         merchantId,
@@ -77,7 +77,7 @@ export function CheckoutClient({
         instructions,
         idempotencyKey
       })
-      
+
       if (res.error) {
         setError(res.error)
         setIsSubmitting(false)
@@ -93,13 +93,18 @@ export function CheckoutClient({
 
   return (
     <div className="space-y-6 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto">
-      <PageHeader 
-        title="Checkout" 
+      <PageHeader
+        title="Checkout"
         description="Review your order and complete payment"
       />
 
+      {/*
+        Order placement can fail after the button is pressed, at which point the
+        only feedback was a coloured box appearing somewhere above the fold.
+        role="alert" makes the failure announced the moment it is rendered.
+      */}
       {error && (
-        <div className="p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl">
+        <div role="alert" className="p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl">
           {error}
         </div>
       )}
@@ -109,19 +114,30 @@ export function CheckoutClient({
         <h2 className="font-bold text-lg flex items-center gap-2">
           <MapPin className="w-5 h-5 text-primary" /> Delivery Details
         </h2>
+        {/*
+          These <label>s sat next to their inputs but were never associated with
+          them — no htmlFor, no wrapping — so the fields announced as an unnamed
+          "edit text". htmlFor/id pairs them up, which also makes the label a
+          click target for the field.
+        */}
         <div>
-          <label className="text-sm text-muted-foreground mb-1 block">Delivery Address</label>
-          <input 
-            type="text" 
+          <label htmlFor="checkout-address" className="text-sm text-muted-foreground mb-1 block">Delivery Address</label>
+          <input
+            id="checkout-address"
+            name="address"
+            type="text"
+            autoComplete="street-address"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             className="w-full bg-background/50 border border-primary/20 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
         <div>
-          <label className="text-sm text-muted-foreground mb-1 block">Instructions for Driver</label>
-          <input 
-            type="text" 
+          <label htmlFor="checkout-instructions" className="text-sm text-muted-foreground mb-1 block">Instructions for Driver</label>
+          <input
+            id="checkout-instructions"
+            name="instructions"
+            type="text"
             placeholder="e.g. Leave at door, ring bell..."
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
@@ -148,7 +164,7 @@ export function CheckoutClient({
             </div>
           ))}
         </div>
-        
+
         <div className="pt-4 space-y-2 text-sm text-muted-foreground">
           <div className="flex justify-between">
             <span>Subtotal</span>
@@ -175,16 +191,25 @@ export function CheckoutClient({
         </div>
 
         {/* Tip Selector */}
-        <div className="pt-4 border-t border-primary/10">
-          <label className="text-sm font-medium mb-2 block">Driver Tip</label>
+        {/*
+          A <label> that labels nothing is invalid; this is a group of buttons,
+          not a field. It becomes a real group with a name, and each button
+          reports its own selected state via aria-pressed rather than relying on
+          the colour swap alone.
+        */}
+        <div className="pt-4 border-t border-primary/10" role="group" aria-labelledby="checkout-tip-label">
+          <p id="checkout-tip-label" className="text-sm font-medium mb-2 block">Driver Tip</p>
           <div className="flex gap-2">
             {[2, 3, 5, 10].map(tip => (
               <button
                 key={tip}
+                type="button"
+                aria-pressed={tipAmount === tip}
+                aria-label={`Tip $${tip}`}
                 onClick={() => setTipAmount(tip)}
                 className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-colors ${
-                  tipAmount === tip 
-                    ? 'bg-primary text-primary-foreground border-primary' 
+                  tipAmount === tip
+                    ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background/50 border-primary/20 hover:border-primary/50 text-foreground'
                 }`}
               >
@@ -202,32 +227,32 @@ export function CheckoutClient({
           <button
             onClick={() => setPaymentMethod('card')}
             className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-              paymentMethod === 'card' 
-                ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary/20' 
+              paymentMethod === 'card'
+                ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary/20'
                 : 'bg-background/50 border-primary/20 text-muted-foreground hover:border-primary/50'
             }`}
           >
             <CreditCard className="w-6 h-6" />
             <span className="text-sm font-medium">Mock Card</span>
           </button>
-          
+
           <button
             onClick={() => setPaymentMethod('wallet')}
             className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-              paymentMethod === 'wallet' 
-                ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary/20' 
+              paymentMethod === 'wallet'
+                ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary/20'
                 : 'bg-background/50 border-primary/20 text-muted-foreground hover:border-primary/50'
             }`}
           >
             <Wallet className="w-6 h-6" />
             <span className="text-sm font-medium">Demo Wallet</span>
           </button>
-          
+
           <button
             onClick={() => setPaymentMethod('cash')}
             className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-              paymentMethod === 'cash' 
-                ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary/20' 
+              paymentMethod === 'cash'
+                ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary/20'
                 : 'bg-background/50 border-primary/20 text-muted-foreground hover:border-primary/50'
             }`}
           >
@@ -237,8 +262,8 @@ export function CheckoutClient({
           <button
             onClick={() => setPaymentMethod('manual')}
             className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-              paymentMethod === 'manual' 
-                ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary/20' 
+              paymentMethod === 'manual'
+                ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary/20'
                 : 'bg-background/50 border-primary/20 text-muted-foreground hover:border-primary/50'
             }`}
           >
@@ -255,8 +280,8 @@ export function CheckoutClient({
             <p className="text-sm text-muted-foreground uppercase tracking-wider font-bold mb-1">Total</p>
             <p className="text-3xl font-black">${total.toFixed(2)}</p>
           </div>
-          <Button 
-            size="lg" 
+          <Button
+            size="lg"
             className="flex-1 h-14 font-bold text-lg shadow-xl shadow-primary/20 group"
             onClick={handlePlaceOrder}
             disabled={isSubmitting}

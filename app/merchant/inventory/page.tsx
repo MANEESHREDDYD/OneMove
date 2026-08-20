@@ -13,7 +13,7 @@ export default function InventoryPage() {
         <div className="p-4 bg-primary/10 rounded-full">
           <Package className="w-12 h-12 text-primary" />
         </div>
-        <h3 className="text-xl font-semibold">Active Inventory</h3>
+        <h2 className="text-xl font-semibold">Active Inventory</h2>
         <p className="text-muted-foreground max-w-md">
           This is a functional MVP placeholder. Live data integration for this module is scheduled for the next iteration.
         </p>

@@ -5,7 +5,7 @@ import React from 'react'
 export function MapMarkerLegend() {
   return (
     <div className="absolute bottom-4 right-4 bg-background/90 backdrop-blur-md p-4 rounded-lg shadow-lg border text-sm z-[1000] space-y-2">
-      <h4 className="font-semibold mb-2">Live Map Legend</h4>
+      <h3 className="font-semibold mb-2">Live Map Legend</h3>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-blue-500 border border-white"></div>

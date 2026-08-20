@@ -87,7 +87,7 @@ export default async function CustomerRideDetail({ params }: { params: Promise<{
         {/* Left Column */}
         <div className="space-y-6">
           <GlassCard className="p-6 space-y-4">
-            <h3 className="font-bold flex items-center gap-2"><MapPin className="w-5 h-5 text-primary" /> Route</h3>
+            <h2 className="font-bold flex items-center gap-2"><MapPin className="w-5 h-5 text-primary" /> Route</h2>
             <div className="space-y-4 relative before:absolute before:inset-0 before:ml-4 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
               <div className="flex items-center gap-4 relative">
                 <div className="bg-background border-2 border-primary w-4 h-4 rounded-full ml-2.5 z-10"></div>

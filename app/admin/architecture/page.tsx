@@ -25,7 +25,7 @@ export default async function ArchitecturePage() {
             <AlertCircle className="h-5 w-5 text-yellow-400" />
           </div>
           <div className="ml-3">
-            <h3 className="text-sm font-medium text-yellow-800">Deployment Status</h3>
+            <h2 className="text-sm font-medium text-yellow-800">Deployment Status</h2>
             <div className="mt-2 text-sm text-yellow-700">
               <p>Private localhost portfolio demo: <strong>GO</strong></p>
               <p>Public production deployment: <strong>NOT YET APPROVED</strong></p>

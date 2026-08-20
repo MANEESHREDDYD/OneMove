@@ -33,7 +33,7 @@ export default async function AdminUsersPage() {
       />
 
       <GlassCard className="p-6 border-blue-500/20 bg-blue-500/5">
-        <h3 className="font-bold text-lg mb-2">Local Private Credentials</h3>
+        <h2 className="font-bold text-lg mb-2">Local Private Credentials</h2>
         <p className="text-muted-foreground text-sm">
           Passwords are NOT shown here for security. To view the exact login credentials for all generated demo users, please check the local file: <code className="bg-muted px-1.5 py-0.5 rounded text-primary">private/DEMO_LOGIN_CREDENTIALS.local.md</code> or <code className="bg-muted px-1.5 py-0.5 rounded text-primary">private/demo-login-credentials.csv</code> in your project repository.
         </p>

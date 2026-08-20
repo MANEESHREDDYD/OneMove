@@ -42,7 +42,7 @@ export default async function RiskCenterPage() {
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-bold font-mono text-sm uppercase">ORDER: {risk.entity_id.split('-')[0]}</h3>
+                  <h2 className="font-bold font-mono text-sm uppercase">ORDER: {risk.entity_id.split('-')[0]}</h2>
                   <Badge variant={risk.risk_level === 'CRITICAL' ? 'destructive' : 'outline'}>{risk.risk_level}</Badge>
                 </div>
                 <ul className="space-y-1 mt-2">

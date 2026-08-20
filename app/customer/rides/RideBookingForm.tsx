@@ -117,10 +117,11 @@ export function RideBookingForm() {
 
             {/* Pickup */}
             <div className="space-y-2 relative">
-              <Label>Pickup Location</Label>
+              <Label htmlFor="pickup">Pickup Location</Label>
               <div className="relative">
-                <MapPin className="absolute left-3 top-3 h-4 w-4 text-primary" />
+                <MapPin className="absolute left-3 top-3 h-4 w-4 text-primary" aria-hidden="true" />
                 <Input 
+                  id="pickup"
                   className="pl-9 bg-background/50 h-12" 
                   placeholder="Where from? (e.g. JFK Airport)" 
                   value={pickupInput}
@@ -145,7 +146,7 @@ export function RideBookingForm() {
                         setShowPickupSuggestions(false)
                       }}
                     >
-                      <MapPin className="h-3 w-3 text-muted-foreground" /> {loc.name}
+                      <MapPin className="h-3 w-3 text-muted-foreground" aria-hidden="true" /> {loc.name}
                     </div>
                   ))}
                 </div>
@@ -154,10 +155,11 @@ export function RideBookingForm() {
             
             {/* Dropoff */}
             <div className="space-y-2 relative">
-              <Label>Dropoff Location</Label>
+              <Label htmlFor="dropoff">Dropoff Location</Label>
               <div className="relative">
-                <Navigation className="absolute left-3 top-3 h-4 w-4 text-destructive" />
+                <Navigation className="absolute left-3 top-3 h-4 w-4 text-destructive" aria-hidden="true" />
                 <Input 
+                  id="dropoff"
                   className="pl-9 bg-background/50 h-12" 
                   placeholder="Where to? (e.g. Times Square)" 
                   value={dropoffInput}

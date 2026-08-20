@@ -20,7 +20,7 @@ export default async function AdminSupportDeskPage() {
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <div className="flex items-center mb-8">
-        <Headphones className="w-8 h-8 text-indigo-600 mr-3" />
+        <Headphones aria-hidden="true" focusable="false" className="w-8 h-8 text-indigo-600 mr-3" />
         <div>
           <h1 className="text-3xl font-bold">AI Support Desk</h1>
           <p className="text-gray-500">MVP deterministic rule-based ticket routing, priority assignment, and resolution paths.</p>
@@ -31,11 +31,19 @@ export default async function AdminSupportDeskPage() {
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-800">Inbound Support Tickets</h2>
           <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Search tickets..." 
-              className="pl-9 pr-4 py-2 border border-gray-300 rounded text-sm w-64 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            {/*
+              The magnifier is decorative — it repeats what the label says — and
+              the placeholder is not an accessible name, so the field gets a
+              visually-hidden <label>. text-gray-400 on white is 2.5:1, below the
+              3:1 required for a non-text graphic, so the icon is darkened too.
+            */}
+            <Search aria-hidden="true" focusable="false" className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-600" />
+            <label htmlFor="support-ticket-search" className="sr-only">Search tickets</label>
+            <input
+              id="support-ticket-search"
+              type="search"
+              placeholder="Search tickets..."
+              className="pl-9 pr-4 py-2 border border-gray-300 rounded text-sm w-64 text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
         </div>
@@ -43,12 +51,12 @@ export default async function AdminSupportDeskPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category & Desc</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI Analysis</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recommended Action</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category & Desc</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI Analysis</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recommended Action</th>
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -65,14 +73,14 @@ export default async function AdminSupportDeskPage() {
                   </span>
                   {ticket.escalation_required && (
                     <div className="mt-2 text-xs text-red-600 font-bold flex items-center">
-                      <AlertTriangle className="w-3 h-3 mr-1" /> ESCALATED
+                      <AlertTriangle aria-hidden="true" focusable="false" className="w-3 h-3 mr-1" /> ESCALATED
                     </div>
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{ticket.customer?.full_name || 'Unknown'}</div>
                   <div className="text-xs text-gray-500">{ticket.customer?.email}</div>
-                  <div className="text-xs text-gray-400 mt-1 font-mono">Tkt: {ticket.id.slice(0,8)}</div>
+                  <div className="text-xs text-gray-600 mt-1 font-mono">Tkt: {ticket.id.slice(0,8)}</div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="text-sm font-bold text-gray-900 uppercase mb-1">{ticket.category}</div>
@@ -88,8 +96,8 @@ export default async function AdminSupportDeskPage() {
                     {ticket.assistant_explanation}
                   </div>
                   {ticket.refund_eligibility && (
-                    <div className="mt-2 text-xs text-green-600 font-bold flex items-center">
-                      <CheckCircle2 className="w-3 h-3 mr-1" /> Eligible for Auto-Refund
+                    <div className="mt-2 text-xs text-green-700 font-bold flex items-center">
+                      <CheckCircle2 aria-hidden="true" focusable="false" className="w-3 h-3 mr-1" /> Eligible for Auto-Refund
                     </div>
                   )}
                 </td>
@@ -97,9 +105,29 @@ export default async function AdminSupportDeskPage() {
                   <div className="text-sm text-gray-900 font-medium">{ticket.recommended_action}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button className="text-indigo-600 hover:text-indigo-900 block mb-2 text-right w-full">Review</button>
+                  {/*
+                    Every row renders a button reading just "Review" / "Resolve".
+                    A screen reader user listing the page's buttons would get a
+                    column of identical names with no way to tell which ticket
+                    each belongs to, so each carries a row-specific accessible
+                    name. text-green-600 on white is 3.3:1 — below AA for body
+                    text — so the resolve action is darkened to green-700.
+                  */}
+                  <button
+                    type="button"
+                    aria-label={`Review ticket ${ticket.id.slice(0, 8)}`}
+                    className="text-indigo-600 hover:text-indigo-900 block mb-2 text-right w-full"
+                  >
+                    Review
+                  </button>
                   {ticket.status === 'OPEN' && (
-                    <button className="text-green-600 hover:text-green-900 block text-right w-full">Resolve</button>
+                    <button
+                      type="button"
+                      aria-label={`Resolve ticket ${ticket.id.slice(0, 8)}`}
+                      className="text-green-700 hover:text-green-900 block text-right w-full"
+                    >
+                      Resolve
+                    </button>
                   )}
                 </td>
               </tr>

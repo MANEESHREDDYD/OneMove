@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Car, Utensils, ShoppingBag, Package, LayoutDashboard, Settings, Map, LineChart, Shield, LifeBuoy, Brain, Headphones, Beaker, Activity } from "lucide-react"
+import { MAIN_CONTENT_ID } from "@/lib/a11y"
 
 const CUSTOMER_NAV = [
   { name: "Dashboard", href: "/customer", icon: LayoutDashboard },
@@ -34,23 +35,49 @@ const ADMIN_NAV = [
   { name: "MLOps", href: "/admin/mlops", icon: Activity },
 ]
 
-function getNavItems(pathname: string) {
-  if (pathname.startsWith("/admin")) return ADMIN_NAV
-  if (pathname.startsWith("/partner")) return DRIVER_NAV
-  if (pathname.startsWith("/merchant")) return MERCHANT_NAV
-  return CUSTOMER_NAV
+type NavSection = {
+  items: typeof CUSTOMER_NAV
+  /**
+   * Names the navigation landmark. Two <nav> elements are rendered (desktop
+   * sidebar + mobile bottom bar); a screen-reader user listing landmarks needs
+   * to be able to tell them apart, so each gets a distinct accessible name
+   * built from this label.
+   */
+  label: string
+}
+
+function getNavSection(pathname: string): NavSection {
+  if (pathname.startsWith("/admin")) return { items: ADMIN_NAV, label: "Admin" }
+  if (pathname.startsWith("/partner")) return { items: DRIVER_NAV, label: "Partner" }
+  if (pathname.startsWith("/merchant")) return { items: MERCHANT_NAV, label: "Merchant" }
+  return { items: CUSTOMER_NAV, label: "Customer" }
+}
+
+function isItemActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(href + "/")
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
-  // For the landing page or auth pages, we might not want the shell
-  const isPublicRoute = pathname === "/" || pathname.startsWith("/auth")
-  if (isPublicRoute) {
+  // The landing page renders its own <header>/<main>/<footer>, including the
+  // single #main-content landmark. Wrapping it here would nest those landmarks
+  // inside <main> and strip them of their banner / contentinfo roles.
+  if (pathname === "/") {
     return <>{children}</>
   }
 
-  const navItems = getNavItems(pathname)
+  // Auth routes get no navigation chrome, but still need exactly one <main>
+  // landmark so the skip link in the root layout has a target.
+  if (pathname.startsWith("/auth")) {
+    return (
+      <main id={MAIN_CONTENT_ID} tabIndex={-1}>
+        {children}
+      </main>
+    )
+  }
+
+  const { items: navItems, label: navLabel } = getNavSection(pathname)
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -59,21 +86,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="p-6">
           <Link href="/" className="text-2xl font-bold tracking-tight">OneMove</Link>
         </div>
-        <nav className="flex-1 px-4 space-y-2">
+        <nav aria-label={`${navLabel} sections`} className="flex-1 px-4 space-y-2">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+            const isActive = isItemActive(pathname, item.href)
             const Icon = item.icon
             return (
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                  isActive 
-                    ? "bg-primary text-primary-foreground" 
+                // aria-current is what actually tells a screen reader which
+                // entry is the current page. The colour swap below is a
+                // supplement to it, never the sole signal.
+                aria-current={isActive ? "page" : undefined}
+                className={`relative flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                  isActive
+                    ? "bg-primary text-primary-foreground font-semibold"
                     : "hover:bg-white/10 text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Icon className="w-5 h-5" />
+                {/*
+                  Non-colour indicator for the active entry: a solid bar on the
+                  leading edge, so the current page is still identifiable
+                  without perceiving the background/foreground colour change
+                  (WCAG 1.4.1 Use of Color). Decorative — the name is carried by
+                  aria-current.
+                */}
+                {isActive && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary-foreground"
+                  />
+                )}
+                <Icon aria-hidden="true" focusable="false" className="w-5 h-5" />
                 <span className="font-medium">{item.name}</span>
               </Link>
             )
@@ -82,29 +126,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="min-w-0 flex-1 pb-20 md:pl-64 md:pb-0">
+      <main
+        id={MAIN_CONTENT_ID}
+        // Focusable only programmatically, so the skip link can move focus here
+        // rather than merely moving the scroll position.
+        tabIndex={-1}
+        className="min-w-0 flex-1 pb-20 md:pl-64 md:pb-0"
+      >
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
           {children}
         </div>
       </main>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 border-t border-border bg-card/80 backdrop-blur-lg z-50 pb-safe">
+      <nav
+        aria-label={`${navLabel} sections, compact`}
+        className="md:hidden fixed bottom-0 inset-x-0 border-t border-border bg-card/80 backdrop-blur-lg z-50 pb-safe"
+      >
         <div className="flex items-center justify-around p-2">
           {navItems.slice(0, 5).map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+            const isActive = isItemActive(pathname, item.href)
             const Icon = item.icon
             return (
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
-                  isActive 
-                    ? "text-primary" 
+                aria-current={isActive ? "page" : undefined}
+                className={`relative flex flex-col items-center p-2 rounded-lg transition-colors ${
+                  isActive
+                    ? "text-primary font-semibold"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Icon className="w-6 h-6 mb-1" />
+                {/* Non-colour active indicator: see the sidebar comment above. */}
+                {isActive && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-0 h-0.5 w-8 rounded-full bg-primary"
+                  />
+                )}
+                <Icon aria-hidden="true" focusable="false" className="w-6 h-6 mb-1" />
                 <span className="text-[10px] font-medium">{item.name}</span>
               </Link>
             )
