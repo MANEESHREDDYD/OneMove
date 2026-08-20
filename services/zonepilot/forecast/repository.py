@@ -13,7 +13,19 @@ from services.zonepilot.forecast.contracts import PredictionRecord
 
 class ForecastRepository:
     def __init__(self, dsn: str | None = None) -> None:
-        self.dsn = dsn or get_database_dsn()
+        self._explicit_dsn = dsn
+
+    @property
+    def dsn(self) -> str:
+        """Resolve the DSN lazily, at connection time rather than construction.
+
+        Repositories used to call get_database_dsn() in __init__. Routers build
+        them at module scope, so importing the API package required database
+        configuration to already be present: an unset DATABASE_URL made the
+        process unimportable, took liveness down with it, and turned 18 test
+        modules into collection errors instead of clean skips (F-024).
+        """
+        return self._explicit_dsn or get_database_dsn()
 
     def _connect(self) -> psycopg.Connection:
         return psycopg.connect(self.dsn, row_factory=dict_row, connect_timeout=15)
