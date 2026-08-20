@@ -16,7 +16,7 @@ from fastapi import HTTPException
 
 from services.api.core import auth
 
-SECRET = "unit-test-signing-secret-at-least-32-chars"
+SECRET = "test-only-signing-secret-at-least-32-chars"
 AUD = "authenticated"
 ISS = "https://issuer.example.com/auth/v1"
 
@@ -78,7 +78,7 @@ def test_wrong_audience_is_rejected() -> None:
 
 def test_tampered_signature_is_rejected() -> None:
     with pytest.raises(HTTPException):
-        auth.verify_token(_mint(_valid_claims(), secret="a-different-signing-secret-32-chars"))
+        auth.verify_token(_mint(_valid_claims(), secret="test-only-different-secret-32-chars"))
 
 
 def test_alg_none_is_rejected() -> None:
