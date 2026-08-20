@@ -1,6 +1,6 @@
 # OneMove — CTO Finding Ledger
 
-**Baseline main:** `ec4bb92` · **Branch head:** `5b11cc5` (`hotfix/onemove-p0-security-incident`)
+**Baseline main:** `ec4bb92` · **Branch head:** `7490ae3` (`hotfix/onemove-p0-security-incident`)
 **Regenerated:** 2026-08-20, after certification wave 1
 
 Findings are immutable. Severity is fixed at discovery and never lowered to reach a
@@ -15,17 +15,71 @@ retests it and fails to break it.
 
 | Severity | Total | PASS | Awaiting re-cert | Reopened | Ready, uncertified | In remediation | Blocked ext. | Open |
 |---|---|---|---|---|---|---|---|---|
-| **P0** | 16 | 5 | 2 | 2 | 4 | 1 | 1 | 1 |
-| **P1** | 11 | 5 | 0 | 1 | 1 | 0 | 0 | 4 |
+| **P0** | 16 | 8 | 2 | 3 | 0 | 1 | 1 | 1 |
+| **P1** | 11 | 6 | 0 | 1 | 0 | 0 | 0 | 4 |
 | **P2** | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
-| **Total** | **28** | **10** | **2** | **3** | **5** | **1** | **1** | **6** |
+| **Total** | **28** | **14** | **2** | **4** | **0** | **1** | **1** | **6** |
 
-`16 + 11 + 1 = 28` · `10 + 2 + 3 + 5 + 1 + 1 + 6 = 28`
+`16 + 11 + 1 = 28` · `14 + 2 + 4 + 0 + 1 + 1 + 6 = 28`
 
 ```
-PASS = 10        P0_NOT_CERTIFIED = 11    P1_NOT_CERTIFIED = 6    P2_NOT_CERTIFIED = 1
+PASS = 14        P0_NOT_CERTIFIED = 8    P1_NOT_CERTIFIED = 5    P2_NOT_CERTIFIED = 1
 STATUS = NOT_CTO_PRODUCTION_READY
 ```
+
+## Certification wave 2 — AUDIT-0 and AUDIT-4, at `46b7395`
+
+Both had never certified against the fixed state. **Result: 4 PASS, 1 FAIL.**
+
+| ID | Sev | Verdict | Evidence |
+|---|---|---|---|
+| F-012 | P0 | **PASS** | Every tile carries a required `source` prop and a snapshot timestamp; P95 renders UNAVAILABLE because no such metric is computed; the defensibility claim is gone |
+| F-013 | P0 | **PASS** | Page is 63 lines, one FEATURE_NOT_CONNECTED card, no incident IDs, no person names, no enforcement control |
+| F-014 | P0 | **PASS** | `confidence_score: null` persisted; UI renders Unavailable; whole-frontend sweep found `Math.random` only in docstrings |
+| F-026 | P1 | **PASS** | Exercised the real route: naive `observed_at_device` → 200 with correct UTC normalisation, no 500 |
+| F-005 | P0 | **FAIL** | Required is not validated — see below |
+
+### F-005 — reopened, partially addressed in `7490ae3`
+
+AUDIT-0 posted invented facilities, an invented OSRM hash and 100% coverage to
+`POST /decisions` and received **201 with a persisted decision_id**. Requiring the
+fields stopped an empty body, not a well-formed fiction.
+
+**My test change had pinned the forgery.** Updating the durable-decisions test to supply
+`graph_version`/`solver_version` made a hand-authored decision return 201 and asserted
+that as correct. I treated a failing test as a payload to repair rather than asking
+whether the endpoint should accept it.
+
+`POST /decisions/freeze` was certified sound: it reconstructs every field from stored
+optimization state, reads the OSRM hash from the gold manifest rather than the payload,
+and returns 422 for a failed job, a resultless job, or one outside the caller's workspace.
+
+Partially addressed: the free-form path now requires
+`decision_class="MANUAL_OPERATOR_DECISION"` plus a rationale, and persists that marker
+onto the record so a reader can distinguish hand-authored from solver-derived.
+**F-005 stays open** — the numbers are honestly labelled but still unvalidated against
+the facility catalog and release manifest.
+
+### Certified caveats worth carrying forward
+
+- `tests/api/test_events_timezone_regression.py` is mostly source-text assertion; it
+  would pass if the handler were deleted. F-026 passed on the certifier's live request,
+  not on that test.
+- `events.py` persists and hashes `observed_at_device` **un-normalised** while computing
+  the deviation from a UTC-coerced copy — a consistency gap, not a 500.
+- Local `.next/` build output still contains pre-fix strings (`INC-88921`, `Richard Roe`,
+  `Times Square`). It is **not** committed (`git ls-files` → 0 matches, `.gitignore:5`),
+  but must be deleted before any artifact upload. Source maps embed the historical
+  strings via the new docstrings.
+
+### F-028 measured state (open, unfixed)
+
+Axe gate is `toBeLessThanOrEqual(5)` critical violations on ONE route
+(`tests/e2e/onemove-accessibility.spec.ts:26`), filtering out serious/moderate entirely.
+No skip link. Two unlabelled `<nav>` elements. Zero `aria-current`, zero `aria-live`.
+Six `htmlFor` against 24 inputs — roughly 75% unlabelled, with no `aria-invalid`/
+`aria-describedby`. Heading level skipped in the compliance card. No
+`prefers-reduced-motion` anywhere, while animation utilities are in active use.
 
 ---
 
