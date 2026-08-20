@@ -6,15 +6,23 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from services.api.core.ratelimit import (
+    EndpointClass,
+    classify_endpoint,
+    limiter,
+    principal_dimensions,
+    rate_limit_metrics,
+)
 from services.api.core.telemetry import (
     error_envelope,
     metrics,
-    opaque_principal,
-    rate_limiter,
-    rate_policy,
     resolve_trace_id,
     safe_request_id,
 )
+
+# Expose the limiter's counters on /metrics. A limiter that has silently stopped
+# limiting must be visible from outside the process.
+metrics.register_renderer(rate_limit_metrics.render_prometheus_lines)
 
 MAX_PAYLOAD_SIZE = 1024 * 1024 * 4  # 4 MiB (Limit for standard routes)
 MAX_SCENARIO_PAYLOAD = 1024 * 1024 * 2  # 2 MiB scenario payload
@@ -39,30 +47,19 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         request.state.correlation_id = correlation_id
         request.state.trace_id = trace_id
 
-        authorization = request.headers.get("authorization", "")
-        authenticated = authorization.lower().startswith("bearer ")
-        principal_source = (
-            authorization[7:] if authenticated else (request.client.host if request.client else "unknown")
-        )
-        policy = rate_policy(request.url.path, authenticated)
-        if policy:
-            bucket, limit = policy
-            allowed, remaining = rate_limiter.check(bucket, opaque_principal(principal_source), limit)
-            if not allowed:
-                response = JSONResponse(
-                    status_code=429,
-                    content=error_envelope(
-                        "RATE_LIMITED",
-                        "Request rate limit exceeded.",
-                        status_code=429,
-                        request_id=req_id,
-                        trace_id=trace_id,
-                        details={"bucket": bucket, "limit_per_minute": limit},
-                    ),
-                    headers={"retry-after": str(remaining), "x-request-id": req_id, "x-trace-id": trace_id},
-                )
-                self._record(request, response.status_code, started, req_id, correlation_id)
-                return response
+        # F-023: rate limiting. This runs before routing and therefore before the
+        # authentication dependency, so it has no verified principal to key on.
+        # It reads unverified token claims for BUCKETING ONLY and pairs every
+        # check with a source-address bucket the caller cannot choose. See the
+        # module docstring in services/api/core/ratelimit.py.
+        #
+        # This stage can only ever REFUSE a request. It never admits anything the
+        # authenticator or the authorizer would have refused, because it runs
+        # strictly earlier and returns a response instead of calling the route.
+        limit_response = self._enforce_rate_limit(request, req_id, trace_id)
+        if limit_response is not None:
+            self._record(request, limit_response.status_code, started, req_id, correlation_id, trace_id)
+            return limit_response
 
         # Payload size enforcement
         content_length = request.headers.get("content-length")
@@ -125,6 +122,115 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             )
             self._record(request, response.status_code, started, req_id, correlation_id, trace_id)
             return response
+
+    @staticmethod
+    def _enforce_rate_limit(request: Request, req_id: str, trace_id: str) -> JSONResponse | None:
+        """Charge the request to its buckets. Returns a response only to refuse."""
+        if not limiter.enabled():
+            return None
+
+        endpoint_class = classify_endpoint(request.url.path, request.method)
+        if endpoint_class is None:
+            # Health, readiness and metrics are never limited. A limiter that can
+            # fail a liveness probe turns a database blip into an instance-kill
+            # loop and blocks the rollback that would fix it.
+            return None
+
+        workspace_id, user_id, network_id = principal_dimensions(
+            request.headers.get("authorization"),
+            request.client.host if request.client else None,
+            request.headers.get("x-forwarded-for"),
+        )
+
+        decision = limiter.check(
+            endpoint_class=endpoint_class,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            network_id=network_id,
+        )
+
+        # A workspace may only have so many optimizations in flight at once.
+        # Checked after the rate budget so an over-quota caller cannot use this
+        # path to probe how busy a workspace is.
+        if decision.allowed and endpoint_class is EndpointClass.OPTIMIZATION and request.method.upper() == "POST":
+            decision = limiter.check_optimization_concurrency(workspace_id)
+
+        if decision.allowed:
+            return None
+
+        if decision.store_unavailable:
+            if endpoint_class == EndpointClass.READ:
+                logging.getLogger("zonepilot.api").warning(
+                    "RATE_LIMIT_BACKEND_UNAVAILABLE",
+                    extra={
+                        "request_id": req_id,
+                        "trace_id": trace_id,
+                        "message": "Rate limit store is unavailable. Degrading gracefully to allow low-risk read."
+                    }
+                )
+                return None
+            
+            # FAIL CLOSED for high-risk operations (OPTIMIZATION, WRITE, ASSISTANT, ADMIN, etc.)
+            # The store is Postgres, which is a hard dependency of
+            # almost every route here, so failing open would not keep the API
+            # usable -- it would only remove the guard rail at the moment the
+            # system is least able to absorb load. 503 rather than 429 because
+            # the caller is not over quota; our dependency is down. F-025 maps
+            # 503 to DEPENDENCY_UNAVAILABLE and marks it retryable.
+            return RequestIdMiddleware._limit_response(
+                status=503,
+                code="DEPENDENCY_UNAVAILABLE",
+                message="Rate limit store is unavailable; the request was refused rather than served unmetered.",
+                request_id=req_id,
+                trace_id=trace_id,
+                retry_after=decision.retry_after_seconds,
+                details={"endpoint_class": decision.endpoint_class.value, "subsystem": "rate_limit_store"},
+            )
+
+        return RequestIdMiddleware._limit_response(
+            status=429,
+            code="RATE_LIMITED",
+            message="Request rate limit exceeded.",
+            request_id=req_id,
+            trace_id=trace_id,
+            retry_after=decision.retry_after_seconds,
+            details={
+                "endpoint_class": decision.endpoint_class.value,
+                "scope": decision.scope,
+                "limit": decision.limit,
+                "reason": decision.reason,
+            },
+        )
+
+    @staticmethod
+    def _limit_response(
+        *,
+        status: int,
+        code: str,
+        message: str,
+        request_id: str,
+        trace_id: str,
+        retry_after: int,
+        details: dict,
+    ) -> JSONResponse:
+        """Refusal in the one canonical envelope, with the headers a client needs."""
+        seconds = max(1, int(retry_after))
+        return JSONResponse(
+            status_code=status,
+            content=error_envelope(
+                code,
+                message,
+                status_code=status,
+                request_id=request_id,
+                trace_id=trace_id,
+                details=details,
+            ),
+            headers={
+                "retry-after": str(seconds),
+                "x-request-id": request_id,
+                "x-trace-id": trace_id,
+            },
+        )
 
     @staticmethod
     def _error_response(status: int, code: str, message: str, request_id: str, trace_id: str) -> JSONResponse:

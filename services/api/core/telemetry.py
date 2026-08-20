@@ -92,6 +92,14 @@ class MetricsRegistry:
         self._requests: dict[tuple[str, str, int], int] = {}
         self._latency_sum: dict[tuple[str, str], float] = {}
         self._latency_count: dict[tuple[str, str], int] = {}
+        # Subsystems that keep their own counters append their exposition lines
+        # here. Without this the rate limiter's health -- in particular whether
+        # it has stopped limiting -- would be invisible on /metrics.
+        self._renderers: list[Callable[[], list[str]]] = []
+
+    def register_renderer(self, renderer: Callable[[], list[str]]) -> None:
+        with self._lock:
+            self._renderers.append(renderer)
 
     def observe_request(self, method: str, route: str, status: int, latency_seconds: float) -> None:
         request_key = (method, route, status)
@@ -122,6 +130,11 @@ class MetricsRegistry:
                 lines.append(
                     f"zonepilot_api_request_latency_seconds_count{{{labels}}} {self._latency_count[(method, route)]}"
                 )
+            renderers = list(self._renderers)
+        # Rendered outside the lock: a subsystem renderer takes its own lock, and
+        # holding both would be a lock-ordering hazard on the metrics path.
+        for renderer in renderers:
+            lines.extend(renderer())
         return "\n".join(lines) + "\n"
 
 
@@ -135,7 +148,25 @@ class _Window:
 
 
 class InMemoryRateLimiter:
-    """Thread-safe fixed-window limiter; intentionally local to one API process."""
+    """Thread-safe fixed-window limiter, local to one process.
+
+    NOT AN ENFORCEMENT PATH. This was the API's rate limiter until F-023. Two
+    defects made it unfit for that job:
+
+      * Per-process state. The API runs at max_instance_count = 10
+        (infra/gcp/modules/cloud_run/main.tf:79), so each instance kept its own
+        counters and every configured quota was multiplied by the instance count.
+        Measured: a limit of 10 admitted 100 across ten limiters.
+      * Unbounded growth. `_windows` was keyed by a caller-supplied principal and
+        nothing ever evicted from it -- not even fully expired windows. Measured:
+        50,000 distinct principals produced 50,000 retained entries, and 1,000
+        expired windows retained 1,000 entries.
+
+    Enforcement now lives in services/api/core/ratelimit.py, which shares one
+    counter across instances in Postgres. This class is retained only as a
+    self-contained reference for the fixed-window algorithm and for the tests
+    that cover it; nothing in the request path calls it.
+    """
 
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
@@ -156,19 +187,12 @@ class InMemoryRateLimiter:
             return True, max(0, limit - window.count)
 
 
-rate_limiter = InMemoryRateLimiter()
-
-
-def rate_policy(path: str, authenticated: bool) -> tuple[str, int] | None:
-    if not _truthy_env("ZONEPILOT_RATE_LIMIT_ENABLED", default=True):
-        return None
-    if "/auth" in path:
-        return "auth", int(os.environ.get("ZONEPILOT_AUTH_RATE_LIMIT_PER_MINUTE", "10"))
-    if any(segment in path for segment in ("/scenarios", "/optimizer", "/jobs")):
-        return "expensive", int(os.environ.get("ZONEPILOT_EXPENSIVE_RATE_LIMIT_PER_MINUTE", "20"))
-    if authenticated:
-        return "authenticated", int(os.environ.get("ZONEPILOT_API_RATE_LIMIT_PER_MINUTE", "120"))
-    return None
+# The `rate_limiter` singleton and the `rate_policy` classifier that used to sit
+# here are gone. They were the only callers of the per-process limiter, and
+# leaving an importable process-local limiter next to the real one is how a
+# future edit reintroduces the bug. Endpoint classification is now
+# services.api.core.ratelimit.classify_endpoint, and enforcement is
+# services.api.core.ratelimit.limiter.
 
 
 def _truthy_env(name: str, default: bool = False) -> bool:
