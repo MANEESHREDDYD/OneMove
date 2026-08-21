@@ -1,27 +1,50 @@
 {
-  "GIT_SHA": "e5f095bb90a5bfecf93d2160b1ff2230dfd2b5ff",
-  "FRONTEND_SHA": "e5f095bb90a5bfecf93d2160b1ff2230dfd2b5ff",
-  "API_SHA": "e5f095bb90a5bfecf93d2160b1ff2230dfd2b5ff",
-  "API_REVISION": "UNAVAILABLE (isolated local demo stack, not Cloud Run)",
-  "ENVIRONMENT": "isolated local Supabase + local FastAPI. NOT production.",
-  "DATASET_VERSION": "osm-461584ea03d2.code-483c8e1f6d25",
-  "NETWORK_VERSION": "1.1.0+bad320dd48da",
-  "GRAPH_VERSION": "1.1.0+bad320dd48da",
-  "H3_RESOLUTION": 8,
-  "ZONE_COUNT": 94,
-  "MATRIX_ID": "matrix-canonical-r1",
-  "MATRIX_SHA256": "50cf5ebdb562e5c891ee63de2d3f2c6634dc2d32138745fa1966e87a4c62a972",
-  "ASSUMPTION_SET_VERSION": "r1-pilot-proxy@1.0.0",
-  "ASSUMPTION_SET_SHA256": "7ca8a5776a6c72c48eade1f73376cdf37abaf441f3fb715b450755534007c053",
-  "SCENARIO_ID": "scen-a1949c81166d",
-  "OPTIMIZATION_JOB_ID": "329b793c-f856-449c-9dd5-cc53592e4f8c",
-  "RESULT_ID": "UNAVAILABLE (optimization_results is keyed by job_id)",
-  "DECISION_ID": "dec-310aa2137dccc40e",
-  "DECISION_CLASS": "OPTIMIZER_DECISION",
-  "REPLAY_ID": "rep-1d996569b29d81c0",
-  "REPLAY_PIT_VALID": true,
-  "REPLAY_ACTION_REPRODUCED": true,
-  "REPLAY_OBJECTIVE_MATCH": true,
-  "SOLVER": "ortools-cp-sat-9.15.6755",
-  "VIDEO_DURATION_SECONDS": 236.8
+  "artifact": "onemove-swiggy-demo-FINAL-APPROVED.webm",
+  "recorded_at": "2026-08-21T06:39:28.595132+00:00",
+  "duration_seconds": 274.96,
+  "resolution": "1920x1080",
+  "sha256": "602cbe68ca4cd9afcea9380d4884030aa906b1ae9a532dc2b530e7d96e11d5d9",
+  "mp4_sha256": "9286f2622940a2832c85b7f0a985aa84eadbfec90643db3a83ef79e04a8b293f",
+  "network": {
+    "zones": 94,
+    "h3_resolution": 8,
+    "evidence_class": "PUBLIC_GEOGRAPHIC",
+    "source": "pilot_roads.osm.pbf",
+    "bbox": {
+      "min_lat": 12.900447069325457,
+      "max_lat": 12.981529630996251,
+      "min_lon": 77.54812512127289,
+      "max_lon": 77.69602845960027
+    }
+  },
+  "traffic": {
+    "provider": "TomTom",
+    "evidence_class": "PROVIDER_ESTIMATED",
+    "captured_at": "2026-08-21T05:40:44.869386+00:00",
+    "corridors": [
+      "Outer Ring Road (Marathahalli)",
+      "Hosur Road (Silk Board)",
+      "Old Airport Road (Domlur)",
+      "100 Feet Road (Indiranagar)",
+      "MG Road / Trinity",
+      "Bannerghatta Road (Dairy Circle)"
+    ]
+  },
+  "weather": {
+    "provider": "Open-Meteo",
+    "evidence_class": "PUBLIC_OFFICIAL"
+  },
+  "solver": "Google OR-Tools CP-SAT",
+  "mission": {
+    "class": "SIMULATED",
+    "route_evidence_class": "PROVIDER_ESTIMATED",
+    "provider": "TomTom",
+    "distance_m": 14444,
+    "baseline_eta_s": 2096,
+    "traffic_eta_s": 2644,
+    "delay_s": 548,
+    "congestion_ratio": 1.261,
+    "origin_cell": "8861892ec3fffff",
+    "destination_cell": "88618924a9fffff"
+  }
 }

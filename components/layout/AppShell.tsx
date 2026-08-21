@@ -87,6 +87,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
+  // The presentation route is a full-viewport surface. Rendering the operator
+  // chrome behind it puts the marketplace nav (Rides / Eats / Grocery /
+  // Courier) into the DOM of a recording that must not contain it, so the
+  // shell is skipped outright rather than merely covered.
+  if (pathname.startsWith("/demo")) {
+    return (
+      <main id={MAIN_CONTENT_ID} tabIndex={-1}>
+        {children}
+      </main>
+    )
+  }
+
   // Auth routes get no navigation chrome, but still need exactly one <main>
   // landmark so the skip link in the root layout has a target.
   if (pathname.startsWith("/auth")) {

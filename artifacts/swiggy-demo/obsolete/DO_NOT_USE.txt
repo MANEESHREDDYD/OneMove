@@ -1,0 +1,20 @@
+REJECTED RECORDINGS — DO NOT DELIVER ANY FILE IN THIS DIRECTORY.
+
+These are ~47-second pre-fix recordings. They were rejected by the user on
+2026-08-21 after one of them (2,972,006 bytes / 46.76s) was opened and found
+to contain a New York / Jersey City map, legacy Rides/Eats/Grocery/Courier
+navigation, and a dominant "TRAFFIC DATA NOT YET AVAILABLE" state.
+
+They are kept only as evidence of what was rejected and why.
+
+The deliverable lives in ../final/ and nowhere else.
+
+--- SECOND REJECTION, 2026-08-21 ---
+The 236.84s recordings (OBSOLETE-REJECTED-236s-*) were also rejected. Duration
+and data were right; the visual product was not:
+  - opened on the Command Center New York / Jersey City map
+  - "Bengaluru Digital Twin" was a bare rectangular SVG hex grid with no
+    basemap, no roads, no city context
+  - "OSM Gold Base Map - Rendering" was claimed while nothing was visible
+  - the same static background held for ~4 minutes under floating cards
+  - scenario and optimization never changed the map

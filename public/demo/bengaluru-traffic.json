@@ -1,0 +1,76 @@
+{
+ "provider": "TomTom",
+ "product": "Traffic Flow (relative0 tiles + flowSegmentData)",
+ "evidence_class": "PROVIDER_ESTIMATED",
+ "captured_at": "2026-08-21T05:40:44.869386+00:00",
+ "tiles_fetched": 32,
+ "zoom": 14,
+ "segments": [
+  {
+   "name": "Outer Ring Road (Marathahalli)",
+   "current_speed_kmh": 27,
+   "free_flow_speed_kmh": 33,
+   "current_travel_s": 1952,
+   "free_flow_travel_s": 1597,
+   "delay_s": 355,
+   "congestion_ratio": 1.222,
+   "confidence": 1,
+   "road_closure": false
+  },
+  {
+   "name": "Hosur Road (Silk Board)",
+   "current_speed_kmh": 21,
+   "free_flow_speed_kmh": 26,
+   "current_travel_s": 1293,
+   "free_flow_travel_s": 1044,
+   "delay_s": 249,
+   "congestion_ratio": 1.239,
+   "confidence": 1,
+   "road_closure": false
+  },
+  {
+   "name": "Old Airport Road (Domlur)",
+   "current_speed_kmh": 29,
+   "free_flow_speed_kmh": 35,
+   "current_travel_s": 1814,
+   "free_flow_travel_s": 1503,
+   "delay_s": 311,
+   "congestion_ratio": 1.207,
+   "confidence": 1,
+   "road_closure": false
+  },
+  {
+   "name": "100 Feet Road (Indiranagar)",
+   "current_speed_kmh": 20,
+   "free_flow_speed_kmh": 27,
+   "current_travel_s": 1449,
+   "free_flow_travel_s": 1073,
+   "delay_s": 376,
+   "congestion_ratio": 1.35,
+   "confidence": 1,
+   "road_closure": false
+  },
+  {
+   "name": "MG Road / Trinity",
+   "current_speed_kmh": 20,
+   "free_flow_speed_kmh": 30,
+   "current_travel_s": 370,
+   "free_flow_travel_s": 246,
+   "delay_s": 124,
+   "congestion_ratio": 1.504,
+   "confidence": 0.991926,
+   "road_closure": false
+  },
+  {
+   "name": "Bannerghatta Road (Dairy Circle)",
+   "current_speed_kmh": 22,
+   "free_flow_speed_kmh": 28,
+   "current_travel_s": 1297,
+   "free_flow_travel_s": 1019,
+   "delay_s": 278,
+   "congestion_ratio": 1.273,
+   "confidence": 1,
+   "road_closure": false
+  }
+ ]
+}
