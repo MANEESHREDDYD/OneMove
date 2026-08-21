@@ -69,3 +69,29 @@ KNOWN LIMITATIONS (stated, not hidden)
 
 DEMO_READY ............. YES
 ============================================================
+
+============================================================
+DELIVERY PACKAGING (post-freeze)
+============================================================
+No product, UI, journey, or narration change was made after the freeze.
+The MP4s are transcodes of the accepted WebM masters; the masters are
+preserved bit-for-bit.
+
+TRANSCODE ............. ffmpeg 7.1, libx264 preset slow, CRF 20,
+                        yuv420p, +faststart, -an (sources carry no audio)
+PRIMARY_MP4 ........... 1920x1080, 00:03:56.84  (source 00:03:56.84)
+FAILSAFE_MP4 .......... 1920x1080, 00:03:56.72  (source 00:03:56.72)
+FASTSTART ............. verified, moov atom within first 4KB
+FRAMES ................ first / middle / last decode; no crop, no watermark
+SHORT_MP4 ............. 1920x1080, 00:01:15.96, trimmed from the accepted
+                        primary (six segments: network, scenario,
+                        optimization, decision, evidence, replay)
+CHECKSUMS ............. checksums.sha256 (5 assets)
+
+KNOWN LIMITATION OBSERVED DURING PACKAGING (not corrected — demo is frozen)
+  The Step 3 "Network Evidence" panel displays Source / Class / Dataset /
+  Version as UNAVAILABLE, because that overlay reads field names the
+  evidence response does not carry. This is truthful rather than
+  fabricated, and the same provenance is shown correctly elsewhere in the
+  video (network summary card, decision panel, replay panel). Recorded
+  here so it is not mistaken for missing data in the platform.
