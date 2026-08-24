@@ -127,3 +127,7 @@ CTO_PRODUCTION_READINESS_MATRIX.md
 # Scratch map-check harness; real map coverage belongs in the E2E suite.
 mapcheck.config.ts
 tests/e2e/mapcheck.spec.ts
+
+# Local scratch probes; not product code.
+scratch_*.py
+.rows.sql
