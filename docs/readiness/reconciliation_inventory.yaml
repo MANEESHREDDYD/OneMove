@@ -1,0 +1,312 @@
+# Reconciliation inventory: origin/main..HEAD
+# Generated from git log; classification is per-commit intent.
+total_commits: 77
+commits:
+  - sha: a50f3e00dc82
+    subject: fix(optimizer): size the solver budget from measurement and align the worker default
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 86a85178cd0a
+    subject: docs(readiness): savepoint at session boundary with F-OPT-013 sequencing
+    classification: KEEP
+    rationale: internal engineering evidence; keep, not public marketing
+  - sha: 563c2b50888c
+    subject: fix(api): typed 503 for rate-limit store outage, and a distinct manual-replay state
+    classification: KEEP
+    rationale: product or platform change
+  - sha: acb86df40bb5
+    subject: docs(readiness): program state savepoint at session boundary
+    classification: KEEP
+    rationale: internal engineering evidence; keep, not public marketing
+  - sha: 8729e7396dac
+    subject: fix(decisions): persist the decision class, and let honest states be storable
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 51d777c0c4ea
+    subject: feat(decisions): version the optimization policy through freeze and replay
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 0b7c633e1034
+    subject: docs(readiness): CI-01 and CI-02 green with verified evidence
+    classification: KEEP
+    rationale: internal engineering evidence; keep, not public marketing
+  - sha: 9d45f5814bdb
+    subject: fix(ci): test the real optimization lifecycle and pin CodeQL by property
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 3b3965679a63
+    subject: fix(decisions): replay against the solved objective, and enable the fast proof path
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 680d4ce1ae69
+    subject: fix(optimizer): reconstruct assignments canonically and version the solve policy
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 315e1c88ed73
+    subject: docs(readiness): certify objective truth and pilot oracle; OPT-09 stays RED
+    classification: KEEP
+    rationale: internal engineering evidence; keep, not public marketing
+  - sha: 7f694488704f
+    subject: fix(optimizer): publish the objective CP-SAT actually solved, and certify the pilot optimum
+    classification: KEEP
+    rationale: product or platform change
+  - sha: f247c544e256
+    subject: docs(readiness): OPT-04/05/06 verified green; record OPT-09 solver-determinism gap
+    classification: KEEP
+    rationale: internal engineering evidence; keep, not public marketing
+  - sha: 8a84f9a9e7b1
+    subject: fix(optimizer): remove the unsupported capacity default and normalise the objective
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 5ca423fcd982
+    subject: wip(optimizer): preserve interrupted capacity-mode and objective contracts
+    classification: SQUASH_WITH
+    rationale: superseded by the follow-up implementation commit
+  - sha: 38adcc20936b
+    subject: docs(readiness): seed the readiness matrix and failure ledger from measured state
+    classification: KEEP
+    rationale: internal engineering evidence; keep, not public marketing
+  - sha: 180d87eb79d8
+    subject: fix(optimizer): account for all 94 demand zones, and stop 500-ing on INFEASIBLE
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 464ac6f146b1
+    subject: docs(audit): CTO review baseline, from runtime evidence
+    classification: KEEP
+    rationale: internal engineering evidence; keep, not public marketing
+  - sha: ceee6e5dd4d6
+    subject: docs(demo): delivery package for the approved recording
+    classification: DEMO_ONLY
+    rationale: demo artifact work; keep history, exclude generated media
+  - sha: 40db3859e655
+    subject: feat(demo): rebuild the demo on real Bengaluru geography and live observations
+    classification: DEMO_ONLY
+    rationale: demo artifact work; keep history, exclude generated media
+  - sha: 2dd745a64606
+    subject: fix(demo): keep the checksum manifest LF so sha256sum can read it
+    classification: DEMO_ONLY
+    rationale: demo artifact work; keep history, exclude generated media
+  - sha: 12b6601cb6b7
+    subject: docs(demo): package the accepted Swiggy demo for delivery
+    classification: DEMO_ONLY
+    rationale: demo artifact work; keep history, exclude generated media
+  - sha: 418084d96d21
+    subject: feat(demo): render the real network and make every panel truthful
+    classification: KEEP
+    rationale: product or platform change
+  - sha: e5f095bb90a5
+    subject: fix(demo): make the Friday recording truthful and executable
+    classification: DEMO_ONLY
+    rationale: demo artifact work; keep history, exclude generated media
+  - sha: 96aab97c977f
+    subject: test: add F-023 empirical test script
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 72d5cbad0c18
+    subject: test: add workflow to prove multi-instance correctness for F-023
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 86b2ad886b53
+    subject: fix(ci): avoid port collision and false-positive secret scans
+    classification: SECURITY_SENSITIVE
+    rationale: review before publishing
+  - sha: cf2e2b84b288
+    subject: chore(demo): correct truth-safe recording patches
+    classification: DEMO_ONLY
+    rationale: demo artifact work; keep history, exclude generated media
+  - sha: 7681a169e805
+    subject: docs(architecture): consolidate canonical system architecture
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 1e38cd2adcfa
+    subject: fix(a11y): enforce WCAG release gates
+    classification: KEEP
+    rationale: product or platform change
+  - sha: c4bafe3b585b
+    subject: feat(gcp): add operational DLQ subscription and alerts
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 4fc00493078c
+    subject: feat(sre): add distributed postgres rate limiting
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 955a62314ff7
+    subject: feat(assumptions): add digest-sealed PIT assumption registry
+    classification: KEEP
+    rationale: product or platform change
+  - sha: c249d40e198b
+    subject: fix(decisions): close manual-decision truth forgery
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 0200a6a07c44
+    subject: feat: Add automated Swiggy Friday Demo recording framework
+    classification: DEMO_ONLY
+    rationale: demo artifact work; keep history, exclude generated media
+  - sha: ab0f4ace5f74
+    subject: test(security): assert the stronger authorization denial on cross-workspace IDOR
+    classification: SECURITY_SENSITIVE
+    rationale: review before publishing
+  - sha: 016b01370c9a
+    subject: fix(outbox,worker): isolate poison payloads and stop reporting discarded solves as success
+    classification: KEEP
+    rationale: product or platform change
+  - sha: ee1dc153bc22
+    subject: fix(decisions): separate operator claims from solver-derived metrics
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 0f9e43ac458a
+    subject: docs(execution): regenerate ledger from finding rows at be81cf1
+    classification: KEEP
+    rationale: product or platform change
+  - sha: be81cf1c2301
+    subject: fix(api,tests): repair three defects the live-database CI run exposed
+    classification: KEEP
+    rationale: product or platform change
+  - sha: d70cfa07a3e3
+    subject: fix(resilience): give UNAVAILABLE a representation instead of discarding evaluations
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 364dd504812c
+    subject: docs(execution): reconcile ledger after wave 3 repairs and the F-007 demotion
+    classification: KEEP
+    rationale: product or platform change
+  - sha: ca177b7c9315
+    subject: fix(resilience): derive metrics from the authentic matrix or report unavailable
+    classification: KEEP
+    rationale: product or platform change
+  - sha: db318718d4ba
+    subject: fix(api): one canonical error contract, with dependency outages as 503
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 2b9148c8c56f
+    subject: fix(forecast,temporal): score only what was measured; bound reads to what was knowable
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 818f8dcabce9
+    subject: fix(db): scope the privilege revoke; the blanket form broke tenant access
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 82f3f8f065e9
+    subject: docs(execution): record certification wave 2 (AUDIT-0, AUDIT-4)
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 7490ae35a28e
+    subject: fix(decisions): a hand-authored decision must declare itself
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 5b11cc5c8998
+    subject: ci: run secret scanning as its own job so database tests still execute
+    classification: SECURITY_SENSITIVE
+    rationale: review before publishing
+  - sha: 46b73958e3ef
+    subject: fix(provenance): persist execution lineage and forbid placeholder provenance
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 486e44326f25
+    subject: docs(execution): regenerate ledger with certification wave 1 verdicts
+    classification: KEEP
+    rationale: product or platform change
+  - sha: d453f72064ee
+    subject: docs(execution): record certification wave 1 verdicts
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 75da1678350c
+    subject: fix(security,supply-chain): repair defects found by independent certification
+    classification: SECURITY_SENSITIVE
+    rationale: review before publishing
+  - sha: b3406f6f5035
+    subject: docs(execution): regenerate the finding ledger with consistent arithmetic
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 9ed8b8e2d6cb
+    subject: fix(auth,tests): repair two regressions my own changes introduced
+    classification: KEEP
+    rationale: product or platform change
+  - sha: ac84ab873d25
+    subject: docs(execution): record this run's remediation
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 54c5ace44a0f
+    subject: fix(worker): fence result writes on the job lease and close the ack-deadline gap
+    classification: KEEP
+    rationale: product or platform change
+  - sha: fe0409961736
+    subject: fix(frontend): remove fabricated operator data and enforce server-side admin authz
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 7c5996c013f3
+    subject: fix(forecast): stop asserting provenance and measurements that do not exist
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 4d33a4f57cb2
+    subject: fix(temporal): split on information availability, not event time
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 5bbb3843597f
+    subject: fix(db): replace blanket GRANT ALL with least privilege and close the RLS gap
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 941d56a9550d
+    subject: fix(truth): stop fabricating routing evidence and optimizer lineage
+    classification: KEEP
+    rationale: product or platform change
+  - sha: b96b57c2e150
+    subject: docs(execution): record F-016, F-017, F-024, F-026 remediation
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 9c3d378a7225
+    subject: fix(auth): require exp, verify issuer, and fail closed on missing auth config
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 71d50ea2fcd1
+    subject: fix(security,api): least-privilege CI tokens, blocking secret baseline, datetime bug
+    classification: SECURITY_SENSITIVE
+    rationale: review before publishing
+  - sha: e7f318604368
+    subject: fix(api): resolve the database DSN lazily so import does not require a database
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 6ecd632c8a41
+    subject: docs(execution): record outbox remediation in the finding ledger
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 2be6f15f5413
+    subject: fix(outbox): wire the dispatcher to the durable claim and fencing protocol
+    classification: KEEP
+    rationale: product or platform change
+  - sha: f09f6608401d
+    subject: docs(execution): add the immutable CTO finding ledger
+    classification: KEEP
+    rationale: product or platform change
+  - sha: e8e9ef511a76
+    subject: fix(security): make the workspace predicate mandatory on tenant reads
+    classification: SECURITY_SENSITIVE
+    rationale: review before publishing
+  - sha: 5c5516f77371
+    subject: fix(decisions): require real lineage instead of fabricated defaults
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 425952d2da5f
+    subject: fix(assistant): emit only evidence IDs that resolve through the Evidence Inspector
+    classification: KEEP
+    rationale: product or platform change
+  - sha: 879300ae372c
+    subject: docs(security): record the credential incident, triage tooling, and readiness matrix
+    classification: SECURITY_SENSITIVE
+    rationale: review before publishing
+  - sha: d14a1530f6ec
+    subject: ci(security): gate on secret scanning and isolate the test database
+    classification: SECURITY_SENSITIVE
+    rationale: review before publishing
+  - sha: a6d2e517aa3b
+    subject: fix(assistant): remove fabricated operational values and require provenance
+    classification: KEEP
+    rationale: product or platform change
+  - sha: d1028c2d19e3
+    subject: fix(security): scope problem snapshots to the owning workspace
+    classification: SECURITY_SENSITIVE
+    rationale: review before publishing
+  - sha: df4ef8f4e546
+    subject: fix(security): remove embedded database credential and fail closed on missing config
+    classification: SECURITY_SENSITIVE
+    rationale: review before publishing
