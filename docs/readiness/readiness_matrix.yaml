@@ -1,0 +1,235 @@
+# OneMove readiness matrix
+# seeded from measured state at 180d87e; statuses are evidence-backed, not aspirational
+# GREEN requires: owner done + H3 verified + X1 unable to break
+rows:
+  - id: OPT-01
+    area: optimizer
+    requirement: "All 94 demand zones accounted as assigned or uncovered"
+    status: GREEN
+    evidence: "tests/optimization/test_zone_accounting.py 7 passed @180d87e; live API: total=94 assigned=4 uncovered=90"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: OPT-02
+    area: optimizer
+    requirement: "Infeasible full-coverage returns typed state, not HTTP 500"
+    status: GREEN
+    evidence: "job 0e904dcd status=FAILED solver_status=INFEASIBLE readable @180d87e"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: OPT-03
+    area: optimizer
+    requirement: "Zero travel only for genuine self-loops"
+    status: GREEN
+    evidence: "12 zero pairs, all same-H3; 1116 non-zero preserved"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: OPT-04
+    area: optimizer
+    requirement: "Objective units commensurate (travel vs coverage_loss)"
+    status: RED
+    evidence: "serve costs 5000*d, abandon costs 5000*1 -> abandoning 185x-2138x cheaper. NEEDS DECISION"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: OPT-05
+    area: optimizer
+    requirement: "Capacity assumption scaled to demand proxy"
+    status: RED
+    evidence: "12x1500=18,000 capacity vs 36,922 demand (48.8%). Full coverage impossible. NEEDS DECISION"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: OPT-06
+    area: optimizer
+    requirement: "allow_uncovered_demand default is defensible"
+    status: RED
+    evidence: "contract default False; API request model overrides to True"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: OPT-07
+    area: optimizer
+    requirement: "Do-nothing baseline vs recommended"
+    status: RED
+    evidence: "not implemented"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: OPT-08
+    area: optimizer
+    requirement: "Structured WHY-decision record"
+    status: RED
+    evidence: "not implemented"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: GEO-01
+    area: geospatial
+    requirement: "Bengaluru artifacts validated by coordinates not filename"
+    status: GREEN
+    evidence: "tests/geo/test_pilot_roads_lineage.py 4 passed; proven to fail on reintroduced defect @180d87e"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: GEO-02
+    area: geospatial
+    requirement: "Mislabelled Andorra-as-Bengaluru artifact removed"
+    status: GREEN
+    evidence: "data/geo/bengaluru_clip.osm.pbf deleted (was untracked; never in public repo)"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: GEO-03
+    area: geospatial
+    requirement: "94 H3 r8 cells inside road extract"
+    status: GREEN
+    evidence: "test_h3_network_cells_fall_inside_the_road_extract"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: MAP-01
+    area: geospatial
+    requirement: "Interactive vector map (pan/zoom/labels/attribution)"
+    status: RED
+    evidence: "current map is static raster + SVG overlay"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: CI-01
+    area: cicd
+    requirement: "test_route_7_optimizations_lifecycle green"
+    status: RED
+    evidence: "run 32693546939: job status FAILED, no worker in CI"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: CI-02
+    area: cicd
+    requirement: "test_ci_contracts CodeQL contract matches workflow"
+    status: RED
+    evidence: "tests/execution/test_ci_contracts.py:141"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: CI-03
+    area: cicd
+    requirement: "Required workflows green on main"
+    status: RED
+    evidence: "main has run only Dependabot Updates + CodeQL recently"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: CI-04
+    area: cicd
+    requirement: "Workflow consolidation toward 4"
+    status: YELLOW
+    evidence: "9 workflows on disk"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: REPO-01
+    area: repo
+    requirement: "main is authoritative"
+    status: RED
+    evidence: "branch head 59 commits ahead of main"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: REPO-02
+    area: repo
+    requirement: "README truthful, no broken badge, no agent language"
+    status: RED
+    evidence: "badge -> python.yml (missing); README:110 '17-Agent Engineering Architecture'"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DATA-01
+    area: data
+    requirement: "Traffic acquired continuously at runtime"
+    status: RED
+    evidence: "collectors exist; no scheduler in IaC; traffic_observations = 0 rows"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DATA-02
+    area: data
+    requirement: "Weather acquired continuously at runtime"
+    status: RED
+    evidence: "weather_observations = 0 rows"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DATA-03
+    area: data
+    requirement: "Freshness computed, degradation handled"
+    status: YELLOW
+    evidence: "computed in demo route only"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: SEC-01
+    area: security
+    requirement: "Exposed credentials rotated"
+    status: BLOCKED_EXTERNAL
+    evidence: "OWNER_ACTION_REQUIRED: provider consoles"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DEC-01
+    area: decisions
+    requirement: "Decision freeze from authoritative solver result"
+    status: GREEN
+    evidence: "dec-7d1f361ac3c9a368 reconstructed from solver output"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: DEC-02
+    area: decisions
+    requirement: "Evidence lineage with per-node evidence class"
+    status: GREEN
+    evidence: "8-node chain, real ids"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: DEC-03
+    area: decisions
+    requirement: "PIT replay, verdict not hardcoded"
+    status: GREEN
+    evidence: "expected_hash==actual_hash 32124ab6b7c7bdfc, EXACT_MATCH from API"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: DEC-04
+    area: decisions
+    requirement: "Human review / override lifecycle"
+    status: RED
+    evidence: "not implemented"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: BT-01
+    area: backtest
+    requirement: "One defensible historical backtest"
+    status: RED
+    evidence: "no backtest code; historical traffic archive not identified"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: LOAD-01
+    area: perf
+    requirement: "Load / soak / chaos measured"
+    status: RED
+    evidence: "not run"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: SCALE-01
+    area: scale
+    requirement: "Multi-city configuration"
+    status: RED
+    evidence: "Bengaluru in domain constants"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DEP-01
+    area: deploy
+    requirement: "CTO-review deployment verified same SHA"
+    status: RED
+    evidence: "no access to deploy target from this session"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DOC-01
+    area: docs
+    requirement: "Executive one-pager"
+    status: RED
+    evidence: "docs/EXECUTIVE_OVERVIEW.md absent"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DOC-02
+    area: docs
+    requirement: "Cost model"
+    status: RED
+    evidence: "docs/COST_MODEL.md absent"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DOC-03
+    area: docs
+    requirement: "Provider licensing review"
+    status: RED
+    evidence: "not started"
+    last_verified_sha: 180d87e
+    verified_by: unverified
