@@ -517,7 +517,18 @@ class DecisionLedger:
 
         action_match = res.action.value == orig.selected_action
         facilities_match = set(res.opened_facility_ids) == set(orig.opened_facilities)
-        recomputed_obj = res.objective.weighted_total if res.objective else 0
+        # Verify against the objective CP-SAT actually minimised, not the
+        # human-facing basis-point projection. The two round at different points
+        # and are not equal, so comparing the projection would let a decision
+        # "reproduce" against a number the solver never ranked solutions by.
+        # Legacy records written before the solver total existed fall back to
+        # the projection so they stay verifiable on their own terms.
+        if res.objective is None:
+            recomputed_obj = 0
+        elif res.objective.solver_objective_total:
+            recomputed_obj = res.objective.solver_objective_total
+        else:
+            recomputed_obj = res.objective.weighted_total
         obj_match = recomputed_obj == orig.objective_value
 
         if action_match and facilities_match and obj_match:

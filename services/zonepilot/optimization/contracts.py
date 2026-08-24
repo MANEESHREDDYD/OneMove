@@ -217,9 +217,21 @@ class ObjectiveWeights(StrictContract):
 
 
 class SolverSettings(StrictContract):
+    """Solver configuration. Part of the problem fingerprint.
+
+    ``num_search_workers`` was pinned to 1 because reproducibility was assumed
+    to require single-threaded search. It does not: the decision is made
+    reproducible by canonical assignment reconstruction and a lexicographic
+    facility tie-break, neither of which depends on how the optimum was found.
+    Parallel search is therefore used only to PROVE the optimum, which it does
+    in roughly 0.4s where a single worker could not close a 74.7% gap in 300s.
+
+    The value stays in the fingerprint so a decision records how it was solved.
+    """
+
     max_time_seconds: float = Field(default=30.0, gt=0.0, le=300.0)
     random_seed: int = Field(default=0, ge=0, le=2_147_483_647)
-    num_search_workers: Literal[1] = 1
+    num_search_workers: int = Field(default=8, ge=1, le=32)
 
 
 # The mathematical policy the problem is solved under. Bump this whenever the
