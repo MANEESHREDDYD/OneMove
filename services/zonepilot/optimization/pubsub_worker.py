@@ -105,6 +105,12 @@ def _reconstruct_problem_from_payload(
     min_open = int(payload.get("min_open_facilities", 1))
     max_open = int(payload.get("max_open_facilities", 4))
     max_travel = int(payload.get("max_travel_seconds", 1800))
+    # NOTE (F-OPT-013): this is a THIRD default for this flag and it disagrees
+    # with both the domain contract and the API, which default to False. A job
+    # or replay reconstructed from an empty payload therefore solves a different
+    # problem from the one the operator requested. Aligning it to False is
+    # correct but changes what every historical decision replays against, so it
+    # is deliberately NOT changed here -- see the finding for the sequencing.
     allow_uncovered = bool(payload.get("allow_uncovered_demand", True))
     scenarios_list = payload.get("scenarios", ["s1_free_flow", "s2_congested", "s3_congested_outage"])
 

@@ -536,6 +536,28 @@ class DecisionLedger:
         # Recomputing anyway and reporting the difference as DRIFT would read as
         # "same model, different answer", which is false and is exactly how a
         # historical decision gets silently restated under new mathematics.
+        # A hand-authored decision has no solver run to reproduce. Saying
+        # "legacy policy" would be imprecise: the policy is not old, it is
+        # absent, because the optimizer never produced this decision. The
+        # operator's choice is preserved as governance evidence either way.
+        if getattr(orig, "decision_class", "OPTIMIZER_DECISION") != "OPTIMIZER_DECISION":
+            return DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=pit_valid,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="MANUAL_DECISION_NOT_REPLAYABLE",
+                reason=(
+                    "MANUAL_DECISION: this decision was recorded as "
+                    f"{getattr(orig, 'decision_class', 'UNKNOWN')} by an operator and was not "
+                    "produced by the optimizer. There is no solver run to reproduce; the "
+                    "operator's rationale is retained as governance evidence."
+                ),
+                code_sha=self.code_sha,
+            )
+
         frozen_policy = getattr(orig, "optimization_policy_version", None)
         if frozen_policy != OPTIMIZATION_POLICY_VERSION:
             return DecisionReplayResult(

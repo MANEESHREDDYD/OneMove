@@ -159,18 +159,34 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             return None
 
         if decision.store_unavailable:
-            if endpoint_class == EndpointClass.READ:
-                logging.getLogger("zonepilot.api").warning(
-                    "RATE_LIMIT_BACKEND_UNAVAILABLE",
-                    extra={
-                        "request_id": req_id,
-                        "trace_id": trace_id,
-                        "message": "Rate limit store is unavailable. Degrading gracefully to allow low-risk read."
-                    }
-                )
-                return None
-            
-            # FAIL CLOSED for high-risk operations (OPTIMIZATION, WRITE, ASSISTANT, ADMIN, etc.)
+            logging.getLogger("zonepilot.api").warning(
+                "RATE_LIMIT_BACKEND_UNAVAILABLE",
+                extra={
+                    "request_id": req_id,
+                    "trace_id": trace_id,
+                    "endpoint_class": endpoint_class.value,
+                    # NOT "message": it is a reserved LogRecord attribute, and
+                    # passing it in extra raises KeyError inside logging. That
+                    # is what turned a store outage into an opaque 500 -- the
+                    # limiter decided correctly and the log call crashed the
+                    # request on its way out.
+                    "detail": "Rate limit store unavailable; refusing rather than serving unmetered.",
+                },
+            )
+
+            # Reads used to fail open here, which sounded like graceful
+            # degradation and was not. The rate limit store IS the Postgres the
+            # read route depends on, so allowing the request through only moved
+            # the failure a few frames later and returned an opaque 500 instead
+            # of a typed, retryable 503. Nothing was served either way; the only
+            # difference was whether the caller could tell why.
+            #
+            # Liveness and readiness probes never reach this branch: they
+            # classify as None above and are exempt, so refusing here cannot
+            # cause an instance-kill loop or block a rollback. See
+            # docs/adr/0002-rate-limit-store-unavailable.md.
+
+            # FAIL CLOSED for every limited endpoint class.
             # The store is Postgres, which is a hard dependency of
             # almost every route here, so failing open would not keep the API
             # usable -- it would only remove the guard rail at the moment the

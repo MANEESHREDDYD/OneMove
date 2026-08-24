@@ -277,7 +277,7 @@ def test_route_10_decisions_and_pit_replay():
     # reproduced this decision. The test previously required EXACT_MATCH here,
     # which would have meant a manual decision validating itself against solver
     # output it never came from.
-    assert rep_data["match_status"] == "LEGACY_POLICY_NOT_REPLAYABLE"
+    assert rep_data["match_status"] == "MANUAL_DECISION_NOT_REPLAYABLE"
     assert rep_data["reproduced_exact_action"] is False
     assert rep_data["objective_match"] is False
 

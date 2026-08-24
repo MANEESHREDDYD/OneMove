@@ -85,10 +85,14 @@ def test_durable_decision_record_replay_shadow():
     assert rep_res.status_code == 200
     replay_data = rep_res.json()
     assert replay_data["pit_valid"] is True
-    assert replay_data["reproduced_exact_action"] is True
+    # This decision was declared MANUAL_OPERATOR_DECISION, so there is no solver
+    # run behind it to reproduce. Expecting EXACT_MATCH here would mean a
+    # hand-authored decision validating itself against optimizer output it never
+    # came from.
+    assert replay_data["reproduced_exact_action"] is False
     assert replay_data["reproduced_exact_facilities"] is True
     assert replay_data["objective_match"] is True
-    assert replay_data["match_status"] == "EXACT_MATCH"
+    assert replay_data["match_status"] == "MANUAL_DECISION_NOT_REPLAYABLE"
 
     # 4. POST /api/v1/decisions/{id}/shadows
     future_time = datetime.fromtimestamp(now.timestamp() + 7200, tz=timezone.utc)
