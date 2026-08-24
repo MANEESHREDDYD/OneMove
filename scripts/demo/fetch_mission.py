@@ -65,7 +65,9 @@ def main() -> None:
         "points": pts,
     }, separators=(",", ":")), encoding="utf-8")
 
-    mm = lambda v: f"{v // 60}m {v % 60}s"
+    def mm(v: int) -> str:
+        return f"{v // 60}m {v % 60}s"
+
     print(f"distance ........... {s['lengthInMeters']:,} m")
     print(f"baseline ETA ....... {mm(baseline_s)}")
     print(f"traffic-aware ETA .. {mm(traffic_s)}")

@@ -1,8 +1,8 @@
 import asyncio
-import httpx
 import subprocess
-import time
-import sys
+
+import httpx
+
 
 async def run_empirical_test():
     print("Starting instance A on port 8001...")

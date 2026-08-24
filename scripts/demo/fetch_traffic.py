@@ -75,8 +75,12 @@ def main() -> None:
     # Crop the mosaic to the exact basemap bbox so it registers with the roads.
     lat_tl, lon_tl = tile2deg(x0, y0, ZOOM)
     lat_br, lon_br = tile2deg(x1 + 1, y1 + 1, ZOOM)
-    px = lambda lon: (lon - lon_tl) / (lon_br - lon_tl) * mosaic.width
-    py = lambda lat: (lat - lat_tl) / (lat_br - lat_tl) * mosaic.height
+    def px(lon: float) -> float:
+        return (lon - lon_tl) / (lon_br - lon_tl) * mosaic.width
+
+    def py(lat: float) -> float:
+        return (lat - lat_tl) / (lat_br - lat_tl) * mosaic.height
+
     box = (int(px(bb["min_lon"])), int(py(bb["max_lat"])),
            int(px(bb["max_lon"])), int(py(bb["min_lat"])))
     mosaic.crop(box).resize((2560, 1440), Image.LANCZOS).save(OUT_PNG)

@@ -120,7 +120,7 @@ def main() -> None:
                 "pois": int(r.commercial_poi_count),
                 "road_density": round(float(r.road_density_km_per_sqkm), 2),
             }
-            for i, r in zip(ids, cells.itertuples())
+            for i, r in zip(ids, cells.itertuples(), strict=True)
         ],
     }
 

@@ -3,6 +3,7 @@ import json
 import logging
 import sys
 from datetime import datetime
+
 from google.cloud import pubsub_v1
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
