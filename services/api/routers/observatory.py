@@ -416,6 +416,58 @@ def list_optimizations(
     return {"jobs": items}
 
 
+
+def _coverage_summary(
+    scenario_metrics: list[dict[str, Any]],
+    res_doc: dict[str, Any],
+    snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Make every demand zone accountable in the response.
+
+    ``assignments`` deliberately lists served pairs only, so a 94-zone problem
+    that abandons 90 zones previously returned four assignments and nothing
+    else. The solver does record the rest -- ``scenario_metrics`` carries
+    covered/uncovered demand units and coverage basis points per scenario -- so
+    this reports the worst scenario (the binding one for a service commitment)
+    and derives the uncovered zone ids from the problem's own demand list.
+    """
+    assignments = res_doc.get("assignments") or []
+    assigned_ids = {a.get("demand_id") for a in assignments if a.get("demand_id")}
+
+    # The repository exposes the frozen problem under "problem"; the raw column
+    # is named problem_json, and reading the column name here silently produced
+    # an empty accounting instead of an error.
+    problem = (snapshot or {}).get("problem") or {}
+    if isinstance(problem, str):
+        try:
+            problem = json.loads(problem)
+        except json.JSONDecodeError:
+            problem = {}
+    all_ids = [str(d.get("demand_id")) for d in (problem.get("demand_points") or []) if d.get("demand_id")]
+    uncovered_ids = sorted(set(all_ids) - assigned_ids) if all_ids else []
+
+    if not scenario_metrics:
+        return {
+            "coverage_basis_points": None,
+            "demand_zones_total": len(all_ids) or None,
+            "assigned_zones": len(assigned_ids) or None,
+            "uncovered_zones": len(uncovered_ids) if all_ids else None,
+            "uncovered_zone_ids": uncovered_ids,
+            "covered_demand_units": None,
+            "uncovered_demand_units": None,
+        }
+
+    worst = min(scenario_metrics, key=lambda m: m.get("coverage_basis_points", 0))
+    return {
+        "coverage_basis_points": worst.get("coverage_basis_points"),
+        "demand_zones_total": len(all_ids) or None,
+        "assigned_zones": len(assigned_ids),
+        "uncovered_zones": len(uncovered_ids) if all_ids else None,
+        "uncovered_zone_ids": uncovered_ids,
+        "covered_demand_units": worst.get("covered_demand_units"),
+        "uncovered_demand_units": worst.get("uncovered_demand_units"),
+    }
+
 @router.get("/optimizations/{opt_id}")
 def get_optimization(
     opt_id: str,
@@ -431,10 +483,32 @@ def get_optimization(
     opened = res_doc.get("opened_facility_ids") or res_doc.get("opened_facilities", [])
     expected_travel = res_doc.get("expected_travel_seconds")
     p95_travel = res_doc.get("p95_travel_seconds")
-    if expected_travel is None and "objective" in res_doc:
-        expected_travel = res_doc["objective"].get("expected_travel_probability_demand_seconds")
-    if p95_travel is None and "objective" in res_doc:
-        p95_travel = res_doc["objective"].get("p95_travel_demand_seconds")
+    # An INFEASIBLE result carries the key "objective" with the value None, so
+    # testing for key presence and then calling .get() on it raised
+    # AttributeError and turned a legitimate infeasible outcome into an opaque
+    # HTTP 500. Read the value, not the key.
+    objective = res_doc.get("objective") or {}
+    if expected_travel is None:
+        expected_travel = objective.get("expected_travel_probability_demand_seconds")
+    if p95_travel is None:
+        p95_travel = objective.get("p95_travel_demand_seconds")
+
+    # Full 94-zone accounting. The solver already records covered/uncovered
+    # demand per scenario; it was simply never surfaced, so a caller saw four
+    # assignments and no way to learn that 90 zones were abandoned.
+    scenario_metrics = res_doc.get("scenario_metrics") or []
+    # The full demand list lives in the frozen problem snapshot, not in the
+    # result. Reading it from there keeps the hashed result contract untouched
+    # while still letting the response account for every zone. The snapshot read
+    # is workspace-scoped, so this cannot widen tenant access.
+    snapshot = None
+    snapshot_id = res_doc.get("problem_snapshot_id")
+    if snapshot_id:
+        try:
+            snapshot = _opt_service.repository.get_problem_snapshot(snapshot_id, ws_id)
+        except Exception:  # a missing snapshot must not fail the job read
+            snapshot = None
+    coverage = _coverage_summary(scenario_metrics, res_doc, snapshot)
 
     return {
         "job_id": str(job["id"]),
@@ -446,7 +520,13 @@ def get_optimization(
         "opened_facilities": opened,
         "expected_travel_seconds": expected_travel,
         "p95_travel_seconds": p95_travel,
-        "coverage_basis_points": res_doc.get("coverage_basis_points"),
+        "coverage_basis_points": coverage["coverage_basis_points"],
+        "demand_zones_total": coverage["demand_zones_total"],
+        "assigned_zones": coverage["assigned_zones"],
+        "uncovered_zones": coverage["uncovered_zones"],
+        "uncovered_zone_ids": coverage["uncovered_zone_ids"],
+        "covered_demand_units": coverage["covered_demand_units"],
+        "uncovered_demand_units": coverage["uncovered_demand_units"],
         "created_at": str(job.get("created_at")),
         "started_at": str(job.get("started_at")),
         "finished_at": str(job.get("finished_at")),
