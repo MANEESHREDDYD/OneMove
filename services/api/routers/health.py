@@ -32,7 +32,6 @@ def validate_cloud_configuration() -> tuple[bool, str]:
     if not gcp_project or not pubsub_topic:
         return False, "Missing required cloud configuration: GCP_PROJECT_ID or PUBSUB_TOPIC_OPTIMIZATIONS"
 
-
     expected_projects = {
         "staging": "zonepilot-stg-9a4285",
         "production": "zonepilot-prod-9a4285",

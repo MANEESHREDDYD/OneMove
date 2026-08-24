@@ -527,7 +527,11 @@ def get_optimization(
         else res_doc.get("fail_closed", False),
         "opened_facilities": opened,
         "expected_travel_seconds": expected_travel,
-        "p95_travel_seconds": p95_travel,
+        # This value is a probability-weighted P95 across SCENARIO TOTAL
+        # demand-weighted travel, so its unit is demand_units*seconds, not
+        # seconds. It was published as "p95_travel_seconds", which reads as a
+        # customer ETA and is not what the model computes.
+        "p95_scenario_total_travel_demand_seconds": p95_travel,
         "coverage_basis_points": coverage["coverage_basis_points"],
         "demand_zones_total": coverage["demand_zones_total"],
         "assigned_zones": coverage["assigned_zones"],

@@ -3,12 +3,12 @@
 from services.zonepilot.optimization.contracts import (
     BASIS_POINTS,
     P95_BASIS_POINTS,
+    CapacityMode,
     DemandPoint,
     Facility,
     FacilityCapacityAdjustment,
     MatrixEvidenceClass,
     ObjectiveBreakdown,
-    CapacityMode,
     ObjectiveComponent,
     ObjectiveWeights,
     OptimizationAction,

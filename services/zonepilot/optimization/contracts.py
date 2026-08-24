@@ -337,9 +337,23 @@ class ObjectiveComponent(StrictContract):
     raw_unit: str
     normalization_reference: int
     normalization_reference_unit: str
-    normalized_basis_points: int
     weight: int
+
+    # The exact integer coefficient CP-SAT multiplied this component by, and the
+    # contribution it actually made to the minimised objective. These are the
+    # authoritative numbers: summing solver_scaled_contribution reproduces the
+    # value the solver ranked solutions by.
+    solver_coefficient: int
+    solver_scaled_contribution: int
+
+    # Human-facing projection. Flooring happens at a different point from the
+    # solver path, so this is NOT the optimisation value -- across 400k random
+    # trials the two paths disagreed on every value and inverted the ordering of
+    # two solutions 13 times. It is published for readability and explicitly
+    # labelled as a projection so it can never be mistaken for the objective.
+    normalized_basis_points: int
     weighted_contribution: int
+
     evidence_class: str = "DERIVED"
 
 
@@ -353,6 +367,11 @@ class ObjectiveBreakdown(StrictContract):
     weighted_total: int
     components: tuple[ObjectiveComponent, ...] = ()
     normalization_scale: int = 0
+    # Fixed-point scale applied to the solver coefficients.
+    solver_scale: int = 0
+    # sum(component.solver_scaled_contribution). This is the quantity CP-SAT
+    # minimised, and the one a reviewer should reconcile against.
+    solver_objective_total: int = 0
 
 
 class OptimizationResult(StrictContract):

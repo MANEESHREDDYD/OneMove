@@ -21,7 +21,6 @@ from pathlib import Path
 
 import pytest
 
-
 DATA_ROOT = Path(os.environ.get("ZONEPILOT_DATA_ROOT", "data_root"))
 MATRIX = DATA_ROOT / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
 

@@ -9,11 +9,11 @@ import ortools
 from ortools.sat.python import cp_model
 
 from services.zonepilot.optimization.contracts import (
-    CapacityMode,
-    ObjectiveComponent,
     BASIS_POINTS,
     P95_BASIS_POINTS,
+    CapacityMode,
     ObjectiveBreakdown,
+    ObjectiveComponent,
     OptimizationAction,
     OptimizationProblem,
     OptimizationResult,
@@ -109,6 +109,16 @@ def _normalisation_references(problem: OptimizationProblem) -> dict[str, tuple[i
     }
 
 
+def _solver_coefficient(weight: int, reference_value: int) -> int:
+    """The exact integer multiplier CP-SAT applies to a component's raw value.
+
+    Defined once and used by both the model and the published record, so the
+    two can never drift. Flooring here rather than in the display path is what
+    makes the published solver contribution reconcile with the solved objective.
+    """
+    return weight * BASIS_POINTS * FIXED_POINT // reference_value
+
+
 def _component(
     name: str,
     raw_value: int,
@@ -117,6 +127,7 @@ def _component(
     weight: int,
 ) -> ObjectiveComponent:
     reference_value, reference_unit = reference
+    coefficient = _solver_coefficient(weight, reference_value)
     normalized = raw_value * BASIS_POINTS // reference_value
     return ObjectiveComponent(
         name=name,
@@ -124,8 +135,10 @@ def _component(
         raw_unit=raw_unit,
         normalization_reference=reference_value,
         normalization_reference_unit=reference_unit,
-        normalized_basis_points=normalized,
         weight=weight,
+        solver_coefficient=coefficient,
+        solver_scaled_contribution=coefficient * raw_value,
+        normalized_basis_points=normalized,
         weighted_contribution=normalized * weight,
     )
 
@@ -244,7 +257,7 @@ def _build_model(problem: OptimizationProblem) -> _ModelState:
     # second of service and the solver correctly abandoned almost everything.
     def _coefficient(name: str, weight: int) -> int:
         reference_value, _ = references[name]
-        return weight * BASIS_POINTS * FIXED_POINT // reference_value
+        return _solver_coefficient(weight, reference_value)
 
     primary_objective = (
         _coefficient("expected_travel", weights.expected_travel) * sum(expected_travel_terms)
@@ -570,6 +583,7 @@ def _optimal_result(
     # Invariant: the published total is the sum of the published contributions.
     # Nothing is added outside this list, so a reader can reconcile it by hand.
     weighted_total = sum(component.weighted_contribution for component in components)
+    solver_objective_total = sum(component.solver_scaled_contribution for component in components)
 
     objective = ObjectiveBreakdown(
         weights=weights,
@@ -581,6 +595,8 @@ def _optimal_result(
         weighted_total=weighted_total,
         components=components,
         normalization_scale=BASIS_POINTS,
+        solver_scale=FIXED_POINT,
+        solver_objective_total=solver_objective_total,
     )
     action = OptimizationAction.NO_ACTION if not opened else OptimizationAction.OPEN_FACILITIES
     return OptimizationResult(
