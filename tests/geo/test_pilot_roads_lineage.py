@@ -148,3 +148,75 @@ def test_h3_network_cells_fall_inside_the_road_extract() -> None:
         lat, lon = h3.cell_to_latlng(cell)
         assert BLR_MIN_LAT <= lat <= BLR_MAX_LAT, f"cell {cell} at lat {lat} is not Bengaluru"
         assert BLR_MIN_LON <= lon <= BLR_MAX_LON, f"cell {cell} at lon {lon} is not Bengaluru"
+
+
+# --- defects the *.osm.pbf-only scan above could not see ---------------------
+#
+# The original Andorra-as-Bengaluru artifact was a .osm.pbf, so the regression
+# above globs *.osm.pbf. Independent verification then found the same defect one
+# extension over: 12 of 22 bengaluru_clip.osrm.* parts were byte-identical to
+# andorra-latest.osrm.*, including .geometry and .names -- the actual road
+# geometry and street names of the routing graph. A scan scoped to the file type
+# that happened to be caught first is a scan that only catches that file type.
+
+
+def _sha_index(paths) -> dict[str, list[str]]:
+    index: dict[str, list[str]] = {}
+    for path in paths:
+        index.setdefault(_sha256(path), []).append(str(path))
+    return index
+
+
+def test_no_city_named_routing_artifact_duplicates_another_city() -> None:
+    """A routing graph named for one city must not be another city's bytes.
+
+    Compares every routing artifact against every other by content hash and
+    fails when two files whose names claim different cities share bytes. This
+    is name-independent: it does not need to know which city is the impostor.
+    """
+    geo = Path("data/geo")
+    if not geo.is_dir():
+        pytest.skip("data/geo is not present")
+
+    artifacts = [p for p in geo.rglob("*") if p.is_file() and ".osrm" in p.name]
+    if not artifacts:
+        pytest.skip("no routing artifacts mounted")
+
+    def city_of(name: str) -> str:
+        stem = name.split(".osrm")[0].lower()
+        return stem.replace("-latest", "").replace("_clip", "")
+
+    collisions: list[str] = []
+    for digest, paths in _sha_index(artifacts).items():
+        cities = {city_of(Path(p).name) for p in paths}
+        if len(cities) > 1:
+            collisions.append(f"{sorted(cities)} share sha256 {digest[:12]}: {sorted(paths)}")
+
+    assert not collisions, (
+        "routing artifacts named for different cities have identical bytes, so at "
+        "least one is mislabelled:\n  " + "\n  ".join(collisions)
+    )
+
+
+def test_no_geographic_extract_is_actually_an_error_page() -> None:
+    """A download that failed must not survive as an 'extract'.
+
+    data/geo/bengaluru_clip.osm was 370 bytes of Apache HTML -- a 406 from
+    overpass-api.de saved under a .osm name. It would satisfy any check that
+    only asks whether the file exists.
+    """
+    geo = Path("data/geo")
+    if not geo.is_dir():
+        pytest.skip("data/geo is not present")
+
+    offenders: list[str] = []
+    for path in geo.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in {".osm", ".pbf", ".xml"}:
+            continue
+        head = path.read_bytes()[:512].lstrip().lower()
+        if head.startswith(b"<!doctype html") or head.startswith(b"<html"):
+            offenders.append(f"{path} ({path.stat().st_size} bytes) is an HTML document")
+        elif path.stat().st_size < 1024 and path.suffix.lower() != ".xml":
+            offenders.append(f"{path} is only {path.stat().st_size} bytes - too small to be an extract")
+
+    assert not offenders, "geographic extracts that are not extracts:\n  " + "\n  ".join(offenders)
