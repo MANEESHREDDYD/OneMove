@@ -26,22 +26,22 @@ rows:
   - id: OPT-04
     area: optimizer
     requirement: "Objective units commensurate (travel vs coverage_loss)"
-    status: RED
-    evidence: "serve costs 5000*d, abandon costs 5000*1 -> abandoning 185x-2138x cheaper. NEEDS DECISION"
+    status: GREEN
+    evidence: "objective normalised to basis points against declared references; 5 components reconcile exactly to weighted_total; tests/optimization/test_zone_accounting.py @8a84f9a"
     last_verified_sha: 180d87e
     verified_by: unverified
   - id: OPT-05
     area: optimizer
     requirement: "Capacity assumption scaled to demand proxy"
-    status: RED
-    evidence: "12x1500=18,000 capacity vs 36,922 demand (48.8%). Full coverage impossible. NEEDS DECISION"
+    status: GREEN
+    evidence: "capacity_mode defaults NOT_MODELED; no throughput constraint posted; ASSUMPTION mode still enforced; verified 5/5 served on fixture @8a84f9a"
     last_verified_sha: 180d87e
     verified_by: unverified
   - id: OPT-06
     area: optimizer
     requirement: "allow_uncovered_demand default is defensible"
-    status: RED
-    evidence: "contract default False; API request model overrides to True"
+    status: GREEN
+    evidence: "single canonical default allow_uncovered_demand=False in both API and domain contract @8a84f9a"
     last_verified_sha: 180d87e
     verified_by: unverified
   - id: OPT-07
@@ -232,4 +232,11 @@ rows:
     status: RED
     evidence: "not started"
     last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: OPT-09
+    area: optimizer
+    requirement: "Corrected model provably optimal within the deterministic solver budget"
+    status: RED
+    evidence: "F-OPT-006: 1 search worker reaches FEASIBLE with 74.7% gap at 300s; 8 workers prove OPTIMAL in 0.4s. Determinism is required by PIT replay, so multi-worker is not an acceptable fix."
+    last_verified_sha: 8a84f9a
     verified_by: unverified
