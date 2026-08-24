@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
+import h3
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ValidationError, Field
 
@@ -950,6 +951,18 @@ def predict_forecast(
     _, ws_id = _resolve_user_context(_user)
     now = datetime.now(timezone.utc)
     target_time = datetime.fromtimestamp(now.timestamp() + payload.horizon_hours * 3600, tz=timezone.utc)
+
+    # zone_id was a bare str, so ANY string -- '../../etc/passwd', a SQL
+    # injection payload, a 10KB blob -- was accepted and durably written to
+    # forecast_records. forecast_records is a measurement table: a row keyed to
+    # a zone that cannot exist is indistinguishable from a real one after the
+    # fact, and every reader that joins forecasts to zones or computes per-zone
+    # accuracy is then reading a table it cannot trust. The same check already
+    # guards GET /zones/{zone_id}/state (ObservatoryService.get_zone_state) and
+    # returns the same INVALID_ARGUMENT envelope; the forecast write path simply
+    # never received it.
+    if not h3.is_valid_cell(payload.zone_id):
+        standard_error("INVALID_ARGUMENT", "Zone ID must be a valid H3 cell identifier", 422)
 
     try:
         ft = ForecastTarget(payload.target)
