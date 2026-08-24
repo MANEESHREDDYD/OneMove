@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ValidationError, Field
 
 from services.api.contracts.observatory import (
     DataHealthResponse,
@@ -384,6 +384,15 @@ def run_optimization(
         problem = _build_real_94x12x3_problem(payload)
     except FileNotFoundError as fnf_err:
         standard_error("MATRIX_UNAVAILABLE", str(fnf_err), 503)
+    except (ValueError, ValidationError) as invalid:
+        # Only FileNotFoundError was caught here, so every domain-validation
+        # failure from the problem builder escaped to the blanket handler and
+        # came back as 500 INTERNAL_ERROR with retryable: true. Nine ordinary
+        # bad requests hit this -- min_open_facilities greater than
+        # max_open_facilities, an empty scenarios list, and similar. Telling a
+        # caller to retry a permanently malformed request invites a retry storm,
+        # and it pages an on-call engineer for a client mistake.
+        standard_error("INVALID_OPTIMIZATION_REQUEST", str(invalid), 422)
 
     job = _opt_service.submit_optimization(
         requested_by=user_id,
