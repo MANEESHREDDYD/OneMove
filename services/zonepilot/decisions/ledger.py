@@ -286,7 +286,16 @@ class DecisionLedger:
             osrm_bundle_hash=osrm_bundle_hash,
             solver_version=solver_version,
             code_sha=self.code_sha,
-            optimization_policy_version=_OPTIMIZATION_POLICY_VERSION,
+            # A hand-authored decision was not produced by the optimizer, so it
+            # has no optimization policy. Stamping one would make it replayable
+            # as though a solver had produced it.
+            optimization_policy_version=(
+                _OPTIMIZATION_POLICY_VERSION
+                if decision_class == "OPTIMIZER_DECISION"
+                else None
+            ),
+            decision_class=decision_class,
+            operator_rationale=operator_rationale,
             evidence_ids=tuple(evidence_ids),
             recorded_at=rec_time,
         )

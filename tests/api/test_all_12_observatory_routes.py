@@ -175,7 +175,11 @@ def test_route_8_scenarios_side_effect_free():
         json={
             "scenario_type": "ROAD_CLOSURE",
             "description": "Corridor disruption test",
-            "parameters": {"multiplier": 1.4},
+            # "multiplier" is not a parameter this API accepts, so the scenario
+            # described no effect on the routed network and was correctly
+            # refused. The contract requires travel_time_inflation_basis_points
+            # or unreachable_facility_demand_pairs.
+            "parameters": {"travel_time_inflation_basis_points": 4000},
             "seed": 42,
         },
     )
@@ -186,6 +190,20 @@ def test_route_8_scenarios_side_effect_free():
     scen_res = client.get(f"/api/v1/scenarios/{scen_id}")
     assert scen_res.status_code == 200
     assert scen_res.json()["scenario_id"] == scen_id
+
+    # A scenario that describes no effect on the network must be refused rather
+    # than stored as a disruption that changes nothing.
+    empty_res = client.post(
+        "/api/v1/scenarios",
+        json={
+            "scenario_type": "ROAD_CLOSURE",
+            "description": "describes nothing",
+            "parameters": {},
+            "seed": 42,
+        },
+    )
+    assert empty_res.status_code == 422
+    assert empty_res.json()["error"]["code"] == "SCENARIO_NOT_REPRESENTABLE"
 
 
 def test_route_9_experiments():
@@ -222,6 +240,24 @@ def test_route_10_decisions_and_pit_replay():
         "osrm_bundle_hash": mat_sha,
         "solver_version": "ortools-cp-sat",
     }
+
+    # As posted, this is optimizer-shaped output with no optimization_job_id
+    # behind it. The API refuses it, which is the whole point of the decision
+    # class separation: a hand-authored decision must never be presentable as
+    # solver output. The test previously asserted the forgery succeeded.
+    forged = client.post("/api/v1/decisions", json=dec_req)
+    assert forged.status_code == 422
+    assert "optimization_job_id" in forged.json()["error"]["message"]
+
+    # Declared as what it is, the same decision is accepted and recorded as
+    # operator-authored.
+    dec_req = {
+        **dec_req,
+        "decision_class": "MANUAL_OPERATOR_DECISION",
+        "operator_rationale": (
+            "Recorded by hand for the API contract test; not derived from a solver run."
+        ),
+    }
     post_res = client.post("/api/v1/decisions", json=dec_req)
     assert post_res.status_code == 201
     dec_id = post_res.json()["decision_id"]
@@ -234,10 +270,16 @@ def test_route_10_decisions_and_pit_replay():
     assert rep_res.status_code == 200
     rep_data = rep_res.json()
     assert rep_data["pit_valid"] is True
-    assert rep_data["reproduced_exact_action"] is True
-    assert rep_data["reproduced_exact_facilities"] is True
-    assert rep_data["objective_match"] is True
-    assert rep_data["match_status"] == "EXACT_MATCH"
+
+    # A hand-authored decision was never produced by the optimizer, so it has no
+    # optimization policy and cannot be reproduced by re-solving. Replay says so
+    # rather than re-running the solver and presenting the result as though it
+    # reproduced this decision. The test previously required EXACT_MATCH here,
+    # which would have meant a manual decision validating itself against solver
+    # output it never came from.
+    assert rep_data["match_status"] == "LEGACY_POLICY_NOT_REPLAYABLE"
+    assert rep_data["reproduced_exact_action"] is False
+    assert rep_data["objective_match"] is False
 
 
 def test_route_11_forecast_prediction():

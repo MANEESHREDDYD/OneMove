@@ -69,7 +69,8 @@ class DecisionRepository:
                         p95_travel_seconds, coverage_basis_points, graph_version,
                         osrm_bundle_hash, solver_version, code_sha, evidence_ids,
                         recorded_at, recorded_by,
-                        optimization_policy_version, p95_scenario_total_travel_demand_seconds
+                        optimization_policy_version, p95_scenario_total_travel_demand_seconds,
+                        decision_class, operator_rationale
                     ) VALUES (
                         %s, %s, %s, %s,
                         %s, %s, %s,
@@ -77,6 +78,7 @@ class DecisionRepository:
                         %s, %s, %s,
                         %s, %s, %s, %s,
                         %s, %s::uuid,
+                        %s, %s,
                         %s, %s
                     )
                     ON CONFLICT (decision_id) DO UPDATE SET
@@ -113,6 +115,8 @@ class DecisionRepository:
                         rec_by_val,
                         decision.optimization_policy_version,
                         decision.p95_scenario_total_travel_demand_seconds,
+                        decision.decision_class,
+                        decision.operator_rationale,
                     ),
                 )
             conn.commit()
@@ -157,6 +161,8 @@ class DecisionRepository:
                     evidence_ids=tuple(row["evidence_ids"]),
                     recorded_at=row["recorded_at"],
                     optimization_policy_version=row.get("optimization_policy_version"),
+                    decision_class=row.get("decision_class") or "OPTIMIZER_DECISION",
+                    operator_rationale=row.get("operator_rationale"),
                     p95_scenario_total_travel_demand_seconds=row.get(
                         "p95_scenario_total_travel_demand_seconds"
                     ),
