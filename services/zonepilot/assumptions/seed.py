@@ -31,7 +31,7 @@ from services.zonepilot.assumptions.contracts import (
 )
 
 R1_PILOT_PROXY_SET_ID = "r1-pilot-proxy"
-R1_PILOT_PROXY_VERSION = "1.0.0"
+R1_PILOT_PROXY_VERSION = "1.1.0"
 
 #: Back-dated to the release that introduced ``optimization_jobs``. These values
 #: were already in force from that point; they simply had no identity. Dating the
@@ -313,12 +313,18 @@ _R1_RECORDS: tuple[AssumptionRecord, ...] = (
     ),
     _r1(
         AssumptionName.SOLVER_MAX_TIME_SECONDS,
-        30.0,
+        120.0,
         unit="seconds",
         rationale=(
-            "Wall-clock budget for CP-SAT on the 94x12x3 problem, chosen to sit well inside the asynchronous "
-            "worker's job lease rather than from a measured time-to-optimality. Hitting it yields a TIME_LIMIT "
-            "result that fails closed, so the budget cannot silently degrade a decision into a worse one."
+            "Wall-clock budget for CP-SAT on the 94x12x3 problem. Raised from 30s at set version 1.1.0 "
+            "on measured evidence rather than the previous lease-safety guess: the same identical problem "
+            "was observed completing in 13s to 31s, so a 30s budget produced intermittent TIME_LIMIT and "
+            "surfaced as replay DRIFT. The cost is real -- normalising the objective removed the trivially "
+            "cheap abandon-everything solution, so full-coverage search is genuinely harder than the budget "
+            "was originally sized for. 120s gives roughly 4x headroom over the observed maximum while "
+            "remaining at 40% of the 300s Pub/Sub ack deadline and well inside the 420s job lease, so a "
+            "slow solve still cannot outlive its lease or trigger redelivery. Hitting the budget still "
+            "yields TIME_LIMIT and fails closed."
         ),
         valid=(1.0, 300.0),
         sensitivity=(10.0, 120.0),

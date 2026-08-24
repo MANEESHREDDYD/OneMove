@@ -105,13 +105,14 @@ def _reconstruct_problem_from_payload(
     min_open = int(payload.get("min_open_facilities", 1))
     max_open = int(payload.get("max_open_facilities", 4))
     max_travel = int(payload.get("max_travel_seconds", 1800))
-    # NOTE (F-OPT-013): this is a THIRD default for this flag and it disagrees
-    # with both the domain contract and the API, which default to False. A job
-    # or replay reconstructed from an empty payload therefore solves a different
-    # problem from the one the operator requested. Aligning it to False is
-    # correct but changes what every historical decision replays against, so it
-    # is deliberately NOT changed here -- see the finding for the sequencing.
-    allow_uncovered = bool(payload.get("allow_uncovered_demand", True))
+    # Third default site for this flag, now aligned. The domain contract and the
+    # API both default to False; this path defaulted to True, so a job or replay
+    # reconstructed from an empty payload silently solved a different problem
+    # from the one the operator requested. Landing this alone was not safe: it
+    # changes what every historical decision replays against, and the solve only
+    # fits its budget after the assumption set raised it to 120s on measured
+    # evidence. Both land together at assumption set 1.1.0.
+    allow_uncovered = bool(payload.get("allow_uncovered_demand", False))
     scenarios_list = payload.get("scenarios", ["s1_free_flow", "s2_congested", "s3_congested_outage"])
 
     mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
