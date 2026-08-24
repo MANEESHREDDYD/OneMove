@@ -489,6 +489,37 @@ def _weighted_p95(values: list[tuple[int, int]]) -> int:
     raise AssertionError("validated scenario probabilities did not sum to one")
 
 
+
+def _canonical_assignment(
+    problem: OptimizationProblem,
+    scenario: UncertaintyScenario,
+    demand_id: str,
+    open_facilities: tuple[str, ...],
+) -> tuple[str | None, int]:
+    """Pick this demand point's facility by rule rather than by solver choice.
+
+    When capacity is NOT_MODELED the demand points are uncoupled: nothing
+    constrains two zones from using the same facility, so each one independently
+    taking its cheapest feasible facility is not merely deterministic, it is
+    optimal. Ties break on facility_id so the result cannot depend on dictionary
+    order, scenario order, or which parallel worker happened to finish first.
+
+    This is what makes the decision reproducible even when the optimum is found
+    by parallel search. It is NOT valid under ASSUMPTION capacity, where the
+    assignments are coupled through each facility's throughput limit.
+    """
+    cap = problem.constraints.max_travel_seconds
+    best_facility: str | None = None
+    best_duration = 0
+    for facility_id in sorted(open_facilities):
+        duration = _duration(scenario, facility_id, demand_id)
+        if duration > cap:
+            continue
+        if best_facility is None or duration < best_duration:
+            best_facility, best_duration = facility_id, duration
+    return best_facility, best_duration
+
+
 def _optimal_result(
     problem: OptimizationProblem,
     state: _ModelState,
@@ -508,8 +539,29 @@ def _optimal_result(
         scenario = scenarios[scenario_id]
         uncovered_units = 0
         total_travel = 0
+        canonical = problem.constraints.capacity_mode is CapacityMode.NOT_MODELED
         for demand_id in sorted(demands):
             demand = demands[demand_id]
+
+            if canonical:
+                facility_id, duration = _canonical_assignment(problem, scenario, demand_id, opened)
+                if facility_id is None:
+                    uncovered_units += demand.demand_units
+                    continue
+                assignments.append(
+                    ScenarioAssignment(
+                        scenario_id=scenario_id,
+                        facility_id=facility_id,
+                        demand_id=demand_id,
+                        assigned_demand_units=demand.demand_units,
+                        travel_seconds=duration,
+                    )
+                )
+                total_travel += demand.demand_units * duration
+                continue
+
+            # ASSUMPTION capacity couples the assignments, so the solver's own
+            # choice is the only correct one to read.
             if solver.value(state.uncovered[(scenario_id, demand_id)]):
                 uncovered_units += demand.demand_units
                 continue

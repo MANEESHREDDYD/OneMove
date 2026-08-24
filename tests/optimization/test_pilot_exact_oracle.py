@@ -174,3 +174,66 @@ def test_cp_sat_optimum_matches_the_independent_oracle() -> None:
 
     chosen = frozenset(f for f in state.open_facility if solver.value(state.open_facility[f]))
     assert chosen in oracle_sets, "CP-SAT selected a set the oracle does not rank as optimal"
+
+
+def _assignment_hash(result) -> str:
+    import hashlib
+
+    lines = [
+        f"{a.scenario_id}|{a.facility_id}|{a.demand_id}|{a.travel_seconds}"
+        for a in sorted(result.assignments, key=lambda a: (a.scenario_id, a.demand_id))
+    ]
+    return hashlib.sha256("\n".join(lines).encode()).hexdigest()
+
+
+@pytest.mark.slow
+def test_decision_is_reproducible_under_parallel_search() -> None:
+    """The decision must not depend on which parallel worker finished first.
+
+    Assignments are reconstructed by a canonical rule rather than read from the
+    solver, so once the facility set is fixed the result is fully determined.
+    Measured across repeated runs: identical facility set, identical assignment
+    hash, identical objective.
+    """
+    from ortools.sat.python import cp_model
+
+    from services.zonepilot.optimization import _cp_sat as cpsat
+
+    problem = _problem()
+    oracle_value, _ = _enumerate(problem)
+
+    facility_sets = set()
+    assignment_hashes = set()
+    objectives = set()
+
+    for _ in range(5):
+        state = cpsat._build_model(problem)
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = 60.0
+        solver.parameters.num_search_workers = 8
+        solver.parameters.random_seed = problem.solver_settings.random_seed
+        assert solver.solve(state.model) == cp_model.OPTIMAL
+
+        result = cpsat._optimal_result(problem, state, solver)
+        facility_sets.add(tuple(sorted(result.opened_facility_ids)))
+        assignment_hashes.add(_assignment_hash(result))
+        objectives.add(result.objective.solver_objective_total)
+
+    assert len(facility_sets) == 1, f"facility set varied across runs: {facility_sets}"
+    assert len(assignment_hashes) == 1, "assignment hash varied across runs"
+    assert len(objectives) == 1, "objective varied across runs"
+    assert objectives.pop() == oracle_value, "solved objective disagrees with the exact oracle"
+
+
+def test_canonical_assignment_breaks_ties_on_facility_id() -> None:
+    """Equal durations must resolve the same way every time, by id order."""
+    from services.zonepilot.optimization._cp_sat import _canonical_assignment
+
+    problem = _problem()
+    scenario = problem.scenarios[0]
+    demand_id = sorted(d.demand_id for d in problem.demand_points)[0]
+    all_facilities = tuple(f.facility_id for f in problem.facilities)
+
+    forward = _canonical_assignment(problem, scenario, demand_id, all_facilities)
+    reversed_order = _canonical_assignment(problem, scenario, demand_id, tuple(reversed(all_facilities)))
+    assert forward == reversed_order, "assignment depended on input ordering"

@@ -222,6 +222,19 @@ class SolverSettings(StrictContract):
     num_search_workers: Literal[1] = 1
 
 
+# The mathematical policy the problem is solved under. Bump this whenever the
+# meaning of the objective, the constraint semantics, or the assignment rule
+# changes -- not for additive fields. It is part of the problem fingerprint, so a
+# decision frozen under one policy can never be silently replayed under another.
+#
+#   1.0.0  original: capacity always bound; objective summed raw units of
+#          different dimensions; assignments read from the solver.
+#   2.0.0  capacity_mode (NOT_MODELED default); objective components normalised
+#          against declared references before weighting; assignments
+#          canonically reconstructed when capacity is not modelled.
+OPTIMIZATION_POLICY_VERSION = "2.0.0"
+
+
 class OptimizationProblem(StrictContract):
     schema_name: Literal["zonepilot.facility_optimization_problem"] = "zonepilot.facility_optimization_problem"
     schema_version: Literal["1.0.0"] = "1.0.0"
@@ -232,6 +245,7 @@ class OptimizationProblem(StrictContract):
     constraints: OptimizationConstraints
     objective_weights: ObjectiveWeights
     solver_settings: SolverSettings = SolverSettings()
+    optimization_policy_version: str = OPTIMIZATION_POLICY_VERSION
 
     @field_validator("problem_id")
     @classmethod
