@@ -34,8 +34,21 @@ class DecisionRecord(StrictContract):
     opened_facilities: tuple[str, ...]
     objective_value: int = Field(ge=0)
     expected_travel_seconds: int = Field(ge=0)
+
+    # Legacy name. The value is a probability-weighted P95 across SCENARIO TOTAL
+    # demand-weighted travel, so its unit is demand_units*seconds, not seconds.
+    # Frozen records keep this field so history stays readable; new records also
+    # populate p95_scenario_total_travel_demand_seconds, which states the unit.
     p95_travel_seconds: int = Field(ge=0)
+    p95_scenario_total_travel_demand_seconds: int | None = Field(default=None, ge=0)
+
     coverage_basis_points: int = Field(ge=0, le=10_000)
+
+    # The mathematical policy this decision was produced under. None means the
+    # record predates policy versioning and must be treated as legacy: replaying
+    # it under the current policy would compare answers from two different
+    # models and report a difference as if it were drift.
+    optimization_policy_version: str | None = None
     graph_version: str = Field(min_length=1)
     osrm_bundle_hash: str = Field(min_length=1)
     solver_version: str = Field(min_length=1)

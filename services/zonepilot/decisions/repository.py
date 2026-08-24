@@ -68,17 +68,27 @@ class DecisionRepository:
                         opened_facilities, objective_value, expected_travel_seconds,
                         p95_travel_seconds, coverage_basis_points, graph_version,
                         osrm_bundle_hash, solver_version, code_sha, evidence_ids,
-                        recorded_at, recorded_by
+                        recorded_at, recorded_by,
+                        optimization_policy_version, p95_scenario_total_travel_demand_seconds
                     ) VALUES (
                         %s, %s, %s, %s,
                         %s, %s, %s,
                         %s, %s, %s,
                         %s, %s, %s,
                         %s, %s, %s, %s,
-                        %s, %s::uuid
+                        %s, %s::uuid,
+                        %s, %s
                     )
                     ON CONFLICT (decision_id) DO UPDATE SET
-                        recorded_at = EXCLUDED.recorded_at
+                        recorded_at = EXCLUDED.recorded_at,
+                        -- Re-asserting the same decision_id means identical
+                        -- content, so lineage columns added after the row was
+                        -- first written must be refreshed too. Without this a
+                        -- row created before policy versioning keeps a NULL
+                        -- policy forever and is permanently misread as legacy.
+                        optimization_policy_version = EXCLUDED.optimization_policy_version,
+                        p95_scenario_total_travel_demand_seconds =
+                            EXCLUDED.p95_scenario_total_travel_demand_seconds
                     RETURNING *
                     """,
                     (
@@ -101,6 +111,8 @@ class DecisionRepository:
                         list(decision.evidence_ids),
                         decision.recorded_at,
                         rec_by_val,
+                        decision.optimization_policy_version,
+                        decision.p95_scenario_total_travel_demand_seconds,
                     ),
                 )
             conn.commit()
@@ -144,6 +156,10 @@ class DecisionRepository:
                     code_sha=row["code_sha"],
                     evidence_ids=tuple(row["evidence_ids"]),
                     recorded_at=row["recorded_at"],
+                    optimization_policy_version=row.get("optimization_policy_version"),
+                    p95_scenario_total_travel_demand_seconds=row.get(
+                        "p95_scenario_total_travel_demand_seconds"
+                    ),
                 )
 
     def list_decisions(self, workspace_id: str, limit: int = 50) -> list[DecisionRecord]:

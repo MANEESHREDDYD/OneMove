@@ -21,6 +21,9 @@ from services.zonepilot.decisions.contracts import (
     ShadowState,
 )
 from services.zonepilot.decisions.repository import DecisionRepository
+from services.zonepilot.optimization.contracts import (
+    OPTIMIZATION_POLICY_VERSION as _OPTIMIZATION_POLICY_VERSION,
+)
 from services.zonepilot.optimization.repository import OptimizationRepository
 from services.zonepilot.release import current_release_sha
 
@@ -194,11 +197,13 @@ class DecisionLedger:
             objective_value=int(obj_val),
             expected_travel_seconds=int(exp_travel),
             p95_travel_seconds=int(p95_travel),
+            p95_scenario_total_travel_demand_seconds=int(p95_travel),
             coverage_basis_points=int(cov_bps),
             graph_version=graph_version,
             osrm_bundle_hash=osrm_bundle_hash,
             solver_version=solver_version,
             code_sha=job.get("code_sha") or self.code_sha,
+            optimization_policy_version=_OPTIMIZATION_POLICY_VERSION,
             evidence_ids=tuple(evidence_ids),
             recorded_at=rec_time,
         )
@@ -275,11 +280,13 @@ class DecisionLedger:
             objective_value=objective_value,
             expected_travel_seconds=expected_travel_seconds,
             p95_travel_seconds=p95_travel_seconds,
+            p95_scenario_total_travel_demand_seconds=p95_travel_seconds,
             coverage_basis_points=coverage_basis_points,
             graph_version=graph_version,
             osrm_bundle_hash=osrm_bundle_hash,
             solver_version=solver_version,
             code_sha=self.code_sha,
+            optimization_policy_version=_OPTIMIZATION_POLICY_VERSION,
             evidence_ids=tuple(evidence_ids),
             recorded_at=rec_time,
         )
@@ -345,6 +352,7 @@ class DecisionLedger:
         snapshot_doc = self.opt_repository.get_problem_snapshot(orig.feature_snapshot_hash, workspace_id=ws_id)
 
         from services.zonepilot.optimization.contracts import (
+            OPTIMIZATION_POLICY_VERSION,
             OptimizationProblem,
             problem_fingerprint,
         )
@@ -509,6 +517,32 @@ class DecisionLedger:
                     "ASSUMPTION_SET_DRIFT: the frozen problem's objective weights do not match assumption set "
                     f"{pinned_assumptions.assumption_set_id}@{pinned_assumptions.version} "
                     f"(sha256 {pinned_assumptions.sha256[:16]}...) that it claims to have been built from."
+                ),
+                code_sha=self.code_sha,
+            )
+
+        # A decision produced under a different mathematical policy cannot be
+        # meaningfully recomputed under the current one: capacity semantics, the
+        # objective normalisation and the assignment rule all changed at 2.0.0.
+        # Recomputing anyway and reporting the difference as DRIFT would read as
+        # "same model, different answer", which is false and is exactly how a
+        # historical decision gets silently restated under new mathematics.
+        frozen_policy = getattr(orig, "optimization_policy_version", None)
+        if frozen_policy != OPTIMIZATION_POLICY_VERSION:
+            return DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=pit_valid,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="LEGACY_POLICY_NOT_REPLAYABLE",
+                reason=(
+                    "LEGACY_POLICY: decision was frozen under optimization policy "
+                    f"{frozen_policy or 'pre-versioning'}, and the current policy is "
+                    f"{OPTIMIZATION_POLICY_VERSION}. The capacity semantics, objective "
+                    "normalisation and assignment rule differ, so a recomputation would "
+                    "not be a replay of this decision."
                 ),
                 code_sha=self.code_sha,
             )
