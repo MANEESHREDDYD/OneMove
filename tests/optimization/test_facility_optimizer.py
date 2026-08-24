@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from services.zonepilot.optimization import (
+    CapacityMode,
     DemandPoint,
     Facility,
     FacilityCapacityAdjustment,
@@ -215,11 +216,16 @@ def test_capacity_and_network_coverage_constraints_are_hard_constraints():
         probability_basis_points=10_000,
         travel_matrix=routed_matrix("coverage", ("a", "b"), ("d",), ((500,), (50,))),
     )
+    # Capacity is only a hard constraint where capacity is actually modelled.
+    # The default is NOT_MODELED, because the public-data demand signal is a
+    # geographic proxy rather than measured throughput; this test is about the
+    # ASSUMPTION mode, where a caller has supplied real capacity values.
     constraints = OptimizationConstraints(
         min_open_facilities=1,
         max_open_facilities=1,
         max_travel_seconds=100,
         minimum_coverage_basis_points=10_000,
+        capacity_mode=CapacityMode.ASSUMPTION,
     )
 
     result = optimize_facilities(

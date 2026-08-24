@@ -42,6 +42,7 @@ from services.zonepilot.economics.registry import CANONICAL_EXPERIMENTS
 from services.zonepilot.forecast.contracts import BaselineModelType, ForecastTarget, PredictionRecord
 from services.zonepilot.forecast.repository import ForecastRepository
 from services.zonepilot.optimization.contracts import (
+    CapacityMode,
     DemandPoint,
     Facility,
     OptimizationConstraints,
@@ -241,7 +242,13 @@ class OptimizationRequest(BaseModel):
     min_open_facilities: int = Field(default=1, ge=1)
     max_open_facilities: int = Field(default=4, ge=1)
     max_travel_seconds: int = Field(default=1800, ge=1)
-    allow_uncovered_demand: bool = True
+    # One canonical operator-facing default. This model previously defaulted to
+    # True while OptimizationConstraints defaulted to False, so the API path
+    # silently permitted partial coverage and reported OPTIMAL while abandoning
+    # most of the network. A normal request now requires the whole modelled
+    # network to be served; partial coverage is an explicit opt-in.
+    allow_uncovered_demand: bool = False
+    capacity_mode: CapacityMode = CapacityMode.NOT_MODELED
     scenarios: list[str] = ["s1_free_flow", "s2_congested", "s3_congested_outage"]
 
 
@@ -357,6 +364,7 @@ def _build_real_94x12x3_problem(
             max_travel_seconds=req.max_travel_seconds,
             minimum_coverage_basis_points=view.minimum_coverage_basis_points,
             allow_uncovered_demand=req.allow_uncovered_demand,
+            capacity_mode=req.capacity_mode,
         ),
         objective_weights=view.objective_weights(allow_uncovered_demand=req.allow_uncovered_demand),
         solver_settings=SolverSettings(max_time_seconds=view.solver_max_time_seconds),

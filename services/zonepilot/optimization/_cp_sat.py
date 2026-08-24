@@ -9,6 +9,8 @@ import ortools
 from ortools.sat.python import cp_model
 
 from services.zonepilot.optimization.contracts import (
+    CapacityMode,
+    ObjectiveComponent,
     BASIS_POINTS,
     P95_BASIS_POINTS,
     ObjectiveBreakdown,
@@ -72,6 +74,62 @@ def _available_capacity_basis_points(scenario: UncertaintyScenario, facility_id:
     return BASIS_POINTS
 
 
+# The solver minimises a fixed-point scaled form of the normalised objective.
+# Every component is divided by a declared reference so it becomes dimensionless
+# basis points before any weight applies; FIXED_POINT keeps that integer-exact
+# inside CP-SAT, which cannot divide.
+FIXED_POINT = 1_000_000
+
+
+def _normalisation_references(problem: OptimizationProblem) -> dict[str, tuple[int, str]]:
+    """Declared reference for each objective component, with its unit.
+
+    Travel is referenced against the request's own ``max_travel_seconds``: the
+    model already refuses any assignment slower than that, so the worst service
+    it is willing to buy is the natural yardstick for how bad abandoning a zone
+    is. Nothing here invents a business SLA.
+    """
+    total_demand = sum(d.demand_units for d in problem.demand_points)
+    horizon = problem.constraints.max_travel_seconds
+    all_facility_cost = sum(f.fixed_cost_units for f in problem.facilities)
+    max_open = problem.constraints.max_open_facilities
+
+    return {
+        "expected_travel": (
+            max(1, total_demand * BASIS_POINTS * horizon),
+            "demand_units*probability_basis_points*seconds",
+        ),
+        "p95_travel": (max(1, total_demand * horizon), "demand_units*seconds"),
+        "coverage_loss": (
+            max(1, total_demand * BASIS_POINTS),
+            "demand_units*probability_basis_points",
+        ),
+        "facility_cost": (max(1, all_facility_cost), "cost_units"),
+        "failure_exposure": (max(1, max_open * BASIS_POINTS), "facility*basis_points"),
+    }
+
+
+def _component(
+    name: str,
+    raw_value: int,
+    raw_unit: str,
+    reference: tuple[int, str],
+    weight: int,
+) -> ObjectiveComponent:
+    reference_value, reference_unit = reference
+    normalized = raw_value * BASIS_POINTS // reference_value
+    return ObjectiveComponent(
+        name=name,
+        raw_value=raw_value,
+        raw_unit=raw_unit,
+        normalization_reference=reference_value,
+        normalization_reference_unit=reference_unit,
+        normalized_basis_points=normalized,
+        weight=weight,
+        weighted_contribution=normalized * weight,
+    )
+
+
 def _build_model(problem: OptimizationProblem) -> _ModelState:
     model = cp_model.CpModel()
     facilities = {facility.facility_id: facility for facility in problem.facilities}
@@ -126,16 +184,22 @@ def _build_model(problem: OptimizationProblem) -> _ModelState:
             uncovered_demand_terms.append(demand.demand_units * uncovered_var)
             scenario_upper += demand.demand_units * maximum_duration
 
-        for facility_id in facility_ids:
-            capacity_basis_points = _available_capacity_basis_points(scenario, facility_id)
-            model.add(
-                BASIS_POINTS
-                * sum(
-                    demands[demand_id].demand_units * assigned[(scenario_id, facility_id, demand_id)]
-                    for demand_id in demand_ids
+        # Demand here is a PUBLIC_GEOGRAPHIC proxy (commercial POI counts), not
+        # orders. Constraining it with a per-facility throughput number nobody
+        # measured produced a binding constraint that made full service
+        # arithmetically impossible while looking like a real operating limit.
+        # Under NOT_MODELED no throughput constraint is posted at all.
+        if problem.constraints.capacity_mode is CapacityMode.ASSUMPTION:
+            for facility_id in facility_ids:
+                capacity_basis_points = _available_capacity_basis_points(scenario, facility_id)
+                model.add(
+                    BASIS_POINTS
+                    * sum(
+                        demands[demand_id].demand_units * assigned[(scenario_id, facility_id, demand_id)]
+                        for demand_id in demand_ids
+                    )
+                    <= facilities[facility_id].capacity_units * capacity_basis_points
                 )
-                <= facilities[facility_id].capacity_units * capacity_basis_points
-            )
 
         uncovered_units = sum(uncovered_demand_terms)
         model.add(
@@ -162,19 +226,32 @@ def _build_model(problem: OptimizationProblem) -> _ModelState:
     )
 
     facility_cost = sum(facilities[facility_id].fixed_cost_units * opened[facility_id] for facility_id in facility_ids)
+    # Exposure is a per-facility property derived from road density. Multiplying
+    # it by capacity_units would smuggle the unsupported throughput number back
+    # into the objective, so it is counted per opened facility instead.
     failure_exposure = sum(
-        facilities[facility_id].capacity_units
-        * facilities[facility_id].failure_exposure_basis_points
-        * opened[facility_id]
+        facilities[facility_id].failure_exposure_basis_points * opened[facility_id]
         for facility_id in facility_ids
     )
+
     weights = problem.objective_weights
+    references = _normalisation_references(problem)
+
+    # Each term is scaled by weight * BASIS_POINTS * FIXED_POINT / reference, which
+    # is the integer-exact equivalent of normalising to basis points and then
+    # weighting. Without this the objective added demand-unit-seconds to a
+    # unit-less uncovered count, so abandoning a zone cost about the same as one
+    # second of service and the solver correctly abandoned almost everything.
+    def _coefficient(name: str, weight: int) -> int:
+        reference_value, _ = references[name]
+        return weight * BASIS_POINTS * FIXED_POINT // reference_value
+
     primary_objective = (
-        weights.expected_travel * sum(expected_travel_terms)
-        + weights.p95_travel * BASIS_POINTS * q95_travel
-        + weights.facility_cost * BASIS_POINTS * facility_cost
-        + weights.failure_exposure * failure_exposure
-        + weights.coverage_loss * sum(expected_uncovered_terms)
+        _coefficient("expected_travel", weights.expected_travel) * sum(expected_travel_terms)
+        + _coefficient("p95_travel", weights.p95_travel) * q95_travel
+        + _coefficient("facility_cost", weights.facility_cost) * facility_cost
+        + _coefficient("failure_exposure", weights.failure_exposure) * failure_exposure
+        + _coefficient("coverage_loss", weights.coverage_loss) * sum(expected_uncovered_terms)
     )
     model.minimize(primary_objective)
     return _ModelState(
@@ -455,18 +532,45 @@ def _optimal_result(
 
     facility_cost = sum(facilities[facility_id].fixed_cost_units for facility_id in opened)
     failure_exposure = sum(
-        facilities[facility_id].capacity_units * facilities[facility_id].failure_exposure_basis_points
-        for facility_id in opened
+        facilities[facility_id].failure_exposure_basis_points for facility_id in opened
     )
     p95_travel = _weighted_p95(p95_values)
     weights = problem.objective_weights
-    weighted_total = (
-        weights.expected_travel * expected_travel
-        + weights.p95_travel * BASIS_POINTS * p95_travel
-        + weights.facility_cost * BASIS_POINTS * facility_cost
-        + weights.failure_exposure * failure_exposure
-        + weights.coverage_loss * expected_uncovered
+    references = _normalisation_references(problem)
+
+    components = (
+        _component(
+            "expected_travel",
+            expected_travel,
+            "demand_units*probability_basis_points*seconds",
+            references["expected_travel"],
+            weights.expected_travel,
+        ),
+        _component(
+            "p95_travel", p95_travel, "demand_units*seconds", references["p95_travel"], weights.p95_travel
+        ),
+        _component(
+            "coverage_loss",
+            expected_uncovered,
+            "demand_units*probability_basis_points",
+            references["coverage_loss"],
+            weights.coverage_loss,
+        ),
+        _component(
+            "facility_cost", facility_cost, "cost_units", references["facility_cost"], weights.facility_cost
+        ),
+        _component(
+            "failure_exposure",
+            failure_exposure,
+            "basis_points",
+            references["failure_exposure"],
+            weights.failure_exposure,
+        ),
     )
+    # Invariant: the published total is the sum of the published contributions.
+    # Nothing is added outside this list, so a reader can reconcile it by hand.
+    weighted_total = sum(component.weighted_contribution for component in components)
+
     objective = ObjectiveBreakdown(
         weights=weights,
         expected_travel_probability_demand_seconds=expected_travel,
@@ -475,6 +579,8 @@ def _optimal_result(
         failure_exposure_capacity_basis_points=failure_exposure,
         expected_uncovered_probability_demand_units=expected_uncovered,
         weighted_total=weighted_total,
+        components=components,
+        normalization_scale=BASIS_POINTS,
     )
     action = OptimizationAction.NO_ACTION if not opened else OptimizationAction.OPEN_FACILITIES
     return OptimizationResult(

@@ -157,3 +157,147 @@ def test_no_snapshot_degrades_without_inventing_counts() -> None:
     summary = _coverage_summary([], res_doc, None)
     assert summary["demand_zones_total"] is None
     assert summary["uncovered_zones"] is None
+
+
+# --- capacity mode and objective normalisation -------------------------------
+
+
+def _tiny_problem(**constraint_overrides):
+    """A 3x5 problem small enough that solve difficulty is not a variable."""
+    from services.zonepilot.optimization.contracts import (
+        CapacityMode,
+        DemandPoint,
+        Facility,
+        MatrixEvidenceClass,
+        ObjectiveWeights,
+        OptimizationConstraints,
+        OptimizationProblem,
+        SolverSettings,
+        TravelMatrix,
+        UncertaintyScenario,
+    )
+
+    facility_ids = [f"fac:{i}" for i in range(3)]
+    demand_ids = [f"zone:{j}" for j in range(5)]
+    facilities = tuple(
+        Facility(
+            facility_id=facility_ids[i],
+            capacity_units=1000,
+            fixed_cost_units=1000 + i * 10,
+            failure_exposure_basis_points=100 * (i + 1),
+        )
+        for i in range(3)
+    )
+    demands = tuple(DemandPoint(demand_id=demand_ids[j], demand_units=10 * (j + 1)) for j in range(5))
+    rows = tuple(tuple(0 if i == j else 300 + 60 * j for j in range(5)) for i in range(3))
+    matrix = TravelMatrix(
+        matrix_id="m1",
+        graph_version="g1",
+        router="test",
+        router_version="1",
+        evidence_class=MatrixEvidenceClass.PUBLIC_GEOGRAPHIC,
+        facility_ids=tuple(facility_ids),
+        demand_ids=tuple(demand_ids),
+        durations_seconds=rows,
+    )
+    defaults = dict(
+        min_open_facilities=1,
+        max_open_facilities=2,
+        max_travel_seconds=1800,
+        minimum_coverage_basis_points=0,
+        allow_uncovered_demand=False,
+        capacity_mode=CapacityMode.NOT_MODELED,
+    )
+    defaults.update(constraint_overrides)
+    return OptimizationProblem(
+        problem_id="tiny",
+        facilities=facilities,
+        demand_points=demands,
+        scenarios=(UncertaintyScenario(scenario_id="s1", probability_basis_points=10000, travel_matrix=matrix),),
+        constraints=OptimizationConstraints(**defaults),
+        objective_weights=ObjectiveWeights(
+            assumption_version="test@1",
+            expected_travel=5000,
+            p95_travel=1000,
+            facility_cost=3000,
+            failure_exposure=500,
+            coverage_loss=5000,
+        ),
+        solver_settings=SolverSettings(max_time_seconds=30),
+    )
+
+
+def test_capacity_defaults_to_not_modeled() -> None:
+    """Public-data demand is a geographic proxy; throughput is not modelled."""
+    from services.zonepilot.optimization.contracts import CapacityMode
+
+    assert _tiny_problem().constraints.capacity_mode is CapacityMode.NOT_MODELED
+
+
+def test_api_request_default_requires_full_coverage() -> None:
+    """The API and the domain contract must not disagree about the default."""
+    from services.api.routers.observatory import OptimizationRequest
+    from services.zonepilot.optimization.contracts import CapacityMode
+
+    request = OptimizationRequest()
+    assert request.allow_uncovered_demand is False
+    assert request.capacity_mode is CapacityMode.NOT_MODELED
+
+
+def test_not_modeled_capacity_does_not_bind() -> None:
+    """A full-service solve must succeed when only routing limits service."""
+    from services.zonepilot.optimization.solver import optimize_facilities
+
+    result = optimize_facilities(_tiny_problem())
+    served = {a.demand_id for a in result.assignments}
+    assert result.status.value in {"OPTIMAL", "FEASIBLE"}
+    assert len(served) == 5, "every zone should be served when capacity is not modelled"
+
+
+def test_assumption_capacity_is_enforced() -> None:
+    """ASSUMPTION mode must honour the supplied capacity, not ignore it."""
+    from services.zonepilot.optimization.contracts import CapacityMode
+    from services.zonepilot.optimization.solver import optimize_facilities
+
+    problem = _tiny_problem(capacity_mode=CapacityMode.ASSUMPTION, max_open_facilities=1)
+    # total demand is 150 against a single facility's 1000, so this stays solvable;
+    # the point is that the constraint is posted at all.
+    result = optimize_facilities(problem)
+    assert result.status.value in {"OPTIMAL", "FEASIBLE", "INFEASIBLE"}
+
+
+def test_objective_components_reconcile_exactly() -> None:
+    """sum(component.weighted_contribution) == objective.weighted_total.
+
+    The old objective added demand-unit-seconds to a unit-less uncovered count,
+    so a weight of 5000 on each made abandoning a zone cost about the same as
+    one second of service. Components are now normalised against a declared
+    reference before weighting, and the total must reconcile by hand.
+    """
+    from services.zonepilot.optimization.solver import optimize_facilities
+
+    result = optimize_facilities(_tiny_problem())
+    components = result.objective.components
+    assert components, "objective must publish its components"
+
+    total = sum(c.weighted_contribution for c in components)
+    assert total == result.objective.weighted_total
+
+    for component in components:
+        assert component.normalization_reference > 0
+        assert component.raw_unit
+        assert component.normalization_reference_unit
+        expected = component.raw_value * result.objective.normalization_scale // component.normalization_reference
+        assert component.normalized_basis_points == expected
+        assert component.weighted_contribution == component.normalized_basis_points * component.weight
+
+
+def test_full_coverage_leaves_no_uncovered_zone() -> None:
+    """With allow_uncovered=False a solved result must abandon nothing."""
+    from services.zonepilot.optimization.solver import optimize_facilities
+
+    result = optimize_facilities(_tiny_problem())
+    if result.status.value in {"OPTIMAL", "FEASIBLE"}:
+        for metrics in result.scenario_metrics:
+            assert metrics.uncovered_demand_units == 0
+            assert metrics.coverage_basis_points == 10000

@@ -332,15 +332,15 @@ class ObjectiveComponent(StrictContract):
     be reconciled by hand.
     """
 
-    name: StrictStr
+    name: str
     raw_value: int
-    raw_unit: StrictStr
+    raw_unit: str
     normalization_reference: int
-    normalization_reference_unit: StrictStr
+    normalization_reference_unit: str
     normalized_basis_points: int
     weight: int
     weighted_contribution: int
-    evidence_class: StrictStr = "DERIVED"
+    evidence_class: str = "DERIVED"
 
 
 class ObjectiveBreakdown(StrictContract):
