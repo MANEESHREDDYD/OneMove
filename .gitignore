@@ -114,3 +114,16 @@ terraform.rc
 artifacts/swiggy-demo/**/*.webm
 artifacts/swiggy-demo/**/*.mp4
 artifacts/swiggy-demo/**/traces/
+
+# Demo recording artifacts: large media and per-run evidence. The delivery
+# package is reproducible from scripts/demo/ and is not something a reviewer
+# cloning the product should inherit.
+artifacts/swiggy-demo/
+
+# Superseded by docs/readiness/readiness_matrix.yaml, which carries the same
+# information with per-row evidence and verification state.
+CTO_PRODUCTION_READINESS_MATRIX.md
+
+# Scratch map-check harness; real map coverage belongs in the E2E suite.
+mapcheck.config.ts
+tests/e2e/mapcheck.spec.ts
