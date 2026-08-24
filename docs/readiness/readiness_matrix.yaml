@@ -240,3 +240,25 @@ rows:
     evidence: "F-OPT-006: 1 search worker reaches FEASIBLE with 74.7% gap at 300s; 8 workers prove OPTIMAL in 0.4s. Determinism is required by PIT replay, so multi-worker is not an acceptable fix."
     last_verified_sha: 8a84f9a
     verified_by: unverified
+  - id: OPT-10
+    area: optimizer
+    requirement: "Published objective is exactly the objective CP-SAT minimised"
+    status: GREEN
+    evidence: "shared _solver_coefficient feeds model and record; solver_objective_total == CP-SAT objective_value on fixture; 400k-trial divergence test recorded as F-OPT-008 @7f69448"
+    last_verified_sha: 7f69448
+    verified_by: "principal (self-verified, pending H3)"
+  - id: OPT-11
+    area: optimizer
+    requirement: "Pilot optimum independently certified against an exact oracle"
+    status: GREEN
+    evidence: "exhaustive enumeration of 793 permitted subsets in 0.08s; optimum 23,548,137,358,244 unique; CP-SAT agrees exactly; tests/optimization/test_pilot_exact_oracle.py @7f69448"
+    last_verified_sha: 7f69448
+    verified_by: "principal (self-verified, pending H3)"
+  - id: OPT-12
+    area: contracts
+    requirement: "P95 field name states its true unit"
+    status: YELLOW
+    evidence: "API response renamed to p95_scenario_total_travel_demand_seconds; DecisionRecord/ledger/lineage still carry the misnomer and need a versioned migration (F-OPT-009)"
+    last_verified_sha: 7f69448
+    verified_by: unverified
+
