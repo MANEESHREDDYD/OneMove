@@ -106,12 +106,16 @@ export function BengaluruMap({
   // Commercial POI count is the optimizer's own demand proxy. Shading by it
   // means the map's texture is the same quantity the solver reasons about,
   // rather than a decorative gradient.
-  const poiScale = useMemo(() => {
-    if (!base) return (n: number) => 0;
-    const vals = base.zones.map((z) => z.pois).sort((a, b) => a - b);
-    const hi = vals[Math.floor(vals.length * 0.92)] || 1;
-    return (n: number) => Math.min(1, n / hi);
+  // Memoise the threshold, not a closure over it. Returning a function from
+  // useMemo defeats the React Compiler -- it cannot preserve the manual
+  // memoisation and skips optimising the whole component, which lint reports as
+  // an error rather than a warning.
+  const poiCeiling = useMemo(() => {
+    if (!base) return 1;
+    const sorted = base.zones.map((z) => z.pois).sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length * 0.92)] || 1;
   }, [base]);
+  const poiScale = (n: number) => Math.min(1, n / poiCeiling);
 
   if (!base || !project) {
     return <div className="absolute inset-0 bg-[#060a12]" data-map-state="loading" />;

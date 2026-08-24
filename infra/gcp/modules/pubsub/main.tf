@@ -34,7 +34,7 @@ resource "google_pubsub_subscription" "dead_letter_sub" {
 
   # Explicit message retention for incident inspection (7 days)
   message_retention_duration = "604800s"
-  
+
   # Ensure message ordering is preserved if needed, though for DLQ it's optional
   # Do not configure push delivery so the DLQ remains inspectable manually
 }

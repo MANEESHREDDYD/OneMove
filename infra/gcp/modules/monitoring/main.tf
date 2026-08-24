@@ -27,9 +27,9 @@ resource "google_monitoring_notification_channel" "email_channel" {
 
 # 1. API 5xx Error Rate Alert
 resource "google_monitoring_alert_policy" "api_5xx_errors" {
-  project      = var.project_id
-  display_name = "ZonePilot API High 5xx Errors (${var.environment})"
-  combiner     = "OR"
+  project               = var.project_id
+  display_name          = "ZonePilot API High 5xx Errors (${var.environment})"
+  combiner              = "OR"
   notification_channels = var.notification_email != "" ? [google_monitoring_notification_channel.email_channel[0].name] : []
 
   conditions {
@@ -49,9 +49,9 @@ resource "google_monitoring_alert_policy" "api_5xx_errors" {
 
 # 2. Dead-Letter Queue Alert
 resource "google_monitoring_alert_policy" "dead_letter_alert" {
-  project      = var.project_id
-  display_name = "ZonePilot DLQ Backlog (${var.environment})"
-  combiner     = "OR"
+  project               = var.project_id
+  display_name          = "ZonePilot DLQ Backlog (${var.environment})"
+  combiner              = "OR"
   notification_channels = var.notification_email != "" ? [google_monitoring_notification_channel.email_channel[0].name] : []
 
   conditions {
@@ -67,7 +67,7 @@ resource "google_monitoring_alert_policy" "dead_letter_alert" {
       }
     }
   }
-  
+
   conditions {
     display_name = "Stuck DLQ Messages (Oldest Age)"
     condition_threshold {
