@@ -1,6 +1,15 @@
 name: Audit 3 (F-023 Rate Limiting)
 on: [push, workflow_dispatch]
 
+# Least privilege (F-017): without this block GITHUB_TOKEN is issued with the
+# repository default, which is write scope, so any compromised third-party
+# action in this job could push to the repo. This workflow only checks out the
+# source and runs scripts/test_f023_empirical.py against an ephemeral local
+# Supabase database. It publishes nothing, uploads no SARIF, uses no OIDC and
+# comments on no pull request, so read on contents is all it needs.
+permissions:
+  contents: read
+
 jobs:
   test-f023:
     runs-on: ubuntu-latest
