@@ -28,7 +28,16 @@ from services.zonepilot.forecast.repository import (
     forecast_is_known_at,
 )
 
-TODAY = datetime(2026, 8, 20, 12, 0, 0, tzinfo=timezone.utc)
+# Anchored to the wall clock, not to a literal date.
+#
+# These were fixed at 2026-08-20, which meant TOMORROW (2026-08-21) silently
+# became a PAST timestamp once the real clock moved past it. The tests that
+# assert "a future forecast must not be visible when as_of defaults to now"
+# then stopped testing anything: the record was no longer in the future, so it
+# was correctly visible, and the leakage guard reported green while guarding
+# nothing. A temporal test whose meaning depends on the date it is run is not a
+# temporal test. TOMORROW must always be genuinely after utc_now().
+TODAY = datetime.now(timezone.utc).replace(microsecond=0)
 YESTERDAY = TODAY - timedelta(days=1)
 TOMORROW = TODAY + timedelta(days=1)
 ZONE = "8860145b59fffff"

@@ -60,6 +60,11 @@ def test_duplicate_pubsub_delivery_idempotency(client, monkeypatch):
         "id": job_id,
         "request_payload": {"min_open_facilities": 2, "max_open_facilities": 3},
         "status": "QUEUED",
+        # The worker refuses to persist a result whose provenance it cannot read
+        # from the frozen job row, so a job fixture without lineage never
+        # reaches the behaviour these tests assert.
+        "graph_version": "1.1.0+bad320dd48da",
+        "assumption_version": "r1-pilot-proxy@1.1.0",
     }
     claimed = True
 
@@ -71,7 +76,12 @@ def test_duplicate_pubsub_delivery_idempotency(client, monkeypatch):
         return None
 
     monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.claim_job_lease", mock_claim)
-    monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.get_job", lambda jid: mock_job)
+    # get_job_system, not get_job: the worker resolves the owning workspace from
+    # the authoritative row rather than trusting a caller-supplied value
+    # (P0-AUTH-SNAPSHOT-001). Patching the old name left the real lookup in
+    # place, so it returned None and the handler exited at "job_not_found"
+    # without ever reaching the solver path this test exists to exercise.
+    monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.get_job_system", lambda jid: mock_job)
     monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.save_result", lambda **kwargs: None)
 
     # First execution: claims lease, solves, acks
@@ -101,13 +111,24 @@ def test_concurrent_lease_contention_single_winner(client, monkeypatch):
         nonlocal claims_count
         claims_count += 1
         if claims_count == 1:
-            return {"id": job_id, "request_payload": {}, "status": "QUEUED"}
+            return {
+                "id": job_id,
+                "request_payload": {},
+                "status": "QUEUED",
+                "graph_version": "1.1.0+bad320dd48da",
+                "assumption_version": "r1-pilot-proxy@1.1.0",
+            }
         return None  # Second worker fails to claim lease
 
     monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.claim_job_lease", mock_claim)
     monkeypatch.setattr(
-        "services.zonepilot.optimization.pubsub_worker._repository.get_job",
-        lambda jid: {"id": jid, "request_payload": {}},
+        "services.zonepilot.optimization.pubsub_worker._repository.get_job_system",
+        lambda jid: {
+            "id": jid,
+            "request_payload": {},
+            "graph_version": "1.1.0+bad320dd48da",
+            "assumption_version": "r1-pilot-proxy@1.1.0",
+        },
     )
     monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.save_result", lambda **kwargs: None)
 
@@ -141,7 +162,13 @@ def test_solver_exception_fail_closed_persistence(client, monkeypatch):
     encoded = base64.b64encode(json.dumps(payload).encode("utf-8")).decode("utf-8")
     push_body = {"message": {"messageId": "msg-err", "data": encoded}}
 
-    mock_job = {"id": job_id, "request_payload": {}, "status": "QUEUED"}
+    mock_job = {
+        "id": job_id,
+        "request_payload": {},
+        "status": "QUEUED",
+        "graph_version": "1.1.0+bad320dd48da",
+        "assumption_version": "r1-pilot-proxy@1.1.0",
+    }
     saved_result = {}
 
     def mock_save(**kwargs):
@@ -151,7 +178,7 @@ def test_solver_exception_fail_closed_persistence(client, monkeypatch):
     monkeypatch.setattr(
         "services.zonepilot.optimization.pubsub_worker._repository.claim_job_lease", lambda **kwargs: mock_job
     )
-    monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.get_job", lambda j: mock_job)
+    monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.get_job_system", lambda j: mock_job)
     monkeypatch.setattr("services.zonepilot.optimization.pubsub_worker._repository.save_result", mock_save)
     monkeypatch.setattr(
         "services.zonepilot.optimization.pubsub_worker.optimize_facilities",
