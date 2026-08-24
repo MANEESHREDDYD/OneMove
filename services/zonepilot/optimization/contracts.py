@@ -54,6 +54,20 @@ class OptimizationStatus(str, Enum):
     SOLVER_ERROR = "SOLVER_ERROR"
 
 
+class CapacityMode(str, Enum):
+    """Whether facility throughput is modelled at all.
+
+    The public-data model has no defensible throughput dataset: demand is a
+    PUBLIC_GEOGRAPHIC proxy (commercial POI counts), not orders. Constraining it
+    with an invented per-facility capacity produced a binding constraint that
+    made full service arithmetically impossible while looking like a real
+    operating limit. NOT_MODELED says so out loud.
+    """
+
+    NOT_MODELED = "NOT_MODELED"
+    ASSUMPTION = "ASSUMPTION"
+
+
 class OptimizationAction(str, Enum):
     OPEN_FACILITIES = "OPEN_FACILITIES"
     NO_ACTION = "NO_ACTION"
@@ -162,6 +176,7 @@ class OptimizationConstraints(StrictContract):
     minimum_coverage_basis_points: int = Field(ge=0, le=BASIS_POINTS)
     allow_uncovered_demand: bool = False
     allow_no_action: bool = False
+    capacity_mode: CapacityMode = CapacityMode.NOT_MODELED
     max_total_fixed_cost_units: int | None = Field(default=None, ge=0, le=MAX_COEFFICIENT)
 
     @model_validator(mode="after")
@@ -306,6 +321,28 @@ class ScenarioInputLineage(StrictContract):
     evidence_class: MatrixEvidenceClass
 
 
+class ObjectiveComponent(StrictContract):
+    """One objective term, from raw measurement to weighted contribution.
+
+    Components used to be summed in their native units -- demand-unit-seconds
+    added to a unit-less uncovered count -- so a weight of 5000 on each meant
+    abandoning a zone cost about the same as one second of service. Each term is
+    now divided by a declared reference to become dimensionless basis points
+    before any weight is applied, and every step is published so the total can
+    be reconciled by hand.
+    """
+
+    name: StrictStr
+    raw_value: int
+    raw_unit: StrictStr
+    normalization_reference: int
+    normalization_reference_unit: StrictStr
+    normalized_basis_points: int
+    weight: int
+    weighted_contribution: int
+    evidence_class: StrictStr = "DERIVED"
+
+
 class ObjectiveBreakdown(StrictContract):
     weights: ObjectiveWeights
     expected_travel_probability_demand_seconds: int
@@ -314,6 +351,8 @@ class ObjectiveBreakdown(StrictContract):
     failure_exposure_capacity_basis_points: int
     expected_uncovered_probability_demand_units: int
     weighted_total: int
+    components: tuple[ObjectiveComponent, ...] = ()
+    normalization_scale: int = 0
 
 
 class OptimizationResult(StrictContract):
