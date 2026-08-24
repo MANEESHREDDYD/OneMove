@@ -2,48 +2,45 @@
   "program_status": "IN_PROGRESS",
   "current_phase": "TRAIN_2_CI_AND_AUTHORITATIVE_MAIN",
   "branch": "hotfix/onemove-p0-security-incident",
-  "head_sha": "8729e7396dacd2ac18f05244bba3da8889abd369",
+  "head_sha": "563c2b50888c3229baaf49c8cf1b5e8801edc8f3",
   "remote_pushed": true,
   "remote_main": "ec4bb92d38914910bfc6f0faabfdaea3919d6c65",
-  "ahead_of_main": 73,
+  "ahead_of_main": 75,
   "behind_main": 0,
+  "branch_count_reconciliation": "74 confirmed by rev-list, origin refs and the GitHub compare API. The prior '76' was a prose error in the summary, not in the data; the savepoint file had recorded 73 before its own commit.",
   "completed_this_session": [
-    "readiness statuses corrected: no row is GREEN without independent verification",
-    "F-DEC-002 closed: optimization_policy_version flows problem -> record -> replay; LEGACY_POLICY_NOT_REPLAYABLE typed state with 3 fixtures",
-    "F-DEC-003 closed: ON CONFLICT refreshes lineage columns instead of only recorded_at",
-    "F-DEC-004 closed: MANUAL_OPERATOR_DECISION no longer persisted as OPTIMIZER_DECISION",
-    "F-FCST-001 closed: EVIDENCE_ACCUMULATING forecast state is storable without inventing values",
-    "F-API-001 closed: all 13 observatory routes pass locally; causes were contract defects, not environment"
+    "reconciled the branch-count discrepancy: no repository divergence, the error was in my narration",
+    "F-RL-001 closed: rate-limit store outage returns typed 503 instead of an opaque 500 caused by a reserved logging key; ADR 0002 written",
+    "F-DEC-005 closed: manual decisions get MANUAL_DECISION_NOT_REPLAYABLE instead of a misleading legacy-policy state",
+    "F-OPT-013 opened: 94-zone solve is not reliably inside the 30s budget; worker holds a third conflicting default"
   ],
-  "targeted_tests": {
-    "command": "pytest tests/optimization tests/geo tests/decisions tests/api tests/execution/test_ci_contracts.py",
-    "passed": 288,
-    "failed": 3,
-    "failures_pre_existing_at_head": true
+  "verified_suites": {
+    "tests/api/test_rate_limit_distributed.py + tests/optimization + tests/geo": "114 passed",
+    "ruff": "clean"
   },
+  "known_flaky": [
+    "tests/decisions/test_decision_ledger.py::test_decision_replay_verification (F-OPT-013)"
+  ],
   "open_findings": {
-    "P0": 0,
+    "P0": 1,
     "P1": 2,
     "P2": 1,
-    "blocked_external": 1,
-    "detail": [
-      "F-API-002 (P2): 3 tests assert pre-hardening behaviour, pre-existing at HEAD",
-      "F-OPT-009 (P1): p95 misnomer remains in ledger/lineage/assistant call sites",
-      "F-OPT-011 (P1): determinism relies on optimum uniqueness, certified for the pilot only",
-      "SEC-01 (BLOCKED_EXTERNAL): exposed credential classes await provider-side rotation"
-    ]
+    "owner_action_required": 1
   },
   "next_train": "TRAIN_2_REMAINDER",
   "exact_next_commands": [
+    "# F-OPT-013 must land as ONE change with H3/H5 verification:",
+    "#   1. align _reconstruct_problem_from_payload allow_uncovered default to False",
+    "#   2. raise SOLVER_MAX_TIME_SECONDS in the assumption registry (bumps assumption version)",
+    "#   3. re-derive decision fixtures from the replay path, not the API path",
+    "pytest tests/decisions -q   # must be 8/8 stable across 3 consecutive runs",
     "gh run list --branch hotfix/onemove-p0-security-incident --limit 20",
-    "gh run view <failing-release-validation-run-id> --log-failed   # root-cause per section 8",
-    "gh api repos/MANEESHREDDYD/OneMove/dependabot/alerts --jq '.[] | {number,severity:.security_advisory.severity,pkg:.dependency.package.name,fixed:.security_vulnerability.first_patched_version.identifier}'",
-    "pytest tests/api/test_durable_decisions_api.py tests/api/test_rate_limit_distributed.py -q   # close F-API-002",
-    "git log --oneline origin/main..HEAD > docs/readiness/reconciliation_inventory.txt   # section 11",
-    "gh pr create --base main --head hotfix/onemove-p0-security-incident   # section 12, only after required CI green"
+    "gh api repos/MANEESHREDDYD/OneMove/dependabot/alerts --jq '.[] | {number,severity:.security_advisory.severity,pkg:.dependency.package.name}'",
+    "git log --oneline origin/main..HEAD > docs/readiness/reconciliation_inventory.txt",
+    "gh pr create --base main --head hotfix/onemove-p0-security-incident"
   ],
   "owner_action_required": [
-    "Rotate the exposed credential classes (database credential, service-role key, provider API key) at their provider consoles; values are never recorded here."
+    "Rotate exposed credential classes (database credential, service-role key, provider API key) at their provider consoles."
   ],
   "resume_automatically": true
 }
