@@ -76,10 +76,21 @@ def test_route_6_data_health():
         assert "evaluated_at" in data
 
 
-def test_route_7_optimizations_lifecycle():
-    # Submit job
+def test_route_7_optimization_submission_is_durable():
+    """Submission alone: the job must be accepted and persisted as QUEUED.
+
+    This asserts the submission contract only. Nothing consumes the queue in
+    this process, so requiring SUCCESS here made the test depend on a worker
+    that does not exist -- it observed FAILED and reported a red build for a
+    system behaving correctly. The worker half is covered by
+    test_route_7_optimization_lifecycle_with_real_worker below.
+    """
+    import uuid
+
     req = {
-        "idempotency_key": "test-idem-route-7",
+        # A fixed idempotency key made every run resolve to the first run's job,
+        # so one bad outcome was inherited forever.
+        "idempotency_key": f"test-idem-route-7-{uuid.uuid4()}",
         "min_open_facilities": 2,
         "max_open_facilities": 4,
         "max_travel_seconds": 1800,
@@ -89,12 +100,68 @@ def test_route_7_optimizations_lifecycle():
     assert post_res.status_code in {200, 201, 202}
     job_id = post_res.json()["job_id"]
 
-    # Retrieve job
     get_res = client.get(f"/api/v1/optimizations/{job_id}")
     assert get_res.status_code == 200
     data = get_res.json()
-    assert data["status"] in {"QUEUED", "RUNNING", "SUCCESS"}
     assert data["job_id"] == job_id
+    assert data["status"] == "QUEUED", "a submitted job with no worker must stay QUEUED"
+    assert data["solver_status"] is None
+
+
+def test_route_7_optimization_lifecycle_with_real_worker():
+    """QUEUED -> terminal, driven by the production worker code path.
+
+    This runs the same lease claim, problem reconstruction, solve and
+    persistence the deployed worker runs; only the Pub/Sub transport is absent.
+    No result is injected and no status is faked.
+    """
+    import uuid
+
+    from services.zonepilot.optimization.pubsub_worker import _reconstruct_problem_from_payload
+    from services.zonepilot.optimization.repository import OptimizationRepository
+    from services.zonepilot.optimization.service import OptimizationService
+    from services.zonepilot.release import current_release_sha
+
+    req = {
+        "idempotency_key": f"test-lifecycle-{uuid.uuid4()}",
+        "min_open_facilities": 1,
+        "max_open_facilities": 4,
+        "max_travel_seconds": 1800,
+        "allow_uncovered_demand": True,
+    }
+    post_res = client.post("/api/v1/optimizations", json=req)
+    assert post_res.status_code in {200, 201, 202}
+    job_id = post_res.json()["job_id"]
+
+    assert client.get(f"/api/v1/optimizations/{job_id}").json()["status"] == "QUEUED"
+
+    repository = OptimizationRepository()
+    service = OptimizationService(repository=repository)
+
+    lease = repository.claim_job_lease(
+        job_id=job_id, lease_owner=f"pytest-{uuid.uuid4().hex[:8]}", lease_seconds=300
+    )
+    assert lease, "the worker must be able to claim a QUEUED job"
+
+    row = repository.get_job_system(job_id)
+    assert row is not None
+    problem = _reconstruct_problem_from_payload(row["request_payload"] or {})
+    service.run_solver_for_job(job_id, problem, code_sha=current_release_sha())
+
+    final = client.get(f"/api/v1/optimizations/{job_id}").json()
+    assert final["status"] in {"SUCCESS", "FAILED"}, f"unexpected terminal status {final['status']}"
+    # Every terminal solver state must be typed and readable -- never a 500.
+    assert final["solver_status"] in {
+        "OPTIMAL",
+        "FEASIBLE",
+        "INFEASIBLE",
+        "TIME_LIMIT",
+        "MODEL_INVALID",
+    }, f"untyped solver status {final['solver_status']}"
+
+    if final["solver_status"] in {"OPTIMAL", "FEASIBLE"}:
+        assert final["demand_zones_total"] == 94
+        assert final["assigned_zones"] + final["uncovered_zones"] == final["demand_zones_total"]
 
 
 def test_route_8_scenarios_side_effect_free():

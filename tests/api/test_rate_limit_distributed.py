@@ -25,7 +25,6 @@ from fastapi.testclient import TestClient
 from services.api.core.middleware import RequestIdMiddleware
 from services.api.core.ratelimit import (
     ACTIVE_OPTIMIZATION_JOBS_SQL,
-    PRUNE_SQL,
     DistributedRateLimiter,
     EndpointClass,
     PostgresRateLimitStore,

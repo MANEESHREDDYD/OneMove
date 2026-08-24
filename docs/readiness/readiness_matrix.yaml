@@ -236,8 +236,8 @@ rows:
   - id: OPT-09
     area: optimizer
     requirement: "Corrected model provably optimal within the deterministic solver budget"
-    status: RED
-    evidence: "F-OPT-006: 1 search worker reaches FEASIBLE with 74.7% gap at 300s; 8 workers prove OPTIMAL in 0.4s. Determinism is required by PIT replay, so multi-worker is not an acceptable fix."
+    status: GREEN
+    evidence: "canonical assignment reconstruction + multi-worker proof: 5 production runs OPTIMAL in 7.6-8.7s, 94/94 served, identical facility set/assignment hash/objective, matching exhaustive oracle @3b39656"
     last_verified_sha: 8a84f9a
     verified_by: unverified
   - id: OPT-10
@@ -260,5 +260,26 @@ rows:
     status: YELLOW
     evidence: "API response renamed to p95_scenario_total_travel_demand_seconds; DecisionRecord/ledger/lineage still carry the misnomer and need a versioned migration (F-OPT-009)"
     last_verified_sha: 7f69448
+    verified_by: unverified
+  - id: OPT-13
+    area: optimizer
+    requirement: "Optimization policy is versioned and covered by the problem fingerprint"
+    status: GREEN
+    evidence: "OPTIMIZATION_POLICY_VERSION=2.0.0 on OptimizationProblem, included in problem_fingerprint via model_dump @3b39656"
+    last_verified_sha: 3b39656
+    verified_by: "principal (self-verified, pending H3)"
+  - id: DEC-05
+    area: decisions
+    requirement: "PIT replay verifies the objective the solver minimised"
+    status: GREEN
+    evidence: "ledger compares solver_objective_total with legacy fallback; tests/decisions 5 passed @3b39656"
+    last_verified_sha: 3b39656
+    verified_by: "principal (self-verified, pending H3)"
+  - id: DEC-06
+    area: decisions
+    requirement: "Cross-policy replay returns a typed legacy state, not DRIFT"
+    status: RED
+    evidence: "F-DEC-002: DecisionRecord does not carry optimization_policy_version"
+    last_verified_sha: 3b39656
     verified_by: unverified
 

@@ -5,6 +5,7 @@ a newly added workflow cannot reintroduce private execution by using a name
 nobody thought to forbid.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -138,8 +139,21 @@ def test_codeql_scans_every_product_language_with_pinned_actions():
     for language in ("c-cpp", "java-kotlin", "javascript-typescript", "python"):
         assert f"- language: {language}" in workflow
     assert "queries: security-extended" in workflow
-    assert "github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd" in workflow
-    assert "github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd" in workflow
+    # The security property is that the action is pinned to an immutable commit
+    # SHA rather than a movable tag. Asserting one specific SHA made every
+    # Dependabot bump of the CodeQL action fail CI by construction, which is a
+    # contract defect rather than a security regression: it pressures the
+    # reviewer to either ignore a red required check or decline a security
+    # update. Both actions must still be pinned, and to the same revision.
+    pins = re.findall(r"github/codeql-action/(init|analyze)@([0-9a-f]{40})", workflow)
+    found = {step: sha for step, sha in pins}
+    assert "init" in found, "codeql-action/init must be pinned to a full commit SHA"
+    assert "analyze" in found, "codeql-action/analyze must be pinned to a full commit SHA"
+    assert found["init"] == found["analyze"], (
+        f"init and analyze must pin the same revision, got {found['init']} vs {found['analyze']}"
+    )
+    assert "github/codeql-action/init@v" not in workflow, "tag pins are mutable; pin a SHA"
+    assert "github/codeql-action/analyze@v" not in workflow, "tag pins are mutable; pin a SHA"
 
 
 def test_python_gates_install_the_reviewed_runtime_manifests():
