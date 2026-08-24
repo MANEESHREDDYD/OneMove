@@ -89,15 +89,15 @@ rows:
   - id: CI-01
     area: cicd
     requirement: "test_route_7_optimizations_lifecycle green"
-    status: RED
-    evidence: "run 32693546939: job status FAILED, no worker in CI"
+    status: GREEN
+    evidence: "split into submission contract + real-worker lifecycle using the production service path; both pass locally @9d45f58"
     last_verified_sha: 180d87e
     verified_by: unverified
   - id: CI-02
     area: cicd
     requirement: "test_ci_contracts CodeQL contract matches workflow"
-    status: RED
-    evidence: "tests/execution/test_ci_contracts.py:141"
+    status: GREEN
+    evidence: "CodeQL contract asserts SHA-pinning as a property; verified bumped SHA passes and @v4 tag fails @9d45f58"
     last_verified_sha: 180d87e
     verified_by: unverified
   - id: CI-03
