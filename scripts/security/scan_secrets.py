@@ -97,9 +97,29 @@ def fingerprint(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
 
 
+# The host group in the URI rule is deliberately greedy so that a credential is
+# still caught when the DSN runs into surrounding text. That greediness means a
+# DSN quoted inside prose also absorbs the trailing punctuation -- a Markdown
+# line such as ``postgresql://postgres:postgres@127.0.0.1...`).`` yields the host
+# ``127.0.0.1...`).``, which no longer matches the loopback allowlist. Normalise
+# the captured host back to its hostname characters before that comparison.
+# Detection is unaffected: only the benign-host test reads the host, the
+# fingerprint is taken from the password, and trimming can never turn a real
+# remote host into a loopback or RFC 2606 reserved name.
+_HOST_CHARS = re.compile(r"^[A-Za-z0-9._\-\[\]:]*")
+
+
+def _normalize_host(host: str) -> str:
+    """Trim prose punctuation a greedy host capture picked up."""
+    cleaned = _HOST_CHARS.match(host).group(0)
+    # A trailing dot is legal in an FQDN but a run of them is sentence ellipsis,
+    # and a trailing hyphen is never legal in a hostname label.
+    return cleaned.rstrip(".-")
+
+
 def _is_benign(rule: str, match: re.Match[str]) -> bool:
     if rule == "uri-embedded-credential":
-        password, host = match.group(2), match.group(3)
+        password, host = match.group(2), _normalize_host(match.group(3))
         return bool(_BENIGN_HOSTS.match(host) or _PLACEHOLDER.match(password) or _OBVIOUS_FIXTURE.search(password))
     if rule == "generic-bearer-token":
         value = match.group(1)
@@ -203,7 +223,23 @@ def load_baseline() -> dict[str, dict]:
     if not path.is_file():
         return {}
     data = json.loads(path.read_text(encoding="utf-8"))
-    return {f["fingerprint"]: f for f in data.get("findings", [])}
+    baseline = {f["fingerprint"]: f for f in data.get("findings", [])}
+
+    # Only the "findings" array is read. Entries written as top-level
+    # fingerprint keys look plausible in review but are silently inert, so an
+    # author can believe a literal is baselined when it is not. That is
+    # fail-closed (an inert entry cannot let a secret through -- the finding
+    # would simply be reported as unbaselined), but it is still a trap. Say so
+    # instead of ignoring it.
+    stray = [k for k in data if k != "findings" and not k.startswith("_")]
+    if stray:
+        print(
+            f"  NOTE baseline has {len(stray)} entry/entries outside the 'findings' array "
+            f"({', '.join(sorted(stray))}); these are NOT loaded. Move them into 'findings' "
+            f"with a \"fingerprint\" field for them to take effect.",
+            file=sys.stderr,
+        )
+    return baseline
 
 
 def main() -> int:
