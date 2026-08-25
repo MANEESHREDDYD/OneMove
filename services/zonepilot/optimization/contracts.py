@@ -15,6 +15,8 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from services.temporal.contracts import EvidenceClass
+
 BASIS_POINTS = 10_000
 P95_BASIS_POINTS = 9_500
 MAX_TRAVEL_SECONDS = 7 * 24 * 60 * 60
@@ -400,6 +402,308 @@ class ObjectiveBreakdown(StrictContract):
     solver_objective_total: int = 0
 
 
+# ---------------------------------------------------------------------------
+# DO-NOTHING BASELINE
+# ---------------------------------------------------------------------------
+#
+# WHAT THE BASELINE IS
+# --------------------
+# The DO_NOTHING baseline is the INCUMBENT FACILITY SET -- the sites the network
+# already operates -- scored by the *identical* objective the solver minimised:
+#
+#   * the same ``OptimizationProblem``: the same demand points and demand units,
+#     the same candidate facility ledger (capacity, fixed cost, failure
+#     exposure), the same constraints;
+#   * the same scenarios, with the same probabilities and the same travel
+#     matrices (same ``graph_version``, same router, same matrix ids);
+#   * the same ``ObjectiveWeights``, and therefore the same
+#     ``assumption_version``;
+#   * the same ``optimization_policy_version``: the same normalisation
+#     references, the same ``FIXED_POINT`` scale, the same assignment rule.
+#
+# Exactly ONE thing differs between the two sides: which facilities are open.
+# That is what makes the difference attributable to the recommendation rather
+# than to a changed yardstick.
+#
+# WHY IT IS AN INPUT AND NOT SOMETHING WE DERIVE
+# ----------------------------------------------
+# R1 contains no facility ledger. ``r1_network`` says so in its own module
+# docstring: capacity, fixed cost and failure exposure are geographic proxies,
+# and the twelve "facilities" in the pilot are CANDIDATE SITES ranked by
+# commercial POI density, not operating depots. Nothing in the Gold artifacts,
+# the OSRM bundle, or ``supabase/migrations`` records which sites are open
+# today.
+#
+# Inventing an incumbent set -- "the four cheapest", "the four most central" --
+# would manufacture the very number the comparison exists to test, and would
+# turn the reported improvement into a statement about our own guess. So the
+# baseline is an OPTIONAL INPUT the caller supplies, and when it is absent the
+# comparison is published as UNAVAILABLE with a machine-readable reason. It is
+# never reported as zero and never silently dropped: a reader who sees no
+# improvement figure is told exactly why there is none.
+#
+# The comparison itself is DERIVED -- computed from a declared input and a
+# solved result by the same arithmetic. It observes nothing.
+
+
+class BaselineEvaluationStatus(str, Enum):
+    """Whether a do-nothing comparison could be computed at all."""
+
+    AVAILABLE = "AVAILABLE"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+class BaselineUnavailableReason(str, Enum):
+    """Why no do-nothing comparison exists. Always paired with a message."""
+
+    # No incumbent set was supplied, and none can be derived from R1 artifacts.
+    NO_BASELINE_SUPPLIED = "NO_BASELINE_SUPPLIED"
+    # The solve produced no proved recommendation, so there is no right-hand
+    # side to compare against.
+    NO_RECOMMENDATION = "NO_RECOMMENDATION"
+    # The supplied set names facilities this problem does not contain, so they
+    # have no row in the travel matrix and cannot be scored.
+    UNKNOWN_FACILITY_IDS = "UNKNOWN_FACILITY_IDS"
+    # Under CapacityMode.ASSUMPTION the per-zone assignments are coupled through
+    # a per-facility throughput limit, so the canonical nearest-facility rule is
+    # explicitly not valid (see ``_cp_sat._canonical_assignment``). Allocating
+    # the incumbent network's load would mean choosing an operating policy
+    # nobody has stated, so the comparison is withheld rather than guessed.
+    CAPACITY_MODE_COUPLES_ASSIGNMENTS = "CAPACITY_MODE_COUPLES_ASSIGNMENTS"
+    # The stored result predates this contract.
+    NOT_RECORDED = "NOT_RECORDED"
+
+
+class DoNothingBaseline(StrictContract):
+    """The incumbent facility set a recommendation is judged against. INPUT.
+
+    ``facility_ids`` may legitimately be empty: a greenfield network where doing
+    nothing serves nobody is a real baseline, and it scores as total coverage
+    loss rather than as a missing comparison. Every id must exist in the problem
+    so that the same travel matrix rows are used on both sides.
+
+    ``source`` and ``evidence_class`` are required because an incumbent set with
+    no stated provenance is exactly the kind of unsourced number this contract
+    exists to keep out. Nothing here is defaulted or inferred.
+    """
+
+    schema_name: Literal["zonepilot.do_nothing_baseline"] = "zonepilot.do_nothing_baseline"
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    baseline_id: str = Field(min_length=1)
+    facility_ids: tuple[str, ...] = Field(default=(), max_length=200)
+    source: str = Field(min_length=1)
+    evidence_class: EvidenceClass
+    as_of: str | None = None
+
+    @field_validator("baseline_id", "source")
+    @classmethod
+    def identifier_is_not_blank(cls, value: str) -> str:
+        return _not_blank(value)
+
+    @field_validator("facility_ids")
+    @classmethod
+    def facility_ids_are_unique_and_named(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not value.strip() for value in values):
+            raise ValueError("baseline facility identifiers must not be blank")
+        if len(values) != len(set(values)):
+            raise ValueError("baseline facility identifiers must be unique")
+        return values
+
+
+class BaselinePolicyViolation(str, Enum):
+    """A way the incumbent set breaks the request's own policy envelope.
+
+    A violation is REPORTED, never a rejection. The network as it stands today
+    is a fact; that a request would not be permitted to PROPOSE it says
+    something about the request, not about whether the fact can be measured.
+    """
+
+    ABOVE_MAX_OPEN_FACILITIES = "ABOVE_MAX_OPEN_FACILITIES"
+    BELOW_MIN_OPEN_FACILITIES = "BELOW_MIN_OPEN_FACILITIES"
+    ABOVE_MAX_TOTAL_FIXED_COST = "ABOVE_MAX_TOTAL_FIXED_COST"
+
+
+class BaselineInfeasibility(str, Enum):
+    """A service commitment the incumbent set fails to meet."""
+
+    UNCOVERED_DEMAND_NOT_PERMITTED = "UNCOVERED_DEMAND_NOT_PERMITTED"
+    BELOW_MINIMUM_COVERAGE = "BELOW_MINIMUM_COVERAGE"
+
+
+class ObjectiveComponentDelta(StrictContract):
+    """One objective component, on both sides, in the solver's own integers.
+
+    ``solver_scaled_delta`` is ``recommended - baseline``: NEGATIVE means the
+    recommendation improves this component. The same integer coefficient applies
+    to both sides -- the normalisation references depend only on the problem,
+    never on which facilities are open -- so the component deltas sum EXACTLY to
+    the total delta, with no rounding residue to absorb.
+    """
+
+    name: str
+    raw_unit: str
+    solver_coefficient: int
+    baseline_raw_value: int
+    recommended_raw_value: int
+    baseline_solver_scaled_contribution: int
+    recommended_solver_scaled_contribution: int
+    solver_scaled_delta: int
+    evidence_class: Literal["DERIVED"] = "DERIVED"
+
+    @model_validator(mode="after")
+    def delta_reconciles_with_its_own_sides(self) -> Self:
+        if self.baseline_solver_scaled_contribution != self.solver_coefficient * self.baseline_raw_value:
+            raise ValueError("baseline contribution is not coefficient * raw value")
+        if self.recommended_solver_scaled_contribution != self.solver_coefficient * self.recommended_raw_value:
+            raise ValueError("recommended contribution is not coefficient * raw value")
+        expected = self.recommended_solver_scaled_contribution - self.baseline_solver_scaled_contribution
+        if self.solver_scaled_delta != expected:
+            raise ValueError("solver_scaled_delta is not recommended minus baseline")
+        return self
+
+
+class BaselineComparison(StrictContract):
+    """What the recommendation is better THAN -- or why that cannot be said.
+
+    Sign conventions, stated once:
+
+    * ``total_solver_scaled_delta`` and every ``component_deltas`` entry are
+      ``recommended - baseline``. Negative is an improvement.
+    * ``absolute_improvement`` is ``baseline - recommended``. Positive is an
+      improvement. It is exactly ``-total_solver_scaled_delta``; both are
+      published because reversing a sign in the reader's head is how a
+      regression gets reported as a win.
+
+    Coverage is reported for the WORST scenario on each side -- the binding one
+    for any service commitment, and the same statistic the read path already
+    reports -- so an "improvement" bought by abandoning zones appears as a
+    negative ``coverage_delta_basis_points`` beside the positive objective
+    delta instead of hiding inside it.
+    """
+
+    schema_name: Literal["zonepilot.do_nothing_baseline_comparison"] = (
+        "zonepilot.do_nothing_baseline_comparison"
+    )
+    schema_version: Literal["1.0.0"] = "1.0.0"
+
+    status: BaselineEvaluationStatus
+    unavailable_reason: BaselineUnavailableReason | None = None
+    message: str = Field(min_length=1)
+    # The comparison observes nothing; it is arithmetic over a declared input
+    # and a solved result.
+    evidence_class: Literal["DERIVED"] = "DERIVED"
+
+    baseline: DoNothingBaseline | None = None
+
+    # Conformance of the SUPPLIED set: evaluated and reported, never enforced.
+    baseline_within_policy: bool | None = None
+    baseline_policy_violations: tuple[BaselinePolicyViolation, ...] = ()
+    baseline_feasible: bool | None = None
+    baseline_infeasibilities: tuple[BaselineInfeasibility, ...] = ()
+
+    baseline_facility_ids: tuple[str, ...] = ()
+    baseline_open_facility_count: int | None = None
+    recommended_facility_ids: tuple[str, ...] = ()
+    recommended_open_facility_count: int | None = None
+
+    baseline_solver_objective_total: int | None = None
+    recommended_solver_objective_total: int | None = None
+    total_solver_scaled_delta: int | None = None
+    absolute_improvement: int | None = None
+    improvement_basis_points: int | None = None
+    improvement_basis_points_unavailable_reason: str | None = None
+    component_deltas: tuple[ObjectiveComponentDelta, ...] = ()
+
+    baseline_coverage_basis_points: int | None = None
+    recommended_coverage_basis_points: int | None = None
+    coverage_delta_basis_points: int | None = None
+    baseline_uncovered_demand_units: int | None = None
+    recommended_uncovered_demand_units: int | None = None
+    baseline_scenario_metrics: tuple[ScenarioMetrics, ...] = ()
+
+    # The yardstick both sides were measured with. If any of these differs from
+    # the result's own lineage, the comparison is not like-for-like.
+    optimization_policy_version: str | None = None
+    assumption_version: str | None = None
+    graph_version: str | None = None
+    solver_scale: int | None = None
+
+    @model_validator(mode="after")
+    def unavailable_is_never_reported_as_zero(self) -> Self:
+        numeric = (
+            self.baseline_solver_objective_total,
+            self.recommended_solver_objective_total,
+            self.total_solver_scaled_delta,
+            self.absolute_improvement,
+            self.baseline_coverage_basis_points,
+            self.recommended_coverage_basis_points,
+        )
+        if self.status is BaselineEvaluationStatus.UNAVAILABLE:
+            if self.unavailable_reason is None:
+                raise ValueError("an UNAVAILABLE comparison must name its reason")
+            if any(value is not None for value in numeric):
+                raise ValueError(
+                    "an UNAVAILABLE comparison must not publish figures; a missing "
+                    "comparison reported as a number is indistinguishable from a real one"
+                )
+            if self.component_deltas:
+                raise ValueError("an UNAVAILABLE comparison must not publish component deltas")
+            return self
+
+        if self.unavailable_reason is not None:
+            raise ValueError("an AVAILABLE comparison must not name an unavailability reason")
+        if any(value is None for value in numeric):
+            raise ValueError("an AVAILABLE comparison must publish every headline figure")
+        if self.baseline is None:
+            raise ValueError("an AVAILABLE comparison must publish the baseline it used")
+        if not self.component_deltas:
+            raise ValueError("an AVAILABLE comparison must publish its component deltas")
+
+        baseline_total = self.baseline_solver_objective_total
+        recommended_total = self.recommended_solver_objective_total
+        total_delta = self.total_solver_scaled_delta
+        baseline_coverage = self.baseline_coverage_basis_points
+        recommended_coverage = self.recommended_coverage_basis_points
+        assert baseline_total is not None
+        assert recommended_total is not None
+        assert total_delta is not None
+        assert baseline_coverage is not None
+        assert recommended_coverage is not None
+
+        # The reconciliation a reviewer would do by hand, enforced by the type.
+        component_sum = sum(delta.solver_scaled_delta for delta in self.component_deltas)
+        if component_sum != total_delta:
+            raise ValueError(
+                f"component deltas sum to {component_sum} but the total delta is "
+                f"{total_delta}; the breakdown does not reconcile"
+            )
+        if total_delta != recommended_total - baseline_total:
+            raise ValueError("total_solver_scaled_delta is not recommended minus baseline")
+        if self.absolute_improvement != -total_delta:
+            raise ValueError("absolute_improvement is not the negation of the total delta")
+        if self.coverage_delta_basis_points != recommended_coverage - baseline_coverage:
+            raise ValueError("coverage_delta_basis_points is not recommended minus baseline")
+        return self
+
+
+def baseline_comparison_unavailable(
+    reason: BaselineUnavailableReason,
+    message: str,
+    *,
+    problem: OptimizationProblem | None = None,
+) -> BaselineComparison:
+    """The only way to say "no comparison", so it can never be said as a zero."""
+
+    return BaselineComparison(
+        status=BaselineEvaluationStatus.UNAVAILABLE,
+        unavailable_reason=reason,
+        message=message,
+        optimization_policy_version=problem.optimization_policy_version if problem is not None else None,
+        assumption_version=problem.objective_weights.assumption_version if problem is not None else None,
+        graph_version=problem.scenarios[0].travel_matrix.graph_version if problem is not None else None,
+    )
+
+
 class OptimizationResult(StrictContract):
     schema_name: Literal["zonepilot.facility_optimization_result"] = "zonepilot.facility_optimization_result"
     schema_version: Literal["1.0.0"] = "1.0.0"
@@ -415,6 +719,11 @@ class OptimizationResult(StrictContract):
     assignments: tuple[ScenarioAssignment, ...] = ()
     scenario_metrics: tuple[ScenarioMetrics, ...] = ()
     objective: ObjectiveBreakdown | None = None
+    # What the recommendation is better THAN. Always present on a solved result:
+    # when no incumbent set was supplied this carries status UNAVAILABLE and a
+    # reason, so "optimal, 4 facilities opened, objective 8.1e12" can never be
+    # published with nothing to compare it to and no explanation of why.
+    baseline_comparison: BaselineComparison | None = None
     solver: Literal["OR_TOOLS_CP_SAT"] = "OR_TOOLS_CP_SAT"
     solver_version: str
     random_seed: int
@@ -440,6 +749,14 @@ class OptimizationResult(StrictContract):
             raise ValueError("non-optimal results must not claim an action")
         if self.opened_facility_ids or self.assignments or self.scenario_metrics or self.objective is not None:
             raise ValueError("non-optimal results must not expose unproved decisions or metrics")
+        if (
+            self.baseline_comparison is not None
+            and self.baseline_comparison.status is not BaselineEvaluationStatus.UNAVAILABLE
+        ):
+            raise ValueError(
+                "a fail-closed result has no recommendation, so it cannot publish an "
+                "improvement over the do-nothing baseline"
+            )
         return self
 
 

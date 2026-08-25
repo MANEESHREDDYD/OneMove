@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import ortools
@@ -11,9 +12,16 @@ from ortools.sat.python import cp_model
 from services.zonepilot.optimization.contracts import (
     BASIS_POINTS,
     P95_BASIS_POINTS,
+    BaselineComparison,
+    BaselineEvaluationStatus,
+    BaselineInfeasibility,
+    BaselinePolicyViolation,
+    BaselineUnavailableReason,
     CapacityMode,
+    DoNothingBaseline,
     ObjectiveBreakdown,
     ObjectiveComponent,
+    ObjectiveComponentDelta,
     OptimizationAction,
     OptimizationProblem,
     OptimizationResult,
@@ -22,6 +30,7 @@ from services.zonepilot.optimization.contracts import (
     ScenarioInputLineage,
     ScenarioMetrics,
     UncertaintyScenario,
+    baseline_comparison_unavailable,
     problem_fingerprint,
 )
 
@@ -314,6 +323,15 @@ def _closed_result(
         solver_version=ortools.__version__,
         random_seed=problem.solver_settings.random_seed,
         num_search_workers=problem.solver_settings.num_search_workers,
+        # A fail-closed result still says what it cannot say. Leaving the field
+        # empty would read as "no comparison was asked for" when the truth is
+        # "there is no recommendation to compare".
+        baseline_comparison=baseline_comparison_unavailable(
+            BaselineUnavailableReason.NO_RECOMMENDATION,
+            f"The solve returned {status.value} rather than a proved recommendation, so there "
+            "is no configuration to compare the incumbent network against.",
+            problem=problem,
+        ),
         message=message,
     )
 
@@ -521,65 +539,114 @@ def _canonical_assignment(
     return best_facility, best_duration
 
 
-def _optimal_result(
+@dataclass(frozen=True)
+class _OpenSetEvaluation:
+    """Everything the objective says about ONE facility set.
+
+    This exists so the recommendation and the do-nothing baseline are scored by
+    the same code rather than by two implementations that agree until one of
+    them is edited. Both sides go through :func:`_evaluate_open_set`, which is
+    also the only place the published :class:`ObjectiveBreakdown` is built.
+    """
+
+    opened: tuple[str, ...]
+    assignments: tuple[ScenarioAssignment, ...]
+    scenario_metrics: tuple[ScenarioMetrics, ...]
+    objective: ObjectiveBreakdown
+
+
+# How a single demand point is served in one scenario: the facility that serves
+# it and the routed seconds to reach it, or ``None`` when it is not served.
+_AssignmentReader = Callable[[UncertaintyScenario, str], tuple[str | None, int]]
+
+
+def _canonical_assignment_reader(
+    problem: OptimizationProblem,
+    opened: tuple[str, ...],
+) -> _AssignmentReader:
+    """Serve each zone from its nearest open facility within the travel cap.
+
+    Valid only when capacity is NOT_MODELED -- see :func:`_canonical_assignment`
+    for why. This is the reader the do-nothing baseline uses, and it is the same
+    one the published recommendation uses in that mode, so neither side gets a
+    private assignment rule.
+    """
+
+    def read(scenario: UncertaintyScenario, demand_id: str) -> tuple[str | None, int]:
+        return _canonical_assignment(problem, scenario, demand_id, opened)
+
+    return read
+
+
+def _solver_assignment_reader(
     problem: OptimizationProblem,
     state: _ModelState,
     solver: cp_model.CpSolver,
-) -> OptimizationResult:
+) -> _AssignmentReader:
+    """Read the assignments CP-SAT itself chose.
+
+    ASSUMPTION capacity couples the zones through each facility's throughput
+    limit, so the solver's own choice is the only correct one to read.
+    """
+
+    facility_ids = sorted(facility.facility_id for facility in problem.facilities)
+
+    def read(scenario: UncertaintyScenario, demand_id: str) -> tuple[str | None, int]:
+        if solver.value(state.uncovered[(scenario.scenario_id, demand_id)]):
+            return None, 0
+        for facility_id in facility_ids:
+            if solver.value(state.assigned[(scenario.scenario_id, facility_id, demand_id)]):
+                return facility_id, _duration(scenario, facility_id, demand_id)
+        return None, 0
+
+    return read
+
+
+def _evaluate_open_set(
+    problem: OptimizationProblem,
+    opened: tuple[str, ...],
+    assignment_for: _AssignmentReader,
+) -> _OpenSetEvaluation:
+    """Score one facility set under this problem's objective.
+
+    The single source of the published objective arithmetic. It takes no
+    solution status and no notion of optimality: it answers "what does this
+    objective say about THIS set of open facilities", which is exactly the
+    question both the recommendation and the do-nothing baseline ask.
+    """
+
     facilities = {facility.facility_id: facility for facility in problem.facilities}
     demands = {demand.demand_id: demand for demand in problem.demand_points}
     scenarios = {scenario.scenario_id: scenario for scenario in problem.scenarios}
-    opened = tuple(facility_id for facility_id in sorted(facilities) if solver.value(state.open_facility[facility_id]))
+
     assignments: list[ScenarioAssignment] = []
     metrics: list[ScenarioMetrics] = []
     expected_travel = 0
     expected_uncovered = 0
     total_demand = sum(demand.demand_units for demand in demands.values())
     p95_values: list[tuple[int, int]] = []
+
     for scenario_id in sorted(scenarios):
         scenario = scenarios[scenario_id]
         uncovered_units = 0
         total_travel = 0
-        canonical = problem.constraints.capacity_mode is CapacityMode.NOT_MODELED
         for demand_id in sorted(demands):
             demand = demands[demand_id]
-
-            if canonical:
-                facility_id, duration = _canonical_assignment(problem, scenario, demand_id, opened)
-                if facility_id is None:
-                    uncovered_units += demand.demand_units
-                    continue
-                assignments.append(
-                    ScenarioAssignment(
-                        scenario_id=scenario_id,
-                        facility_id=facility_id,
-                        demand_id=demand_id,
-                        assigned_demand_units=demand.demand_units,
-                        travel_seconds=duration,
-                    )
-                )
-                total_travel += demand.demand_units * duration
-                continue
-
-            # ASSUMPTION capacity couples the assignments, so the solver's own
-            # choice is the only correct one to read.
-            if solver.value(state.uncovered[(scenario_id, demand_id)]):
+            facility_id, duration = assignment_for(scenario, demand_id)
+            if facility_id is None:
                 uncovered_units += demand.demand_units
                 continue
-            for facility_id in sorted(facilities):
-                if solver.value(state.assigned[(scenario_id, facility_id, demand_id)]):
-                    duration = _duration(scenario, facility_id, demand_id)
-                    assignments.append(
-                        ScenarioAssignment(
-                            scenario_id=scenario_id,
-                            facility_id=facility_id,
-                            demand_id=demand_id,
-                            assigned_demand_units=demand.demand_units,
-                            travel_seconds=duration,
-                        )
-                    )
-                    total_travel += demand.demand_units * duration
-                    break
+            assignments.append(
+                ScenarioAssignment(
+                    scenario_id=scenario_id,
+                    facility_id=facility_id,
+                    demand_id=demand_id,
+                    assigned_demand_units=demand.demand_units,
+                    travel_seconds=duration,
+                )
+            )
+            total_travel += demand.demand_units * duration
+
         covered_units = total_demand - uncovered_units
         coverage_basis_points = covered_units * BASIS_POINTS // total_demand
         metrics.append(
@@ -597,9 +664,7 @@ def _optimal_result(
         p95_values.append((total_travel, scenario.probability_basis_points))
 
     facility_cost = sum(facilities[facility_id].fixed_cost_units for facility_id in opened)
-    failure_exposure = sum(
-        facilities[facility_id].failure_exposure_basis_points for facility_id in opened
-    )
+    failure_exposure = sum(facilities[facility_id].failure_exposure_basis_points for facility_id in opened)
     p95_travel = _weighted_p95(p95_values)
     weights = problem.objective_weights
     references = _normalisation_references(problem)
@@ -651,6 +716,218 @@ def _optimal_result(
         solver_scale=FIXED_POINT,
         solver_objective_total=solver_objective_total,
     )
+    return _OpenSetEvaluation(
+        opened=opened,
+        assignments=tuple(assignments),
+        scenario_metrics=tuple(metrics),
+        objective=objective,
+    )
+
+
+def _worst_scenario(metrics: tuple[ScenarioMetrics, ...]) -> ScenarioMetrics:
+    """The binding scenario for a service commitment, chosen the same way twice."""
+
+    return min(metrics, key=lambda item: (item.coverage_basis_points, item.scenario_id))
+
+
+def _improvement_basis_points(absolute_improvement: int, baseline_total: int) -> tuple[int | None, str | None]:
+    """Improvement as a fraction of the baseline, in exact integer basis points.
+
+    Truncated toward zero rather than floored, so a 0.5 bp regression reports as
+    0 rather than as -1: a rounding rule that makes a regression look larger is
+    as wrong as one that makes it look smaller.
+    """
+
+    if baseline_total <= 0:
+        return None, (
+            "the baseline objective is not strictly positive, so an improvement "
+            "expressed as a fraction of it has no meaning"
+        )
+    scaled = absolute_improvement * BASIS_POINTS
+    magnitude = abs(scaled) // baseline_total
+    return (-magnitude if scaled < 0 else magnitude), None
+
+
+def evaluate_do_nothing_baseline(
+    problem: OptimizationProblem,
+    result: OptimizationResult,
+    baseline: DoNothingBaseline | None,
+) -> BaselineComparison:
+    """Score the incumbent network against the recommendation, or say why not.
+
+    Both sides are scored by :func:`_evaluate_open_set` under the same problem,
+    the same scenarios, the same travel matrices, the same weights and the same
+    policy version, so the only difference between them is which facilities are
+    open.
+    """
+
+    if baseline is None:
+        return baseline_comparison_unavailable(
+            BaselineUnavailableReason.NO_BASELINE_SUPPLIED,
+            "No incumbent facility set was supplied. R1 carries no facility ledger -- "
+            "its twelve facilities are candidate sites ranked by commercial POI density, "
+            "not operating depots -- so there is nothing to derive one from, and inventing "
+            "one would manufacture the number this comparison exists to test. Supply "
+            "do_nothing_baseline to obtain the comparison.",
+            problem=problem,
+        )
+
+    if result.status is not OptimizationStatus.OPTIMAL or result.objective is None:
+        return baseline_comparison_unavailable(
+            BaselineUnavailableReason.NO_RECOMMENDATION,
+            f"The solve returned {result.status.value} rather than a proved recommendation, "
+            "so there is no configuration to compare the incumbent network against.",
+            problem=problem,
+        )
+
+    known = {facility.facility_id for facility in problem.facilities}
+    unknown = sorted(set(baseline.facility_ids) - known)
+    if unknown:
+        return baseline_comparison_unavailable(
+            BaselineUnavailableReason.UNKNOWN_FACILITY_IDS,
+            "The incumbent set names facilities this problem does not contain "
+            f"({', '.join(unknown)}), so they have no row in the travel matrix and "
+            "cannot be scored under the same objective.",
+            problem=problem,
+        )
+
+    if problem.constraints.capacity_mode is not CapacityMode.NOT_MODELED:
+        return baseline_comparison_unavailable(
+            BaselineUnavailableReason.CAPACITY_MODE_COUPLES_ASSIGNMENTS,
+            f"capacity_mode is {problem.constraints.capacity_mode.value}, which couples every "
+            "zone through a per-facility throughput limit. The canonical nearest-facility rule "
+            "is documented as invalid under that mode, and allocating the incumbent network's "
+            "load any other way would mean choosing an operating policy nobody has stated.",
+            problem=problem,
+        )
+
+    opened = tuple(sorted(baseline.facility_ids))
+    evaluation = _evaluate_open_set(problem, opened, _canonical_assignment_reader(problem, opened))
+
+    constraints = problem.constraints
+    facilities = {facility.facility_id: facility for facility in problem.facilities}
+    baseline_cost = sum(facilities[facility_id].fixed_cost_units for facility_id in opened)
+
+    violations: list[BaselinePolicyViolation] = []
+    if len(opened) > constraints.max_open_facilities:
+        violations.append(BaselinePolicyViolation.ABOVE_MAX_OPEN_FACILITIES)
+    if len(opened) < constraints.min_open_facilities:
+        violations.append(BaselinePolicyViolation.BELOW_MIN_OPEN_FACILITIES)
+    if constraints.max_total_fixed_cost_units is not None and baseline_cost > constraints.max_total_fixed_cost_units:
+        violations.append(BaselinePolicyViolation.ABOVE_MAX_TOTAL_FIXED_COST)
+
+    total_demand = sum(demand.demand_units for demand in problem.demand_points)
+    infeasibilities: list[BaselineInfeasibility] = []
+    if not constraints.allow_uncovered_demand and any(
+        metric.uncovered_demand_units for metric in evaluation.scenario_metrics
+    ):
+        infeasibilities.append(BaselineInfeasibility.UNCOVERED_DEMAND_NOT_PERMITTED)
+    # Compared exactly the way the model posts it, not against the floored
+    # display figure, so the flag and the constraint cannot disagree on a tie.
+    if any(
+        metric.covered_demand_units * BASIS_POINTS < total_demand * constraints.minimum_coverage_basis_points
+        for metric in evaluation.scenario_metrics
+    ):
+        infeasibilities.append(BaselineInfeasibility.BELOW_MINIMUM_COVERAGE)
+
+    recommended_components = {component.name: component for component in result.objective.components}
+    deltas: list[ObjectiveComponentDelta] = []
+    for component in evaluation.objective.components:
+        recommended = recommended_components.get(component.name)
+        if recommended is None:  # pragma: no cover - both sides come from _evaluate_open_set
+            raise AssertionError(f"the recommendation publishes no {component.name!r} component")
+        if recommended.solver_coefficient != component.solver_coefficient:  # pragma: no cover
+            raise AssertionError(
+                f"{component.name}: the two sides were scaled by different coefficients, so they "
+                "were not measured with the same yardstick"
+            )
+        deltas.append(
+            ObjectiveComponentDelta(
+                name=component.name,
+                raw_unit=component.raw_unit,
+                solver_coefficient=component.solver_coefficient,
+                baseline_raw_value=component.raw_value,
+                recommended_raw_value=recommended.raw_value,
+                baseline_solver_scaled_contribution=component.solver_scaled_contribution,
+                recommended_solver_scaled_contribution=recommended.solver_scaled_contribution,
+                solver_scaled_delta=recommended.solver_scaled_contribution - component.solver_scaled_contribution,
+            )
+        )
+
+    baseline_total = evaluation.objective.solver_objective_total
+    recommended_total = result.objective.solver_objective_total
+    total_delta = recommended_total - baseline_total
+    absolute_improvement = -total_delta
+    improvement_basis_points, improvement_reason = _improvement_basis_points(absolute_improvement, baseline_total)
+
+    baseline_worst = _worst_scenario(evaluation.scenario_metrics)
+    recommended_worst = _worst_scenario(result.scenario_metrics)
+
+    if absolute_improvement > 0:
+        headline = "The recommendation improves on the incumbent network"
+    elif absolute_improvement == 0:
+        headline = "The recommendation scores exactly as the incumbent network does"
+    else:
+        headline = "The recommendation scores WORSE than the incumbent network"
+    coverage_delta = recommended_worst.coverage_basis_points - baseline_worst.coverage_basis_points
+    coverage_note = (
+        f" Worst-scenario coverage moves {coverage_delta:+d} basis points "
+        f"({baseline_worst.coverage_basis_points} -> {recommended_worst.coverage_basis_points})."
+    )
+
+    return BaselineComparison(
+        status=BaselineEvaluationStatus.AVAILABLE,
+        message=(
+            f"{headline}: {baseline_total} -> {recommended_total} on the solver scale, "
+            f"a {absolute_improvement} absolute change." + coverage_note
+        ),
+        baseline=baseline,
+        baseline_within_policy=not violations,
+        baseline_policy_violations=tuple(violations),
+        baseline_feasible=not infeasibilities,
+        baseline_infeasibilities=tuple(infeasibilities),
+        baseline_facility_ids=opened,
+        baseline_open_facility_count=len(opened),
+        recommended_facility_ids=tuple(result.opened_facility_ids),
+        recommended_open_facility_count=len(result.opened_facility_ids),
+        baseline_solver_objective_total=baseline_total,
+        recommended_solver_objective_total=recommended_total,
+        total_solver_scaled_delta=total_delta,
+        absolute_improvement=absolute_improvement,
+        improvement_basis_points=improvement_basis_points,
+        improvement_basis_points_unavailable_reason=improvement_reason,
+        component_deltas=tuple(deltas),
+        baseline_coverage_basis_points=baseline_worst.coverage_basis_points,
+        recommended_coverage_basis_points=recommended_worst.coverage_basis_points,
+        coverage_delta_basis_points=coverage_delta,
+        baseline_uncovered_demand_units=baseline_worst.uncovered_demand_units,
+        recommended_uncovered_demand_units=recommended_worst.uncovered_demand_units,
+        baseline_scenario_metrics=evaluation.scenario_metrics,
+        optimization_policy_version=problem.optimization_policy_version,
+        assumption_version=problem.objective_weights.assumption_version,
+        graph_version=problem.scenarios[0].travel_matrix.graph_version,
+        solver_scale=FIXED_POINT,
+    )
+
+
+def _optimal_result(
+    problem: OptimizationProblem,
+    state: _ModelState,
+    solver: cp_model.CpSolver,
+) -> OptimizationResult:
+    facilities = {facility.facility_id: facility for facility in problem.facilities}
+    opened = tuple(facility_id for facility_id in sorted(facilities) if solver.value(state.open_facility[facility_id]))
+
+    # NOT_MODELED leaves the zones uncoupled, so the canonical rule reproduces
+    # the optimum exactly and does not depend on which worker finished first.
+    # ASSUMPTION couples them through a throughput limit, where only the
+    # solver's own choice is correct.
+    if problem.constraints.capacity_mode is CapacityMode.NOT_MODELED:
+        assignment_for = _canonical_assignment_reader(problem, opened)
+    else:
+        assignment_for = _solver_assignment_reader(problem, state, solver)
+
+    evaluation = _evaluate_open_set(problem, opened, assignment_for)
     action = OptimizationAction.NO_ACTION if not opened else OptimizationAction.OPEN_FACILITIES
     return OptimizationResult(
         problem_id=problem.problem_id,
@@ -661,10 +938,10 @@ def _optimal_result(
         status=OptimizationStatus.OPTIMAL,
         action=action,
         fail_closed=False,
-        opened_facility_ids=opened,
-        assignments=tuple(assignments),
-        scenario_metrics=tuple(metrics),
-        objective=objective,
+        opened_facility_ids=evaluation.opened,
+        assignments=evaluation.assignments,
+        scenario_metrics=evaluation.scenario_metrics,
+        objective=evaluation.objective,
         solver_version=ortools.__version__,
         random_seed=problem.solver_settings.random_seed,
         num_search_workers=problem.solver_settings.num_search_workers,
@@ -676,6 +953,7 @@ def optimize_facilities(
     problem: OptimizationProblem,
     *,
     skip_implied_solves: bool = True,
+    baseline: DoNothingBaseline | None = None,
 ) -> OptimizationResult:
     """Solve a robust capacitated facility problem, returning only proved optima.
 
@@ -686,15 +964,20 @@ def optimize_facilities(
     ``skip_implied_solves`` only controls whether forced tie-break indicators are
     resolved by implication instead of by a redundant proved solve. Both modes
     emit the same result; the flag exists so the equivalence can be tested.
+
+    ``baseline`` is the incumbent facility set to report the recommendation
+    against. It is an input because R1 records no such set; omitting it yields
+    an UNAVAILABLE comparison carrying that reason, never a zero improvement.
     """
 
-    return solve_with_counters(problem, skip_implied_solves=skip_implied_solves)[0]
+    return solve_with_counters(problem, skip_implied_solves=skip_implied_solves, baseline=baseline)[0]
 
 
 def solve_with_counters(
     problem: OptimizationProblem,
     *,
     skip_implied_solves: bool = True,
+    baseline: DoNothingBaseline | None = None,
 ) -> tuple[OptimizationResult, _SolveCounters]:
     """Solve and also report how much CP-SAT work the run actually cost."""
 
@@ -706,4 +989,6 @@ def solve_with_counters(
         return failure, policy.counters
     if solver is None:
         raise AssertionError("canonical solve returned neither a solver nor a failure")
-    return _optimal_result(problem, state, solver), policy.counters
+    result = _optimal_result(problem, state, solver)
+    comparison = evaluate_do_nothing_baseline(problem, result, baseline)
+    return result.model_copy(update={"baseline_comparison": comparison}), policy.counters
