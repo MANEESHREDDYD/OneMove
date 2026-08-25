@@ -6,23 +6,60 @@ import pytest
 import requests
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://127.0.0.1:54321")
+API_URL = os.environ.get("ONEMOVE_API_URL", "http://127.0.0.1:8000")
 ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "mock_anon_key")
 LOCAL_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "mock_service_key")
 JWT_SECRET = os.environ["SUPABASE_JWT_SECRET"]
 
 
-def _is_supabase_reachable():
+def _unmet_dependencies() -> list[str]:
+    """Name every service this module needs but cannot reach.
+
+    These tests exercise tenant isolation end to end, so they need TWO live
+    services: Supabase for auth and PostgREST, and the OneMove API for the
+    ``/v1/probes`` write path. The guard used to probe only Supabase, so with
+    Supabase up and the API down the module was NOT skipped -- it ran and
+    produced thirteen ConnectionRefusedError failures that read as tenant
+    isolation defects. A guard that checks one dependency and gates on two is
+    the same class of defect as a test that asserts nothing: it reports on
+    something other than what it claims to.
+
+    Returning the list rather than a bool is deliberate. The skip reason then
+    names the specific service that is missing, so a reader knows what to start
+    instead of being told, vaguely, that an environment is unavailable.
+    """
+    missing: list[str] = []
+
     if ANON_KEY == "mock_anon_key" or LOCAL_SERVICE_KEY == "mock_service_key":
-        return False
+        missing.append("Supabase keys (SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are placeholders)")
+    else:
+        try:
+            r = requests.head(f"{SUPABASE_URL}/rest/v1/", headers={"apikey": ANON_KEY}, timeout=2)
+            if r.status_code >= 400:
+                missing.append(f"Supabase PostgREST at {SUPABASE_URL} (HTTP {r.status_code})")
+        except Exception as exc:
+            missing.append(f"Supabase at {SUPABASE_URL} ({type(exc).__name__})")
+
+        try:
+            requests.head(f"{SUPABASE_URL}/auth/v1/health", timeout=2)
+        except Exception as exc:
+            missing.append(f"Supabase GoTrue at {SUPABASE_URL}/auth/v1 ({type(exc).__name__})")
+
     try:
-        r = requests.head(f"{SUPABASE_URL}/rest/v1/", headers={"apikey": ANON_KEY}, timeout=2)
-        return r.status_code < 400
-    except Exception:
-        return False
+        # Any response at all proves the port is served; the status is irrelevant
+        # because an unauthenticated probe is expected to be rejected.
+        requests.get(f"{API_URL}/health", timeout=2)
+    except Exception as exc:
+        missing.append(f"OneMove API at {API_URL} ({type(exc).__name__})")
+
+    return missing
 
 
-if not _is_supabase_reachable():
-    pytestmark = pytest.mark.skip(reason="Live Supabase environment unreachable at SUPABASE_URL")
+_MISSING = _unmet_dependencies()
+if _MISSING:
+    pytestmark = pytest.mark.skip(
+        reason="tenant-isolation tests need live services; unreachable: " + "; ".join(_MISSING)
+    )
 
 email1 = "test_user_e@onemove.com"
 email2 = "test_user_f@onemove.com"
@@ -156,7 +193,7 @@ def setup_users():
 
 
 def submit_probe(token, probe_data):
-    url = "http://127.0.0.1:8000/v1/probes"
+    url = f"{API_URL}/v1/probes"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     return requests.post(url, headers=headers, json=probe_data)
 
