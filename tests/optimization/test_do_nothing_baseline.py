@@ -100,6 +100,17 @@ def _solve(problem, baseline=None):
     return optimize_facilities(problem, baseline=baseline)
 
 
+def test_process_isolated_solver_carries_the_declared_baseline() -> None:
+    """The production solver boundary must not drop the demo baseline."""
+    from services.zonepilot.optimization.solver import optimize_facilities
+
+    result = optimize_facilities(_problem(), baseline=_baseline("fac:0", "fac:1"))
+
+    assert result.baseline_comparison is not None
+    assert result.baseline_comparison.status.value == "AVAILABLE"
+    assert result.baseline_comparison.baseline_facility_ids == ("fac:0", "fac:1")
+
+
 # --- the absent baseline -----------------------------------------------------
 
 

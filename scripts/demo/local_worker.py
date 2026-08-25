@@ -33,19 +33,29 @@ logger = logging.getLogger("demo.local_worker")
 WORKER_ID = f"local-demo-worker-{uuid.uuid4().hex[:8]}"
 
 
-def claim_and_solve_one(repository: OptimizationRepository, service: OptimizationService) -> bool:
-    """Claim one QUEUED job and solve it. Returns True when a job was processed."""
+def claim_and_solve_one(repository: OptimizationRepository, service: OptimizationService, target_job_id: str | None = None) -> bool:
+    """Claim one QUEUED job (or exactly target_job_id) and solve it. Returns True when a job was processed."""
     with repository._connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, request_payload
-                FROM public.optimization_jobs
-                WHERE status = 'QUEUED'
-                ORDER BY created_at ASC
-                LIMIT 1
-                """
-            )
+            if target_job_id:
+                cur.execute(
+                    """
+                    SELECT id, request_payload
+                    FROM public.optimization_jobs
+                    WHERE id = %(job_id)s
+                    """,
+                    {"job_id": target_job_id}
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id, request_payload
+                    FROM public.optimization_jobs
+                    WHERE status = 'QUEUED'
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                    """
+                )
             row = cur.fetchone()
 
     if not row:
@@ -74,6 +84,7 @@ def claim_and_solve_one(repository: OptimizationRepository, service: Optimizatio
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="process at most one job then exit")
+    parser.add_argument("--job-id", type=str, help="target a specific optimization job id")
     parser.add_argument("--poll-seconds", type=float, default=2.0)
     args = parser.parse_args()
 
@@ -83,7 +94,7 @@ def main() -> int:
     logger.info("Local demo worker %s starting.", WORKER_ID)
     while True:
         try:
-            processed = claim_and_solve_one(repository, service)
+            processed = claim_and_solve_one(repository, service, target_job_id=args.job_id)
         except Exception:
             logger.exception("Local worker iteration failed")
             processed = False

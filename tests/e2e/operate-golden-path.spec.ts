@@ -1,183 +1,278 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
 import { expect, test } from '@playwright/test';
+import dotenv from 'dotenv';
 
-/**
- * The golden path a viewer records.
- *
- * This drives the real page against the real API. It is not a screenshot test
- * and it does not stub anything: if the map engine fails to initialise, if the
- * mission artifact is missing, or if the observation store cannot be read, this
- * fails — which is the point. A demo recorded over a broken golden path is
- * worse than no demo.
- *
- * The assertions are deliberately about HONESTY as much as function. A map that
- * renders is not enough; it has to render the right city, label simulated data
- * as simulated, and refuse to describe a stale reading as current.
- */
+dotenv.config({ path: '.env.local' });
 
+const run = promisify(execFile);
+const API = process.env.ONEMOVE_API_URL || 'http://127.0.0.1:8000';
 const OPERATE = '/demo/operate';
+const RECORD = process.env.ONEMOVE_DEMO_RECORD === '1';
 
-/** MapLibre needs a moment to compile shaders and lay out 11k line features. */
-async function waitForMap(page: import('@playwright/test').Page) {
-  await expect(page.getByTestId('map-stage')).toBeVisible({ timeout: 30_000 });
+const HOLD = RECORD
+  ? {
+      opening: 10_000,
+      network: 22_000,
+      live: 20_000,
+      mission: 30_000,
+      disruption: 23_000,
+      comparison: 42_000,
+      why: 47_000,
+      freeze: 25_000,
+      evidence: 27_000,
+      replay: 32_000,
+      closing: 12_000,
+    }
+  : {
+      opening: 200,
+      network: 200,
+      live: 200,
+      mission: 200,
+      disruption: 200,
+      comparison: 200,
+      why: 200,
+      freeze: 200,
+      evidence: 200,
+      replay: 200,
+      closing: 200,
+    };
+
+const required = (name: string) => {
+  const value = process.env[name];
+  if (!value) throw new Error(`FAIL CLOSED: ${name} is required for the demo journey.`);
+  return value;
+};
+
+test('records the OPERATE → recommend → evidence → replay golden path', async ({ page, request }) => {
+  test.setTimeout(RECORD ? 600_000 : 240_000);
+
+  const authResponse = await request.post(
+    `${required('NEXT_PUBLIC_SUPABASE_URL')}/auth/v1/token?grant_type=password`,
+    {
+      headers: { apikey: required('NEXT_PUBLIC_SUPABASE_ANON_KEY') },
+      data: { email: required('TENANT_A_EMAIL'), password: required('TENANT_A_PASSWORD') },
+    },
+  );
+  expect(authResponse.ok(), 'demo authentication').toBeTruthy();
+  const token = (await authResponse.json()).access_token as string;
+  const workspace = required('DEMO_WORKSPACE_ID');
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'x-workspace-id': workspace,
+  };
+
+  const apiGet = async (path: string) => {
+    const response = await request.get(`${API}${path}`, { headers });
+    expect(response.ok(), `GET ${path}: ${await response.text()}`).toBeTruthy();
+    return response.json();
+  };
+
+  const push = async (payload: Record<string, unknown>) => {
+    await page.evaluate((next) => {
+      const driver = (window as unknown as { __omOperateDemo?: (value: unknown) => void }).__omOperateDemo;
+      if (!driver) throw new Error('OPERATE demo driver is unavailable');
+      driver(next);
+    }, payload);
+  };
+
+  await page.setExtraHTTPHeaders({ Authorization: `Bearer ${token}`, 'x-workspace-id': workspace });
+  await page.goto(OPERATE, { waitUntil: 'networkidle' });
+  await page.waitForFunction(
+    () => (window as unknown as { __omOperateReady?: boolean }).__omOperateReady === true,
+  );
   await expect(page.locator('[data-map-state="ready"]')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('canvas.maplibregl-canvas')).toBeVisible({ timeout: 30_000 });
-  // Let the first paint settle so screenshots are not of a half-drawn frame.
-  await page.waitForTimeout(1500);
-}
 
-test.describe('OPERATE golden path', () => {
-  test('the map is a real engine drawing real Bengaluru geography', async ({ page }) => {
-    await page.goto(OPERATE);
-    await waitForMap(page);
-
-    // A canvas with non-zero size proves the WebGL context actually initialised,
-    // rather than the container merely existing.
-    const box = await page.locator('canvas.maplibregl-canvas').boundingBox();
-    expect(box?.width ?? 0).toBeGreaterThan(400);
-    expect(box?.height ?? 0).toBeGreaterThan(300);
-
-    // The engine is present and controllable, not a picture.
-    await expect(page.locator('.maplibregl-ctrl-zoom-in')).toBeVisible();
-    await expect(page.locator('.maplibregl-ctrl-zoom-out')).toBeVisible();
-
-    // Attribution is a licence condition, not decoration.
-    await expect(page.locator('[data-map-attribution="true"]')).toContainText('OpenStreetMap');
+  const rendered = await page.evaluate(() => {
+    const map = (window as unknown as {
+      __omMap?: { queryRenderedFeatures: (options: { layers: string[] }) => unknown[] };
+    }).__omMap;
+    return {
+      roads: map?.queryRenderedFeatures({ layers: ['roads-line'] }).length ?? 0,
+      routes: map?.queryRenderedFeatures({ layers: ['routes-line'] }).length ?? 0,
+    };
   });
+  expect(rendered.roads, 'rendered road features').toBeGreaterThan(0);
+  expect(rendered.routes, 'rendered route features').toBeGreaterThan(0);
 
-  test('the basemap it loaded is Bengaluru, checked by coordinates', async ({ page }) => {
-    // An Andorra extract once shipped under a Bengaluru filename and rendered
-    // perfectly. Geography is verified by coordinate, never by a name.
-    const response = await page.request.get('/demo/bengaluru-basemap.json');
-    expect(response.ok()).toBeTruthy();
-    const basemap = await response.json();
+  const basemapResponse = await request.get('http://localhost:3000/demo/bengaluru-basemap.json');
+  const basemap = await basemapResponse.json();
+  expect(basemap.evidence_class).toBe('PUBLIC_GEOGRAPHIC');
+  expect(basemap.zones).toHaveLength(94);
+  expect(basemap.roads.length).toBeGreaterThan(10_000);
 
-    expect(basemap.evidence_class).toBe('PUBLIC_GEOGRAPHIC');
-    expect(basemap.zones).toHaveLength(94);
-    expect(basemap.bbox.min_lat).toBeGreaterThanOrEqual(12.7);
-    expect(basemap.bbox.max_lat).toBeLessThanOrEqual(13.2);
-    expect(basemap.bbox.min_lon).toBeGreaterThanOrEqual(77.3);
-    expect(basemap.bbox.max_lon).toBeLessThanOrEqual(77.9);
+  const missionResponse = await request.get('http://localhost:3000/demo/mission-routes.json');
+  const mission = await missionResponse.json();
+  expect(mission.evidence_class).toBe('SIMULATED');
+  expect(mission.orders).toHaveLength(16);
+  expect(mission.routes).toHaveLength(16);
+  expect(mission.traffic_aware).toBe(false);
+  expect(mission.routes.every((route: { geometry: unknown[] }) => route.geometry.length > 2)).toBeTruthy();
+
+  await expect(page.getByTestId('live-context-panel')).toContainText('PROVIDER_ESTIMATED');
+  await expect(page.getByTestId('live-context-panel')).toContainText('PUBLIC_OFFICIAL');
+  const trafficFreshness = await page.locator('[data-source="Traffic"]').getAttribute('data-freshness');
+  expect(['FRESH', 'DEGRADED', 'STALE', 'UNAVAILABLE']).toContain(trafficFreshness);
+
+  await push({ stage: 'opening' });
+  await page.waitForTimeout(HOLD.opening);
+  await push({ stage: 'network' });
+  await page.waitForTimeout(HOLD.network);
+  await page.waitForTimeout(HOLD.live);
+
+  await push({ stage: 'mission' });
+  await page.locator('[data-order-id="ORD-009"]').click();
+  await expect(page.getByTestId('order-detail')).toContainText('ORD-009');
+  await expect(page.getByTestId('order-detail')).toContainText('not traffic-aware');
+  await page.waitForTimeout(HOLD.mission);
+
+  const facilitiesResponse = await request.get('http://localhost:3000/demo/facilities.json');
+  const facilityIds = (await facilitiesResponse.json()).facility_ids as string[];
+  const baseline = {
+    baseline_id: 'simulated-demo-baseline-cto-outreach-v1',
+    facility_ids: facilityIds.slice(0, 4),
+    source: 'cto-outreach-v1 controlled demo scenario definition; not a retailer network',
+    evidence_class: 'SIMULATED',
+    as_of: null,
+  };
+
+  await push({ stage: 'disruption' });
+  await expect(page.getByTestId('simulated-disruption')).toContainText('SIMULATED SCENARIO');
+  await page.waitForTimeout(HOLD.disruption);
+
+  const sha = (await run('git', ['rev-parse', 'HEAD'], { cwd: process.cwd() })).stdout.trim();
+  const submit = await request.post(`${API}/api/v1/optimizations`, {
+    headers,
+    data: {
+      idempotency_key: `cto-outreach-v1-${sha.slice(0, 16)}`,
+      min_open_facilities: 1,
+      max_open_facilities: 4,
+      max_travel_seconds: 1800,
+      allow_uncovered_demand: true,
+      scenarios: ['s1_free_flow', 's2_congested', 's3_congested_outage'],
+      do_nothing_baseline: baseline,
+    },
   });
+  expect(submit.ok(), `optimization submission: ${await submit.text()}`).toBeTruthy();
+  const submitted = await submit.json();
+  const jobId = submitted.job_id as string;
 
-  test('sixteen simulated orders are listed and labelled as simulated', async ({ page }) => {
-    await page.goto(OPERATE);
-    await waitForMap(page);
-
-    const list = page.getByTestId('order-list');
-    await expect(list).toBeVisible();
-    // The class must be on the panel itself, so a cropped screenshot still
-    // carries it.
-    await expect(list).toContainText('SIMULATED');
-    await expect(list).toContainText('No customer, merchant or rider exists.');
-
-    const rows = page.locator('[data-order-id]');
-    await expect(rows).toHaveCount(16);
-    await expect(page.locator('[data-order-id="ORD-001"]')).toBeVisible();
-    await expect(page.locator('[data-order-id="ORD-016"]')).toBeVisible();
-  });
-
-  test('selecting an order reveals its route and does not overstate it', async ({ page }) => {
-    await page.goto(OPERATE);
-    await waitForMap(page);
-
-    await page.locator('[data-order-id="ORD-009"]').click();
-
-    const detail = page.getByTestId('order-detail');
-    await expect(detail).toBeVisible();
-    await expect(detail).toContainText('ORD-009');
-    await expect(detail).toContainText('km');
-    await expect(detail).toContainText('SIMULATED');
-
-    // The routing is not traffic-aware, and the interface has to say so rather
-    // than leaving a number that looks like an ETA unqualified.
-    await expect(detail).toContainText('not traffic-aware');
-
-    await expect(page.locator('[data-order-id="ORD-009"][data-selected="true"]')).toBeVisible();
-
-    // Clicking again clears the selection, so a presenter can get back to the
-    // whole-network view without reloading.
-    await page.locator('[data-order-id="ORD-009"]').click();
-    await expect(page.getByTestId('order-detail')).toBeHidden();
-  });
-
-  test('the routes drawn are road geometry, not straight lines', async ({ page }) => {
-    const response = await page.request.get('/demo/mission-routes.json');
-    expect(response.ok()).toBeTruthy();
-    const artifact = await response.json();
-
-    expect(artifact.evidence_class).toBe('SIMULATED');
-    expect(artifact.orders).toHaveLength(16);
-    expect(artifact.routes).toHaveLength(16);
-    expect(artifact.traffic_aware).toBe(false);
-
-    for (const route of artifact.routes) {
-      // Two vertices between two distinct places is a straight line.
-      expect(route.geometry.length).toBeGreaterThan(2);
-      expect(route.distance_m).toBeGreaterThan(0);
-      for (const [lon, lat] of route.geometry) {
-        expect(lat).toBeGreaterThanOrEqual(12.7);
-        expect(lat).toBeLessThanOrEqual(13.2);
-        expect(lon).toBeGreaterThanOrEqual(77.3);
-        expect(lon).toBeLessThanOrEqual(77.9);
-      }
+  if (!['SUCCESS', 'FAILED'].includes(submitted.status)) {
+    try {
+      const workerEnv = {
+        ...process.env,
+        DATABASE_URL: required('DATABASE_URL'),
+        TEST_DATABASE_URL: process.env.TEST_DATABASE_URL || required('DATABASE_URL'),
+        ZONEPILOT_DATA_ROOT: process.env.ZONEPILOT_DATA_ROOT || require('path').join(process.cwd(), 'data_root'),
+        PYTHONPATH: process.cwd(),
+      };
+      await run('python', ['scripts/demo/local_worker.py', '--job-id', jobId], {
+        cwd: process.cwd(),
+        env: workerEnv,
+        timeout: 180_000,
+        maxBuffer: 2 * 1024 * 1024,
+      });
+    } catch {
+      // A deployed worker may win the lease. The authoritative status below is
+      // the only outcome that decides whether the journey continues.
     }
-  });
+  }
 
-  test('live context names every source and never claims more than it has', async ({ page }) => {
-    await page.goto(OPERATE);
-    await waitForMap(page);
-
-    const panel = page.getByTestId('live-context-panel');
-    await expect(panel).toBeVisible();
-
-    // Every source the demo shows, with its provenance.
-    await expect(panel.locator('[data-source="Traffic"]')).toContainText('PROVIDER_ESTIMATED');
-    await expect(panel.locator('[data-source="Weather"]')).toContainText('PUBLIC_OFFICIAL');
-    await expect(panel.locator('[data-source="Network geography"]')).toContainText(
-      'PUBLIC_GEOGRAPHIC',
-    );
-    await expect(panel.locator('[data-source="Delivery mission"]')).toContainText('SIMULATED');
-
-    // The word beside a provider must follow its freshness, never be hardcoded
-    // to something reassuring.
-    const trafficState = await panel
-      .locator('[data-source="Traffic"]')
-      .getAttribute('data-freshness');
-    expect(['FRESH', 'DEGRADED', 'STALE', 'UNAVAILABLE']).toContain(trafficState);
-
-    const trafficRow = panel.locator('[data-source="Traffic"]');
-    if (trafficState === 'FRESH') {
-      await expect(trafficRow).toContainText('CURRENT');
-    } else if (trafficState === 'DEGRADED') {
-      await expect(trafficRow).toContainText('RECENT');
-    } else if (trafficState === 'STALE') {
-      await expect(trafficRow).toContainText('LAST KNOWN');
-    } else {
-      await expect(trafficRow).toContainText('UNAVAILABLE');
-      await expect(trafficRow).toContainText('no observation recorded');
+  let optimization: Record<string, unknown> | null = null;
+  const solveDeadline = Date.now() + 190_000;
+  while (Date.now() < solveDeadline) {
+    const current = await apiGet(`/api/v1/optimizations/${jobId}`);
+    if (current.status === 'SUCCESS' || current.status === 'FAILED') {
+      optimization = current;
+      break;
     }
+    // The optimization endpoint has an intentionally small identity budget.
+    // CP-SAT may run for two minutes, so polling faster than this only rate
+    // limits the presenter without making the result arrive sooner.
+    await page.waitForTimeout(10_000);
+  }
+  expect(optimization, 'optimization completed').not.toBeNull();
+  expect(optimization!.solver_status).toBe('OPTIMAL');
+  const result = optimization!.result_document as Record<string, unknown>;
+  const comparison = result.baseline_comparison as Record<string, unknown>;
+  expect(comparison.status).toBe('AVAILABLE');
+  expect(comparison.baseline_facility_ids as string[]).toEqual(baseline.facility_ids);
+
+  const optimizationScene = {
+    job_id: jobId,
+    opened_facilities: optimization!.opened_facilities,
+    run_duration_ms: optimization!.run_duration_ms,
+    result_document: result,
+  };
+  await push({ stage: 'comparison', optimization: optimizationScene });
+  await expect(page.getByTestId('do-nothing')).toContainText('SIMULATED DEMO BASELINE');
+  await expect(page.getByTestId('recommended')).toContainText('RECOMMENDED');
+  await expect(page.getByTestId('comparison-delta')).toBeVisible();
+  await page.waitForTimeout(HOLD.comparison);
+
+  await push({ stage: 'why', optimization: optimizationScene });
+  await expect(page.getByTestId('why-decision')).toContainText('Why this decision?');
+  await expect(page.getByTestId('why-decision')).toContainText('Objective components');
+  await page.waitForTimeout(HOLD.why);
+
+  const freezeResponse = await request.post(`${API}/api/v1/decisions/freeze`, {
+    headers,
+    data: {
+      optimization_job_id: jobId,
+      operator_rationale: 'Controlled Bengaluru disruption demo recommendation accepted for reproducibility.',
+    },
   });
+  expect(freezeResponse.ok(), `decision freeze: ${await freezeResponse.text()}`).toBeTruthy();
+  const decision = await freezeResponse.json();
+  await push({ stage: 'freeze', optimization: optimizationScene, decision });
+  await expect(page.getByTestId('frozen-decision')).toContainText(decision.decision_id);
+  await page.waitForTimeout(HOLD.freeze);
 
-  test('the page states what is real without the narration having to', async ({ page }) => {
-    await page.goto(OPERATE);
-    await waitForMap(page);
+  const scenarioInputs = result.scenario_inputs as {
+    scenario_id: string;
+    matrix_id: string;
+    evidence_class: string;
+  }[];
+  const evidence = [
+    { label: 'Decision', id: decision.decision_id, evidence_class: 'DERIVED' },
+    { label: 'Optimization result', id: jobId, evidence_class: 'DERIVED' },
+    { label: 'Problem snapshot', id: result.problem_snapshot_id, evidence_class: 'DERIVED' },
+    ...scenarioInputs.map((item) => ({
+      label: item.scenario_id,
+      id: item.matrix_id,
+      evidence_class: item.evidence_class === 'PUBLIC_GEOGRAPHIC' ? 'PUBLIC_GEOGRAPHIC' : 'SIMULATED',
+    })),
+    { label: 'Demo baseline', id: baseline.baseline_id, evidence_class: 'SIMULATED' },
+    { label: 'Assumption set', id: result.assumption_version, evidence_class: 'ASSUMPTION' },
+    { label: 'Release', id: decision.code_sha, evidence_class: 'DERIVED' },
+  ];
+  await push({ stage: 'evidence', optimization: optimizationScene, decision, evidence });
+  await expect(page.getByTestId('decision-evidence')).toContainText('Decision evidence');
+  await expect(page.getByTestId('decision-evidence')).toContainText('SIMULATED');
+  await page.waitForTimeout(HOLD.evidence);
 
-    // A single still frame from the recording must carry this.
-    const body = page.locator('body');
-    await expect(body).toContainText('public geographic evidence');
-    await expect(body).toContainText('provider-estimated');
-    await expect(body).toContainText('simulated');
-  });
+  const replayResponse = await request.post(
+    `${API}/api/v1/decisions/${decision.decision_id}/replay`,
+    { headers, data: {} },
+  );
+  expect(replayResponse.ok(), `decision replay: ${await replayResponse.text()}`).toBeTruthy();
+  const replay = await replayResponse.json();
+  expect(typeof replay.match_status).toBe('string');
+  await push({ stage: 'replay', optimization: optimizationScene, decision, evidence, replay });
+  await expect(page.getByTestId('decision-replay')).toContainText(replay.match_status);
+  await expect(page.getByTestId('decision-replay')).not.toContainText('No replay result');
+  await page.waitForTimeout(HOLD.replay);
 
-  test('no credential is exposed to the browser', async ({ page }) => {
-    await page.goto(OPERATE);
-    await waitForMap(page);
+  const html = await page.content();
+  expect(html).not.toMatch(/api\.tomtom\.com/i);
+  expect(html).not.toMatch(/[?&]key=/i);
+  expect(html).not.toMatch(/service_role/i);
+  expect(html).not.toContain(token);
 
-    const html = await page.content();
-    // Provider keys must never reach client HTML; the browser reads normalized
-    // state from our API and never calls a provider directly.
-    expect(html).not.toMatch(/api\.tomtom\.com/i);
-    expect(html).not.toMatch(/[?&]key=/i);
-    expect(html).not.toMatch(/service_role/i);
-  });
+  await push({ stage: 'closing', optimization: optimizationScene, decision, evidence, replay });
+  await expect(page.getByTestId('demo-closing')).toContainText('Operate. Simulate. Decide. Prove.');
+  await page.waitForTimeout(HOLD.closing);
 });

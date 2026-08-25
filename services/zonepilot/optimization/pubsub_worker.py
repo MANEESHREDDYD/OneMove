@@ -18,6 +18,7 @@ from services.zonepilot.assumptions.application import AssumptionSetView
 from services.zonepilot.assumptions.registry import default_assumption_registry
 from services.zonepilot.optimization.contracts import (
     DemandPoint,
+    DoNothingBaseline,
     Facility,
     OptimizationConstraints,
     OptimizationProblem,
@@ -324,7 +325,13 @@ async def process_pubsub_push(request: Request, response: Response):
         )
         _repository.save_problem_snapshot(snapshot, workspace_id=workspace_id)
 
-        result = optimize_facilities(problem)
+        baseline_doc = payload.get("do_nothing_baseline") if isinstance(payload, dict) else None
+        baseline = (
+            DoNothingBaseline.model_validate(baseline_doc, strict=False)
+            if baseline_doc is not None
+            else None
+        )
+        result = optimize_facilities(problem, baseline=baseline)
         run_ms = int((time.perf_counter() - start_time) * 1000)
 
         result_doc = result.model_dump()

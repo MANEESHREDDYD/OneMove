@@ -12,6 +12,7 @@ import uuid
 from typing import Any
 
 from services.zonepilot.optimization.contracts import (
+    DoNothingBaseline,
     OptimizationProblem,
 )
 from services.zonepilot.optimization.r1_catalog import default_data_root
@@ -302,7 +303,16 @@ class OptimizationService:
 
             self.repository.save_problem_snapshot(snapshot, workspace_id=job_workspace_id)
 
-            result = optimize_facilities(problem)
+            request_payload = job_row.get("request_payload") or {}
+            if isinstance(request_payload, str):
+                request_payload = json.loads(request_payload)
+            baseline_doc = request_payload.get("do_nothing_baseline") if isinstance(request_payload, dict) else None
+            baseline = (
+                DoNothingBaseline.model_validate(baseline_doc, strict=False)
+                if baseline_doc is not None
+                else None
+            )
+            result = optimize_facilities(problem, baseline=baseline)
             run_ms = int((time.perf_counter() - start_time) * 1000)
 
             result_doc = result.model_dump()

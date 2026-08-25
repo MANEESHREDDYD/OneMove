@@ -56,6 +56,7 @@ from services.zonepilot.optimization.contracts import (
     TravelMatrix,
     UncertaintyScenario,
 )
+from services.temporal.contracts import EvidenceClass
 from services.zonepilot.optimization.r1_catalog import FileSystemArtifactCatalog, default_data_root
 from services.zonepilot.optimization.repository import OptimizationRepository
 from services.zonepilot.optimization.service import OptimizationService
@@ -242,6 +243,16 @@ def get_osm_evidence_tile(
 # --- R1 Optimization API ---
 
 
+class DoNothingBaselineRequest(BaseModel):
+    """JSON-facing form of the strict immutable domain baseline contract."""
+
+    baseline_id: str = Field(min_length=1)
+    facility_ids: list[str] = Field(default_factory=list, max_length=200)
+    source: str = Field(min_length=1)
+    evidence_class: EvidenceClass
+    as_of: str | None = None
+
+
 class OptimizationRequest(BaseModel):
     idempotency_key: str | None = None
     min_open_facilities: int = Field(default=1, ge=1)
@@ -258,6 +269,10 @@ class OptimizationRequest(BaseModel):
     # re-declaring them, so the request model cannot drift away from the tiers
     # it is validated against.
     scenarios: list[str] = Field(default_factory=lambda: list(CANONICAL_SCENARIO_IDS))
+    # R1 has candidate sites but no incumbent facility ledger. A comparison is
+    # therefore optional input, and the controlled demo labels its supplied set
+    # SIMULATED instead of presenting it as a retailer's real network.
+    do_nothing_baseline: DoNothingBaselineRequest | None = None
 
 
 def _build_real_94x12x3_problem(

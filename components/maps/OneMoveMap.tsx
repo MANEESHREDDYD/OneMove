@@ -485,6 +485,15 @@ export function OneMoveMap({
   useEffect(() => setSource('scenario', data.scenario), [setSource, data.scenario]);
   useEffect(() => setSource('recommended', data.recommended), [setSource, data.recommended]);
 
+  // Scenario and recommendation layers start hidden in normal OPERATE mode,
+  // then reveal themselves when the executive journey supplies real features.
+  useEffect(() => {
+    if (data.scenario?.features.length) setVisible((current) => ({ ...current, scenario: true }));
+  }, [data.scenario]);
+  useEffect(() => {
+    if (data.recommended?.features.length) setVisible((current) => ({ ...current, recommended: true }));
+  }, [data.recommended]);
+
   // Selection is applied to the data rather than to a filter, so a selected
   // order can be emphasised while the rest stay drawn but dimmed.
   useEffect(() => {

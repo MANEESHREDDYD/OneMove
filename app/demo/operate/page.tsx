@@ -17,6 +17,7 @@
 
 import dynamic from 'next/dynamic';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { cellToBoundary, cellToLatLng } from 'h3-js';
 
 import {
   LiveContextPanel,
@@ -26,8 +27,13 @@ import {
   OrderList,
   type MissionArtifact,
 } from '@/components/demo/OrderList';
+import {
+  DecisionJourney,
+  type OperateDemoScene,
+} from '@/components/demo/DecisionJourney';
 import type { FeatureCollection } from '@/lib/geo/basemap';
 import type { EvidenceState } from '@/lib/geo/evidence';
+import { createClient } from '@/utils/supabase/client';
 
 // MapLibre touches `window` at module scope, so it can never be server-rendered.
 const OneMoveMap = dynamic(
@@ -52,6 +58,8 @@ export default function OperatePage() {
   const [context, setContext] = useState<LiveContext | null>(null);
   const [contextError, setContextError] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [facilityIds, setFacilityIds] = useState<string[]>([]);
+  const [scene, setScene] = useState<OperateDemoScene>({ stage: 'opening' });
 
   // --- the simulated mission, from its versioned artifact -------------------
 
@@ -80,10 +88,44 @@ export default function OperatePage() {
     };
   }, []);
 
+  useEffect(() => {
+    fetch('/demo/facilities.json')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data: { facility_ids?: string[] }) => setFacilityIds(data.facility_ids ?? []))
+      .catch(() => setFacilityIds([]));
+  }, []);
+
+  // The recording harness changes only the presentation stage. All numbers it
+  // supplies are responses from the API calls made in the same test run.
+  useEffect(() => {
+    const target = window as unknown as {
+      __omOperateDemo?: (next: Partial<OperateDemoScene> & { stage: OperateDemoScene['stage'] }) => void;
+      __omOperateReady?: boolean;
+    };
+    target.__omOperateDemo = (next) => setScene((current) => ({ ...current, ...next }));
+    target.__omOperateReady = true;
+    return () => {
+      delete target.__omOperateDemo;
+      delete target.__omOperateReady;
+    };
+  }, []);
+
   // --- live context, from the API that reads the observation store ----------
 
-  const loadContext = useCallback(() => {
-    fetch('/api/v1/demo/live-context', { credentials: 'include' })
+  const loadContext = useCallback(async () => {
+    const headers: Record<string, string> = {};
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) headers.Authorization = `Bearer ${session.access_token}`;
+    } catch {
+      // A recording may supply its verified bearer header at the browser-context
+      // level. The endpoint still fails closed if neither source authenticates.
+    }
+    const workspaceId = process.env.NEXT_PUBLIC_DEMO_WORKSPACE_ID;
+    if (workspaceId) headers['x-workspace-id'] = workspaceId;
+
+    fetch('/api/v1/demo/live-context', { credentials: 'include', headers })
       .then(async (r) => {
         if (!r.ok) {
           const body = await r.json().catch(() => null);
@@ -165,6 +207,51 @@ export default function OperatePage() {
 
   const trafficSource = context?.sources.find((s) => s.source === 'Traffic');
 
+  const facilities = useMemo(
+    () => collection(facilityIds.map((id) => {
+      const [lat, lon] = cellToLatLng(id.replace(/^fac:/, ''));
+      return {
+        type: 'Feature' as const,
+        id,
+        geometry: { type: 'Point' as const, coordinates: [lon, lat] },
+        properties: { facilityId: id },
+      };
+    })),
+    [facilityIds],
+  );
+
+  const comparison = scene.optimization?.result_document.baseline_comparison;
+  const disruptedFacility = comparison?.baseline_facility_ids?.[0] ?? facilityIds[0];
+  const showDisruption = ['disruption', 'comparison', 'why', 'freeze', 'evidence', 'replay', 'closing'].includes(scene.stage);
+  const showRecommendation = ['comparison', 'why', 'freeze', 'evidence', 'replay', 'closing'].includes(scene.stage);
+
+  const disruption = useMemo(() => {
+    if (!showDisruption || !disruptedFacility) return undefined;
+    const cell = disruptedFacility.replace(/^fac:/, '');
+    const ring = cellToBoundary(cell).map(([lat, lon]) => [lon, lat]);
+    ring.push(ring[0]);
+    return collection([{
+      type: 'Feature' as const,
+      id: `disruption-${cell}`,
+      geometry: { type: 'Polygon' as const, coordinates: [ring] },
+      properties: { scenarioId: 's3_congested_outage', evidenceClass: 'SIMULATED' },
+    }]);
+  }, [disruptedFacility, showDisruption]);
+
+  const recommended = useMemo(() => {
+    if (!showRecommendation) return undefined;
+    const ids = scene.optimization?.opened_facilities ?? [];
+    return collection(ids.map((id) => {
+      const [lat, lon] = cellToLatLng(id.replace(/^fac:/, ''));
+      return {
+        type: 'Feature' as const,
+        id: `recommended-${id}`,
+        geometry: { type: 'Point' as const, coordinates: [lon, lat] },
+        properties: { facilityId: id, evidenceClass: 'DERIVED' },
+      };
+    }));
+  }, [scene.optimization, showRecommendation]);
+
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#04070d] font-sans text-slate-100">
       <header className="z-20 flex shrink-0 items-center justify-between border-b border-slate-800/80 bg-[#070c16] px-6 py-2.5">
@@ -187,11 +274,13 @@ export default function OperatePage() {
       <div className="relative flex min-h-0 flex-1">
         <div className="absolute inset-0" data-testid="map-stage">
           <OneMoveMap
-            data={{ orders: orderFeatures, routes: routeFeatures, traffic }}
+            data={{ orders: orderFeatures, routes: routeFeatures, traffic, facilities, scenario: disruption, recommended }}
             selectedOrderId={selectedOrderId}
             onSelectOrder={setSelectedOrderId}
           />
         </div>
+
+        <DecisionJourney scene={scene} />
 
         <aside className="pointer-events-none absolute right-4 top-4 bottom-4 z-10 flex w-[310px] flex-col gap-3">
           <LiveContextPanel

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+import json
 import os
 import subprocess
 import sys
@@ -10,6 +11,7 @@ import sys
 from pydantic import ValidationError
 
 from services.zonepilot.optimization.contracts import (
+    DoNothingBaseline,
     OptimizationAction,
     OptimizationProblem,
     OptimizationResult,
@@ -67,7 +69,11 @@ def _closed_result(
     )
 
 
-def optimize_facilities(problem: OptimizationProblem) -> OptimizationResult:
+def optimize_facilities(
+    problem: OptimizationProblem,
+    *,
+    baseline: DoNothingBaseline | None = None,
+) -> OptimizationResult:
     """Solve in an isolated worker and verify its typed result lineage.
 
     OR-Tools and analytical libraries can load conflicting native runtimes in a
@@ -75,13 +81,14 @@ def optimize_facilities(problem: OptimizationProblem) -> OptimizationResult:
     timeout become a typed fail-closed response instead of taking down the host.
     """
 
-    return optimize_facilities_with_telemetry(problem)[0]
+    return optimize_facilities_with_telemetry(problem, baseline=baseline)[0]
 
 
 def optimize_facilities_with_telemetry(
     problem: OptimizationProblem,
     *,
     legacy_tie_break: bool = False,
+    baseline: DoNothingBaseline | None = None,
 ) -> tuple[OptimizationResult, SolveTelemetry | None]:
     """Solve in isolation and also surface the worker's measured run cost.
 
@@ -97,10 +104,16 @@ def optimize_facilities_with_telemetry(
     command = [sys.executable, "-m", "services.zonepilot.optimization._worker"]
     if legacy_tie_break:
         command.append(LEGACY_TIE_BREAK_FLAG)
+    worker_input = json.dumps(
+        {
+            "problem": problem.model_dump(mode="json"),
+            "baseline": baseline.model_dump(mode="json") if baseline is not None else None,
+        }
+    )
     try:
         completed = subprocess.run(
             command,
-            input=problem.model_dump_json(),
+            input=worker_input,
             capture_output=True,
             text=True,
             timeout=timeout,

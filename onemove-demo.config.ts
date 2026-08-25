@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
 
 /**
  * Recording configuration for the network-intelligence walkthrough.
@@ -9,7 +12,7 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: /onemove-network-intelligence\.spec\.ts/,
+  testMatch: /operate-golden-path\.spec\.ts/,
   fullyParallel: false,
   timeout: 900_000,
   expect: { timeout: 30_000 },
