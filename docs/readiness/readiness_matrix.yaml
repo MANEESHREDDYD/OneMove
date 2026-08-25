@@ -215,10 +215,10 @@ rows:
   - id: DOC-01
     area: docs
     requirement: "Executive one-pager"
-    status: RED
-    evidence: "docs/EXECUTIVE_OVERVIEW.md absent"
-    last_verified_sha: 180d87e
-    verified_by: unverified
+    status: READY_FOR_VERIFY
+    evidence: "docs/EXECUTIVE_OVERVIEW.md exists, 214 lines. The RED evidence string ('absent') was stale from 180d87e and was contradicted by the file on disk; corrected here rather than left to mislead."
+    last_verified_sha: 774522f
+    verified_by: "principal (self-verified, pending H3)"
   - id: DOC-02
     area: docs
     requirement: "Cost model"
@@ -282,4 +282,19 @@ rows:
     evidence: "F-DEC-002: DecisionRecord does not carry optimization_policy_version"
     last_verified_sha: 3b39656
     verified_by: unverified
+  - id: WARROOM-01
+    area: orchestration
+    requirement: "All actual available agent execution capacity stays utilized while independent release work exists"
+    status: READY_FOR_VERIFY
+    evidence: >-
+      Restaffed to 12 concurrent workers at 2026-08-25 ~16:00 IST immediately after the
+      session-limit reset, without a human reminder. Prior to the reset all 12 workers were
+      terminated simultaneously by the account limit; their in-flight work was recovered from
+      the working tree and committed as 774522f before relaunch, so nothing was lost.
+      MAX_AVAILABLE_CAPACITY is recorded as at-least-12 rather than a round number: 12 launches
+      were accepted and none has terminated, which bounds capacity from below but not above.
+      Roles, ownership boundaries, base SHA and per-worker task are enumerated in
+      docs/readiness/program_state.json.
+    last_verified_sha: 774522f
+    verified_by: "principal (self-observed; GREEN requires repeated checkpoints showing automatic restaffing, not one observation)"
 
