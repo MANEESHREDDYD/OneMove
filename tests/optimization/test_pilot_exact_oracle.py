@@ -5,10 +5,26 @@ facility sets number only 794. That is small enough to enumerate exhaustively
 and compute the objective independently of CP-SAT, which turns "the solver says
 OPTIMAL" into "an independent method agrees on the optimum".
 
-The oracle deliberately re-derives the objective from the published contract
-rather than importing the model builder, so a defect in the model construction
-cannot hide by being shared with its own verifier. It is a test-only device and
-never substitutes for the production solver.
+The oracle re-derives the objective from the published contract rather than
+importing the model builder, so a defect in the model construction cannot hide
+by being shared with its own verifier. Concretely, this file restates the fixed
+point scale and all five normalisation references as its own literals and
+formulas; it imports no arithmetic from `_cp_sat`. An earlier version of this
+docstring claimed that independence while the file actually imported
+`FIXED_POINT` and `_normalisation_references` from the module under test, which
+made the claim false: a wrong reference would have been applied identically on
+both sides and cancelled out.
+
+The independence is not silent. `test_oracle_references_match_the_model_builder`
+compares this file's independent derivation against the model builder's, so the
+two are proved equal rather than assumed equal, and a change to either surfaces
+as a failure instead of a shared blind spot.
+
+Scope, stated so it cannot be overclaimed: the oracle certifies the OBJECTIVE
+VALUE and the OPTIMAL FACILITY SET by exhaustive enumeration. It does not
+certify the solver's constraint encoding beyond what the objective and the
+feasibility rule expose. It is a test-only device and never substitutes for the
+production solver.
 """
 
 from __future__ import annotations
@@ -24,6 +40,34 @@ MATRIX = DATA_ROOT / "private" / "official" / "gold" / "r1_osrm_travel_matrix.js
 
 BASIS_POINTS = 10_000
 P95_BASIS_POINTS = 9_500
+
+# Restated here as literals, deliberately NOT imported from the module under
+# test. If the model builder changes its fixed-point scale, this file must fail
+# rather than follow it silently.
+ORACLE_FIXED_POINT = 1_000_000
+
+
+def _oracle_references(problem) -> dict[str, int]:
+    """Independently derive each component's normalisation reference.
+
+    Re-derived from the problem contract -- total demand units, the travel cap,
+    the total fixed cost of every candidate facility, and the facility-count
+    ceiling -- not read from `_cp_sat._normalisation_references`. Duplication is
+    the point: it is what makes the comparison in
+    `test_oracle_references_match_the_model_builder` an actual check.
+    """
+    total_demand = sum(d.demand_units for d in problem.demand_points)
+    horizon = problem.constraints.max_travel_seconds
+    all_facility_cost = sum(f.fixed_cost_units for f in problem.facilities)
+    max_open = problem.constraints.max_open_facilities
+
+    return {
+        "expected_travel": max(1, total_demand * BASIS_POINTS * horizon),
+        "p95_travel": max(1, total_demand * horizon),
+        "coverage_loss": max(1, total_demand * BASIS_POINTS),
+        "facility_cost": max(1, all_facility_cost),
+        "failure_exposure": max(1, max_open * BASIS_POINTS),
+    }
 
 
 def _problem():
@@ -43,8 +87,6 @@ def _oracle_objective(problem, open_set: frozenset[str]) -> int | None:
     facility within the travel cap, and each component is multiplied by the same
     integer coefficient the solver record publishes.
     """
-    from services.zonepilot.optimization._cp_sat import FIXED_POINT, _normalisation_references
-
     demands = {d.demand_id: d.demand_units for d in problem.demand_points}
     facilities = {f.facility_id: f for f in problem.facilities}
     cap = problem.constraints.max_travel_seconds
@@ -88,12 +130,11 @@ def _oracle_objective(problem, open_set: frozenset[str]) -> int | None:
     facility_cost = sum(facilities[f].fixed_cost_units for f in open_set)
     failure_exposure = sum(facilities[f].failure_exposure_basis_points for f in open_set)
 
-    references = _normalisation_references(problem)
+    references = _oracle_references(problem)
     weights = problem.objective_weights
 
     def coefficient(name: str, weight: int) -> int:
-        reference_value, _ = references[name]
-        return weight * BASIS_POINTS * FIXED_POINT // reference_value
+        return weight * BASIS_POINTS * ORACLE_FIXED_POINT // references[name]
 
     return (
         coefficient("expected_travel", weights.expected_travel) * expected_travel
@@ -237,3 +278,38 @@ def test_canonical_assignment_breaks_ties_on_facility_id() -> None:
     forward = _canonical_assignment(problem, scenario, demand_id, all_facilities)
     reversed_order = _canonical_assignment(problem, scenario, demand_id, tuple(reversed(all_facilities)))
     assert forward == reversed_order, "assignment depended on input ordering"
+
+
+def test_oracle_references_match_the_model_builder() -> None:
+    """The oracle's independent derivation must equal the model builder's.
+
+    This is what turns the independence above from an assertion in prose into a
+    checked property. The oracle derives its five normalisation references and
+    its fixed-point scale from the problem contract alone; the model builder
+    derives its own. They must agree exactly. If they ever diverge, one of the
+    two is wrong and this test says so -- which is precisely the failure mode
+    that sharing the import used to hide.
+    """
+    from services.zonepilot.optimization._cp_sat import (
+        FIXED_POINT,
+        _normalisation_references,
+    )
+
+    problem = _problem()
+
+    assert ORACLE_FIXED_POINT == FIXED_POINT, (
+        f"oracle fixed point {ORACLE_FIXED_POINT:,} != model {FIXED_POINT:,}; "
+        "the model's scale changed and the oracle was not updated"
+    )
+
+    model_references = _normalisation_references(problem)
+    oracle_references = _oracle_references(problem)
+
+    assert set(oracle_references) == set(model_references), (
+        "oracle and model disagree about which components are normalised"
+    )
+    for name, oracle_value in oracle_references.items():
+        model_value, _unit = model_references[name]
+        assert oracle_value == model_value, (
+            f"{name}: oracle reference {oracle_value:,} != model reference {model_value:,}"
+        )
