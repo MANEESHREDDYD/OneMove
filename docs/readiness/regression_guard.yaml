@@ -1,0 +1,246 @@
+# OneMove regression guard
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# Parallel worktrees branched from an older base can silently reintroduce a
+# defect that was already fixed here. A merge that "has no conflicts" is not
+# evidence that the fix survived: several of the defects below were originally
+# introduced by a value moving in one file while two other definitions of the
+# same value stayed where they were.
+#
+# Every entry names a defect that was real, the invariant that now prevents it,
+# the source symbol that must hold, and the test that proves it. The tests are
+# executable assertions against the real source, not documentation:
+# tests/regression/test_regression_guard.py fails the build if any invariant
+# below regresses.
+#
+# HOW TO USE IT
+#   - Before merging a long-lived branch: run tests/regression/test_regression_guard.py.
+#   - When adding a guard: add the entry AND the assertion, then break the
+#     invariant on purpose and watch the test go red. A guard that has never
+#     been seen to fail is not a guard.
+#   - Never relax a guard to make a merge pass. The guard is the merge signal.
+#
+# verified_at: 2026-08-25 on hotfix/onemove-p0-security-incident
+# All ten guards were verified as CURRENTLY HOLDING at that commit.
+
+schema: onemove.regression_guard/1.0.0
+test_suite: tests/regression/test_regression_guard.py
+
+guards:
+  - id: RG-01
+    defect: >-
+      allow_uncovered_demand was defined in three independent places and the
+      three disagreed. The domain contract and the API defaulted to False while
+      the async worker's payload reconstruction defaulted to True, so a job or a
+      replay rebuilt from an empty payload silently solved a DIFFERENT problem
+      from the one the operator requested -- partial coverage permitted, status
+      reported OPTIMAL, most of the network abandoned.
+    guard: >-
+      All three definition sites default to False. Full service is the default;
+      partial coverage is an explicit opt-in that the caller has to type.
+    evidence: >-
+      services/zonepilot/optimization/contracts.py:OptimizationConstraints.allow_uncovered_demand;
+      services/api/routers/observatory.py:OptimizationRequest.allow_uncovered_demand;
+      services/zonepilot/optimization/pubsub_worker.py:_reconstruct_problem_from_payload
+    test: >-
+      tests/regression/test_regression_guard.py::test_rg01_allow_uncovered_demand_defaults_false_in_contract,
+      ::test_rg01_allow_uncovered_demand_defaults_false_in_api_request,
+      ::test_rg01_worker_payload_default_literal_is_false,
+      ::test_rg01_worker_reconstruction_defaults_to_full_coverage
+
+  - id: RG-02
+    defect: >-
+      Facility throughput was always constrained, using a number nobody
+      measured. The constraint bound, made full service arithmetically
+      impossible, and looked from the outside like a real operating limit.
+    guard: >-
+      CapacityMode exists and OptimizationConstraints.capacity_mode defaults to
+      NOT_MODELED. The API request model defaults to NOT_MODELED too, so no
+      caller path can silently reinstate the modelled-capacity behaviour.
+    evidence: >-
+      services/zonepilot/optimization/contracts.py:CapacityMode;
+      services/zonepilot/optimization/contracts.py:OptimizationConstraints.capacity_mode;
+      services/api/routers/observatory.py:OptimizationRequest.capacity_mode
+    test: >-
+      tests/regression/test_regression_guard.py::test_rg02_capacity_mode_defaults_to_not_modelled
+
+  - id: RG-03
+    defect: >-
+      A flat 1500 demand-units-per-facility figure -- a uniform round number
+      applied to all 94 candidate sites because no per-site throughput was ever
+      observed -- entered the model as a hard constraint and drove the answer.
+    guard: >-
+      The 1500 assumption may still exist as a declared, sourced assumption, but
+      it must NOT BIND by default. CP-SAT posts the throughput constraint only
+      under CapacityMode.ASSUMPTION. Proven behaviourally: a problem whose
+      per-facility capacity is far below total demand still solves to a proved
+      optimum at full coverage under the default mode, and is proved INFEASIBLE
+      only when capacity modelling is explicitly opted into.
+    evidence: >-
+      services/zonepilot/optimization/_cp_sat.py:_build_model (capacity constraint
+      guarded by `capacity_mode is CapacityMode.ASSUMPTION`);
+      services/zonepilot/assumptions/seed.py:FACILITY_CAPACITY_UNITS
+    test: >-
+      tests/regression/test_regression_guard.py::test_rg03_flat_capacity_does_not_bind_by_default,
+      ::test_rg03_capacity_binds_only_when_explicitly_opted_in,
+      ::test_rg03_capacity_constraint_is_guarded_by_capacity_mode
+
+  - id: RG-04
+    defect: >-
+      Objective components were summed in their native units -- demand-unit-
+      seconds added to a unit-less uncovered count -- so equal weights meant
+      abandoning a whole zone cost about the same as one second of service, and
+      the solver correctly abandoned almost everything. The number then
+      published as "the objective" was a rounded human-facing projection that
+      rounds at a different point from the solver path; across 400k random
+      trials the two disagreed on every value and inverted the ordering of two
+      solutions 13 times.
+    guard: >-
+      ObjectiveComponent publishes solver_coefficient and
+      solver_scaled_contribution; ObjectiveBreakdown publishes
+      solver_objective_total. The published solver_objective_total must equal
+      the value CP-SAT actually minimised -- verified by rebuilding the same
+      model, solving it directly, and comparing against solver.objective_value.
+      The display projection (weighted_total) is retained but must never be
+      mistaken for the objective.
+    evidence: >-
+      services/zonepilot/optimization/contracts.py:ObjectiveComponent.solver_coefficient,
+      ObjectiveComponent.solver_scaled_contribution,
+      ObjectiveBreakdown.solver_objective_total;
+      services/zonepilot/optimization/_cp_sat.py:_optimal_result
+    test: >-
+      tests/regression/test_regression_guard.py::test_rg04_objective_contract_publishes_solver_fields,
+      ::test_rg04_published_solver_total_is_the_value_cp_sat_minimised,
+      ::test_rg04_solver_contribution_is_coefficient_times_raw_value
+
+  - id: RG-05
+    defect: >-
+      The mathematical policy a decision was solved under was not recorded, so a
+      decision frozen under the old semantics (capacity always binding, raw-unit
+      objective, solver-read assignments) could be replayed under the new ones
+      and the difference would be reported as drift rather than as two different
+      models.
+    guard: >-
+      OPTIMIZATION_POLICY_VERSION exists and is carried on OptimizationProblem,
+      so it is inside the serialised payload that problem_fingerprint hashes.
+      Changing the policy version must change the fingerprint.
+    evidence: >-
+      services/zonepilot/optimization/contracts.py:OPTIMIZATION_POLICY_VERSION;
+      services/zonepilot/optimization/contracts.py:OptimizationProblem.optimization_policy_version;
+      services/zonepilot/optimization/contracts.py:problem_fingerprint
+    test: >-
+      tests/regression/test_regression_guard.py::test_rg05_policy_version_is_carried_on_the_problem,
+      ::test_rg05_policy_version_enters_the_problem_fingerprint
+
+  - id: RG-06
+    defect: >-
+      Replay compared the recomputed decision against the human-facing
+      basis-point projection. Because the projection and the solver total round
+      at different points, a decision could "reproduce" against a number CP-SAT
+      never ranked solutions by.
+    guard: >-
+      DecisionLedger.replay_decision compares solver_objective_total. It falls
+      back to weighted_total only for legacy records written before the solver
+      total existed, and refuses outright to replay a decision frozen under a
+      different OPTIMIZATION_POLICY_VERSION.
+    evidence: >-
+      services/zonepilot/decisions/ledger.py:DecisionLedger.replay_decision
+    test: >-
+      tests/regression/test_regression_guard.py::test_rg06_replay_compares_the_solver_objective_total,
+      ::test_rg06_replay_refuses_a_foreign_policy_version
+
+  - id: RG-07
+    defect: >-
+      The decision_class column defaulted to OPTIMIZER_DECISION and the
+      repository never wrote it, so an operator's declared
+      MANUAL_OPERATOR_DECISION was persisted as optimizer output -- the API
+      validated the declaration and the storage layer discarded it. A
+      hand-authored decision then carried an optimization policy stamp, which
+      made it look replayable as though a solver had produced it.
+    guard: >-
+      DecisionRecord carries decision_class and operator_rationale; the
+      repository reads and writes both columns; and
+      DecisionLedger.record_decision stamps optimization_policy_version ONLY for
+      an OPTIMIZER_DECISION -- a manual decision gets None. Replay refuses a
+      non-optimizer decision instead of recomputing one.
+    evidence: >-
+      services/zonepilot/decisions/contracts.py:DecisionRecord.decision_class,
+      DecisionRecord.operator_rationale;
+      services/zonepilot/decisions/ledger.py:DecisionLedger.record_decision;
+      services/zonepilot/decisions/repository.py (both columns in INSERT and SELECT)
+    test: >-
+      tests/regression/test_regression_guard.py::test_rg07_decision_record_carries_class_and_rationale,
+      ::test_rg07_manual_decision_is_not_stamped_with_an_optimization_policy,
+      ::test_rg07_repository_persists_decision_class_and_rationale
+
+  - id: RG-08
+    defect: >-
+      forecast_records declared predicted_value, model_version,
+      feature_dataset_version and graph_version NOT NULL, but predict_forecast
+      deliberately writes NULL for all four: no forecast has been produced, so
+      there is no model behind it. Every such insert failed and the API reported
+      FORECAST_STORE_UNAVAILABLE -- blaming the store for a contract
+      disagreement, while the only way to satisfy the schema was to invent
+      values.
+    guard: >-
+      PredictionRecord.predicted_value is nullable so the honest
+      EVIDENCE_ACCUMULATING state is representable, and the columns are NULLable
+      in the schema -- but a non-null prediction must still carry lineage, in
+      the contract validator AND in the database CHECK constraint
+      forecast_prediction_requires_lineage. Nullability must never become a way
+      to store an unattributed number.
+    evidence: >-
+      services/zonepilot/forecast/contracts.py:PredictionRecord.predicted_value,
+      PredictionRecord._provenance_required_when_predicting;
+      supabase/migrations/20260825001000_forecast_evidence_accumulating.sql:forecast_prediction_requires_lineage
+    test: >-
+      tests/regression/test_regression_guard.py::test_rg08_prediction_value_is_nullable_for_evidence_accumulating,
+      ::test_rg08_prediction_with_a_value_requires_lineage,
+      ::test_rg08_migration_drops_not_null_and_adds_the_lineage_check
+
+  - id: RG-09
+    defect: >-
+      data/geo/bengaluru_clip.osm.pbf was byte-identical to
+      andorra-latest.osm.pbf. Andorra shipped under a Bengaluru name, and the
+      original "quarantine" test only asserted that two hashes differed, which
+      stayed green while the wrong country was in the file.
+    guard: >-
+      No artifact named for one city may contain another city's data, and no
+      geographic extract may be an error page. Enforced by the pre-existing
+      tests/geo suite, which checks real OSM bounds rather than hash inequality.
+      This guard does not duplicate those assertions; it asserts the suite still
+      exists and still contains the specific regression tests, so deleting the
+      coverage is itself a failure.
+    evidence: >-
+      tests/geo/test_pilot_roads_lineage.py::test_no_artifact_named_bengaluru_contains_another_city,
+      ::test_pilot_roads_coordinates_are_actually_in_bengaluru,
+      ::test_no_city_named_routing_artifact_duplicates_another_city,
+      ::test_no_geographic_extract_is_actually_an_error_page
+    test: >-
+      tests/regression/test_regression_guard.py::test_rg09_geo_lineage_suite_still_guards_the_andorra_defect
+      (delegates to the tests/geo suite named above)
+
+  - id: RG-10
+    defect: >-
+      The rate limit store outage path logged with extra={"message": ...}.
+      "message" is a reserved LogRecord attribute, so logging raised KeyError
+      INSIDE the handler: the limiter decided correctly and the log call crashed
+      the request on its way out, turning a typed retryable 503 into an opaque
+      500. Reads also failed open, which sounded like graceful degradation but
+      was not -- the rate limit store IS the Postgres the read route depends on.
+    guard: >-
+      A rate limit store outage fails CLOSED with a typed, retryable HTTP 503
+      DEPENDENCY_UNAVAILABLE (not 429, not 500, and not fail-open), and NO
+      logging call anywhere in the repository passes a reserved LogRecord
+      attribute inside extra={...}. Reserved names checked: message, asctime,
+      args, exc_info, levelname, module, name, pathname, lineno, funcName,
+      created, msecs, thread, process.
+    evidence: >-
+      services/api/core/middleware.py:RequestIdMiddleware (store_unavailable branch);
+      services/api/core/ratelimit.py:StoreUnavailable, RateLimitDecision.store_unavailable;
+      repository-wide AST scan of every logging call's extra= dict
+    test: >-
+      tests/regression/test_regression_guard.py::test_rg10_store_outage_returns_typed_503,
+      ::test_rg10_store_outage_does_not_fail_open,
+      ::test_rg10_no_logging_call_uses_a_reserved_logrecord_attribute_in_extra
