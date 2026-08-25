@@ -313,6 +313,7 @@ def _closed_result(
         fail_closed=True,
         solver_version=ortools.__version__,
         random_seed=problem.solver_settings.random_seed,
+        num_search_workers=problem.solver_settings.num_search_workers,
         message=message,
     )
 
@@ -666,6 +667,7 @@ def _optimal_result(
         objective=objective,
         solver_version=ortools.__version__,
         random_seed=problem.solver_settings.random_seed,
+        num_search_workers=problem.solver_settings.num_search_workers,
         message="CP-SAT proved the primary objective and deterministic tie-break optimal.",
     )
 

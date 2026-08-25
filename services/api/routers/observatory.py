@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 import h3
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ValidationError, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from services.api.contracts.observatory import (
     DataHealthResponse,

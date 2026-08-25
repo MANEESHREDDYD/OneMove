@@ -418,7 +418,14 @@ class OptimizationResult(StrictContract):
     solver: Literal["OR_TOOLS_CP_SAT"] = "OR_TOOLS_CP_SAT"
     solver_version: str
     random_seed: int
-    num_search_workers: Literal[1] = 1
+    # Records how the solve was ACTUALLY run. This was Literal[1] back when
+    # SolverSettings pinned a single worker; once parallel search was allowed
+    # for the optimality proof, the result kept asserting 1 while real solves
+    # used 8. A frozen lineage record that misstates its own solver
+    # configuration is worse than one that omits it -- an auditor checking
+    # reproducibility would be told the solve was single-threaded when it was
+    # not. It now carries the real value.
+    num_search_workers: int = Field(default=1, ge=1, le=32)
     message: str
 
     @model_validator(mode="after")
