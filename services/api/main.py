@@ -16,7 +16,7 @@ from services.api.core.telemetry import (
     initialize_error_tracking,
     is_retryable_status,
 )
-from services.api.routers import events, health, observatory, version
+from services.api.routers import events, health, live_context, observatory, version
 from services.common.db_dsn import DatabaseConfigurationError
 
 configure_logging()
@@ -197,6 +197,7 @@ for _dependency_error in _PSYCOPG_DEPENDENCY_ERRORS:
 
 app.include_router(events.router)
 app.include_router(observatory.router)
+app.include_router(live_context.router)
 app.include_router(version.router)
 app.include_router(health.router)
 app.include_router(health.router, prefix="/api/v1")
