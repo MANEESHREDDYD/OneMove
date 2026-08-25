@@ -117,7 +117,7 @@ export function SafeLeafletMap({ center, zoom = 13, markers = [], polyline, heig
       >
         <ResizeMapOnMount />
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &middot; &copy; <a href="https://carto.com/attributions">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
         {validMarkers.map((marker, i) => (
