@@ -1,46 +1,66 @@
 {
   "program_status": "IN_PROGRESS",
+  "stop_reason": "EXECUTION_BOUNDARY_ONLY",
+  "resume_automatically": true,
   "current_phase": "TRAIN_2_CI_AND_AUTHORITATIVE_MAIN",
+  "authoritative_integration_sha": "8343d0c40b290644d6460f60e157dca62e11c106",
   "branch": "hotfix/onemove-p0-security-incident",
-  "head_sha": "563c2b50888c3229baaf49c8cf1b5e8801edc8f3",
-  "remote_pushed": true,
-  "remote_main": "ec4bb92d38914910bfc6f0faabfdaea3919d6c65",
-  "ahead_of_main": 75,
+  "main_sha": "ec4bb92d38914910bfc6f0faabfdaea3919d6c65",
+  "ahead_of_main": 91,
   "behind_main": 0,
-  "branch_count_reconciliation": "74 confirmed by rev-list, origin refs and the GitHub compare API. The prior '76' was a prose error in the summary, not in the data; the savepoint file had recorded 73 before its own commit.",
-  "completed_this_session": [
-    "reconciled the branch-count discrepancy: no repository divergence, the error was in my narration",
-    "F-RL-001 closed: rate-limit store outage returns typed 503 instead of an opaque 500 caused by a reserved logging key; ADR 0002 written",
-    "F-DEC-005 closed: manual decisions get MANUAL_DECISION_NOT_REPLAYABLE instead of a misleading legacy-policy state",
-    "F-OPT-013 opened: 94-zone solve is not reliably inside the 30s budget; worker holds a third conflicting default"
-  ],
-  "verified_suites": {
-    "tests/api/test_rate_limit_distributed.py + tests/optimization + tests/geo": "114 passed",
-    "ruff": "clean"
+  "pr": "https://github.com/MANEESHREDDYD/OneMove/pull/40",
+  "concurrency": {
+    "note": "Six agents were launched and ALL were terminated on their first API calls by an account-level usage limit resetting 06:40 Asia/Kolkata. Launches are accepted; the agents die immediately. Capacity is therefore effectively 0-1, not 20. Reporting 20 active would be fabricated.",
+    "max_supported_concurrent_agents": "UNKNOWN_LIMIT_BOUND",
+    "observed_agent_terminations": 6,
+    "logical_role_count": 24,
+    "actual_active_agents": 1
   },
-  "known_flaky": [
-    "tests/decisions/test_decision_ledger.py::test_decision_replay_verification (F-OPT-013)"
-  ],
+  "worktrees": {
+    "agent_worktrees": 0,
+    "note": "Two agent worktrees were created from ec4bb92 (stale origin/main), NOT from the branch head. Both had zero commits. Removed - merging a worktree based on stale main would have reintroduced fixed defects (allow_uncovered_demand=True, capacity 1500, old objective math)."
+  },
+  "verified_this_session": {
+    "targeted_gate": "339 passed, 0 failed (api, decisions, optimization, geo, temporal, adversarial)",
+    "ruff": "clean repo-wide",
+    "ci_last_observed": "15 pass, 2 fail, 2 pending"
+  },
+  "readiness": {
+    "READY_FOR_VERIFY": 19,
+    "RED": 17,
+    "YELLOW": 3,
+    "BLOCKED_EXTERNAL": 1
+  },
   "open_findings": {
-    "P0": 1,
+    "P0": 0,
     "P1": 2,
-    "P2": 1,
-    "owner_action_required": 1
+    "P2": 3,
+    "owner_action_post_rc": 1
   },
-  "next_train": "TRAIN_2_REMAINDER",
+  "closed_this_session": [
+    "F-OPT-013 solver budget + worker default (assumption set 1.1.0)",
+    "F-API-001 three observatory route contract defects",
+    "F-RL-001 rate-limit outage typed 503 (reserved LogRecord key)",
+    "F-DEC-002/003/004/005 policy version, upsert lineage, decision_class persistence, manual replay state",
+    "F-FCST-001 EVIDENCE_ACCUMULATING storable",
+    "X1-001 retryable 500 on malformed optimization request",
+    "X1-003 forecast zone_id H3 validation",
+    "X1-004 forecast horizon_hours bounds",
+    "geo: second Andorra instance (12/22 osrm parts) + HTML-as-extract",
+    "temporal: time-bombed PIT fixtures",
+    "adversarial: stale get_job patch"
+  ],
+  "owner_action_post_rc": [
+    "Rotate exposed credential classes at provider consoles: database credential, service-role key, provider API key. Values never recorded."
+  ],
   "exact_next_commands": [
-    "# F-OPT-013 must land as ONE change with H3/H5 verification:",
-    "#   1. align _reconstruct_problem_from_payload allow_uncovered default to False",
-    "#   2. raise SOLVER_MAX_TIME_SECONDS in the assumption registry (bumps assumption version)",
-    "#   3. re-derive decision fixtures from the replay path, not the API path",
-    "pytest tests/decisions -q   # must be 8/8 stable across 3 consecutive runs",
-    "gh run list --branch hotfix/onemove-p0-security-incident --limit 20",
-    "gh api repos/MANEESHREDDYD/OneMove/dependabot/alerts --jq '.[] | {number,severity:.security_advisory.severity,pkg:.dependency.package.name}'",
-    "git log --oneline origin/main..HEAD > docs/readiness/reconciliation_inventory.txt",
-    "gh pr create --base main --head hotfix/onemove-p0-security-incident"
-  ],
-  "owner_action_required": [
-    "Rotate exposed credential classes (database credential, service-role key, provider API key) at their provider consoles."
-  ],
-  "resume_automatically": true
+    "gh pr checks 40                     # 2 remaining CI failures to root-cause",
+    "python -m pytest tests/ -q          # full suite; expect DB-dependent failures without TEST_DATABASE_URL",
+    "# X1 findings still open (see docs/readiness/x1_findings.md): X1-002 scenario name validation,",
+    "#   X1-006 code_sha DB CHECK missing, X1-008 idempotency_key bounds",
+    "# H3 flagged: pilot oracle imports _normalisation_references from _cp_sat, so it is not fully",
+    "#   independent - its docstring overclaims and should be corrected",
+    "# Not started: continuous traffic/weather scheduling, MapLibre, Operate/Simulate/Decide UX,",
+    "#   observability, load/soak/chaos, multi-city, backtest"
+  ]
 }
