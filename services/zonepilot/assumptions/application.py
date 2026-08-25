@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from services.zonepilot.assumptions.contracts import (
     AssumptionName,
@@ -44,6 +44,19 @@ class AssumptionApplicationError(ValueError):
     """A set does not carry an assumption the optimizer requires."""
 
 
+class ScenarioBindingError(AssumptionApplicationError):
+    """A request named scenarios this assumption set's ladder does not define.
+
+    Carries the wire ``code`` so the API can name the violated rule instead of
+    flattening every scenario mistake into one generic envelope. This is a
+    permanent property of the request, so it is never retryable.
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 @dataclass(frozen=True, slots=True)
 class ScenarioTier:
     """One rung of the uncertainty ladder.
@@ -51,9 +64,19 @@ class ScenarioTier:
     ``evidence_class`` is not an assumption -- it is a statement about how the
     matrix was produced, and it stays structural so that a set edit can never
     relabel a simulated failure as observed geography.
+
+    ``scenario_id`` is structural for the same reason. It used to be supplied by
+    the caller and ``zip``ped positionally onto this ladder, so the name carried
+    no binding relationship to the rung it named: any three strings validated,
+    and the SEVERE tier's multiplier and ``evidence_class`` could be attached to
+    a matrix called ``matrix-s1_free_flow``. That mislabel is then sealed by
+    ``problem_fingerprint`` into the job row, the problem snapshot, the result
+    and the decision ledger -- the one label on a frozen artifact that nothing
+    validated. The label now belongs to the tier, not to the request.
     """
 
     role: str
+    scenario_id: str
     travel_time_multiplier: float
     probability_basis_points: int
     evidence_class: MatrixEvidenceClass
@@ -66,9 +89,10 @@ class ScenarioTier:
 
 #: The ladder's shape (order, derivation, evidence) is fixed; only its numbers
 #: come from the assumption set.
-_TIER_SHAPE: tuple[tuple[str, str, str, MatrixEvidenceClass, bool], ...] = (
+_TIER_SHAPE: tuple[tuple[str, str, str, str, MatrixEvidenceClass, bool], ...] = (
     (
         "BASELINE",
+        "s1_free_flow",
         AssumptionName.SCENARIO_BASELINE_TRAVEL_MULTIPLIER,
         AssumptionName.SCENARIO_BASELINE_PROBABILITY_BPS,
         MatrixEvidenceClass.PUBLIC_GEOGRAPHIC,
@@ -76,6 +100,7 @@ _TIER_SHAPE: tuple[tuple[str, str, str, MatrixEvidenceClass, bool], ...] = (
     ),
     (
         "DEGRADED",
+        "s2_congested",
         AssumptionName.SCENARIO_DEGRADED_TRAVEL_MULTIPLIER,
         AssumptionName.SCENARIO_DEGRADED_PROBABILITY_BPS,
         MatrixEvidenceClass.DERIVED,
@@ -83,12 +108,16 @@ _TIER_SHAPE: tuple[tuple[str, str, str, MatrixEvidenceClass, bool], ...] = (
     ),
     (
         "SEVERE",
+        "s3_congested_outage",
         AssumptionName.SCENARIO_SEVERE_TRAVEL_MULTIPLIER,
         AssumptionName.SCENARIO_SEVERE_PROBABILITY_BPS,
         MatrixEvidenceClass.SIMULATED_FAILURE,
         False,
     ),
 )
+
+#: The only scenario ids a request may name, in ladder order.
+CANONICAL_SCENARIO_IDS: tuple[str, ...] = tuple(shape[1] for shape in _TIER_SHAPE)
 
 
 class AssumptionSetView:
@@ -221,13 +250,58 @@ class AssumptionSetView:
         return tuple(
             ScenarioTier(
                 role=role,
+                scenario_id=scenario_id,
                 travel_time_multiplier=self.real(multiplier_name),
                 probability_basis_points=self.integer(probability_name),
                 evidence_class=evidence_class,
                 is_baseline=is_baseline,
             )
-            for role, multiplier_name, probability_name, evidence_class, is_baseline in _TIER_SHAPE
+            for (
+                role,
+                scenario_id,
+                multiplier_name,
+                probability_name,
+                evidence_class,
+                is_baseline,
+            ) in _TIER_SHAPE
         )
+
+    def bind_scenarios(self, requested: Sequence[str]) -> tuple[ScenarioTier, ...]:
+        """Resolve the requested scenario ids onto this set's sealed ladder.
+
+        Returns the tiers in request order, which is ladder order because the
+        only accepted order is the ladder's. Raises :class:`ValueError` -- which
+        the API translates to a typed 422 -- rather than accepting a label it
+        cannot vouch for.
+
+        This exists because the caller's strings used to be ``zip``ped straight
+        onto the tiers. Counting them was the only check, so three invented
+        names validated and were sealed into the frozen artifact as though the
+        system had measured them.
+        """
+        tiers = self.scenario_tiers
+        if len(requested) != len(tiers):
+            raise ScenarioBindingError(
+                "SCENARIO_LADDER_MISMATCH",
+                f"assumption set {self.token} defines {len(tiers)} scenario tiers "
+                f"({', '.join(tier.role for tier in tiers)}) but {len(requested)} scenarios were requested. "
+                f"Refusing to invent probabilities or multipliers for the difference."
+            )
+
+        mismatched = [
+            f"position {index} requested {name!r} but that rung is {tier.role} ({tier.scenario_id!r})"
+            for index, (name, tier) in enumerate(zip(requested, tiers, strict=True))
+            if name != tier.scenario_id
+        ]
+        if mismatched:
+            raise ScenarioBindingError(
+                "SCENARIO_UNKNOWN",
+                f"scenario ids must name this assumption set's sealed ladder in order; "
+                f"supported: {list(CANONICAL_SCENARIO_IDS)}. " + "; ".join(mismatched) + ". "
+                "A scenario id is the label on a probability-weighted uncertainty tier and is sealed "
+                "into the problem fingerprint, so it may not be chosen by the caller."
+            )
+        return tiers
 
     # -- objective and solver ------------------------------------------------
 

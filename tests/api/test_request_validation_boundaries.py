@@ -108,3 +108,104 @@ def test_forecast_zone_id_rejection_matches_the_zone_state_route(client: TestCli
     response = client.post("/api/v1/forecast/predict", json={"zone_id": "not-an-h3"})
 
     assert envelope_of(response)["message"] == "Zone ID must be a valid H3 cell identifier"
+
+
+# --- POST /api/v1/optimizations : scenarios -----------------------------------
+
+
+@pytest.mark.parametrize(
+    "scenarios",
+    [
+        ["totally_made_up_a", "totally_made_up_b", "totally_made_up_c"],
+        ["s3_congested_outage", "s2_congested", "s1_free_flow"],
+        ["s1_free_flow", "s1_free_flow", "s1_free_flow"],
+        ["s1_free_flow", "s2_congested", "matrix-s1_free_flow"],
+    ],
+    ids=["invented", "reordered", "repeated-baseline", "near-miss"],
+)
+def test_optimization_refuses_scenario_ids_the_ladder_does_not_define(
+    client: TestClient, never_persists: list, scenarios: list[str]
+) -> None:
+    """A scenario id is the label on a sealed uncertainty tier, not a free string.
+
+    `scenarios: list[str]` was unvalidated and the builder only checked the
+    *count* before zipping the caller's strings positionally onto the assumption
+    set's tiers, stamping each with that tier's probability, duration multiplier
+    and `evidence_class`. So any three strings validated, and the SEVERE tier's
+    1.4x multiplier and SIMULATED_FAILURE evidence class could be attached to a
+    matrix named `matrix-s1_free_flow`.
+
+    That is not a cosmetic mislabel: the id becomes the `matrix_id` on the frozen
+    problem, which is covered by `problem_fingerprint` and therefore propagates
+    into the job row, the problem snapshot, the result document and any decision
+    frozen from it. It was the one label on a frozen artifact that nothing
+    validated, so an audit reading the ledger back could not tell whether
+    `matrix-s1_free_flow` was free-flow.
+
+    The `reordered` case matters most: every id in it is real, so a check that
+    only tested membership would pass it while the labels still landed on the
+    wrong rungs.
+    """
+    response = client.post("/api/v1/optimizations", json={"scenarios": scenarios})
+
+    assert response.status_code == 422, response.text
+    error = envelope_of(response)
+    assert error["code"] == "SCENARIO_UNKNOWN"
+    assert error["retryable"] is False
+    # The sibling POST /api/v1/scenarios enumerates its legal values; so must this.
+    for accepted in ("s1_free_flow", "s2_congested", "s3_congested_outage"):
+        assert accepted in error["message"]
+
+
+def test_optimization_scenario_count_mismatch_is_typed_and_not_retryable(
+    client: TestClient, never_persists: list
+) -> None:
+    """The count check existed but escaped as a bare ValueError -> 500 retryable:true."""
+    response = client.post("/api/v1/optimizations", json={"scenarios": []})
+
+    assert response.status_code == 422, response.text
+    error = envelope_of(response)
+    assert error["code"] == "SCENARIO_LADDER_MISMATCH"
+    assert error["retryable"] is False
+
+
+def test_scenario_labels_belong_to_the_tier_not_the_request() -> None:
+    """The structural half: the ladder owns its labels.
+
+    Asserted directly against the assumption set so the guarantee cannot be
+    satisfied by an API-layer allow-list that a second writer (the Pub/Sub
+    worker's payload reconstruction) would bypass.
+    """
+    from services.zonepilot.assumptions.application import CANONICAL_SCENARIO_IDS
+    from services.zonepilot.assumptions.registry import default_assumption_registry
+
+    view = default_assumption_registry().active_view()
+    tiers = view.scenario_tiers
+
+    assert tuple(tier.scenario_id for tier in tiers) == CANONICAL_SCENARIO_IDS
+    # The baseline rung is the one whose matrix is real routed geography.
+    assert tiers[0].is_baseline and tiers[0].scenario_id == "s1_free_flow"
+
+    bound = view.bind_scenarios(list(CANONICAL_SCENARIO_IDS))
+    assert bound == tiers
+
+
+def test_worker_reconstruction_refuses_an_unbound_scenario_label() -> None:
+    """The second writer must refuse what the API refuses.
+
+    `_reconstruct_problem_from_payload` re-solves a frozen payload. Validating
+    only at submission would leave this path re-attaching invented labels to the
+    sealed tiers for any job whose payload predates the fix.
+    """
+    from services.zonepilot.assumptions.application import ScenarioBindingError
+    from services.zonepilot.optimization.pubsub_worker import _reconstruct_problem_from_payload
+
+    with pytest.raises(ScenarioBindingError) as raised:
+        _reconstruct_problem_from_payload({"scenarios": ["a", "b", "c"]})
+    assert raised.value.code == "SCENARIO_UNKNOWN"
+
+    try:
+        problem = _reconstruct_problem_from_payload({})
+    except FileNotFoundError as exc:  # pragma: no cover - artifact-dependent
+        pytest.skip(f"R1 evidence artifacts unavailable: {exc}")
+    assert [s.scenario_id for s in problem.scenarios] == ["s1_free_flow", "s2_congested", "s3_congested_outage"]

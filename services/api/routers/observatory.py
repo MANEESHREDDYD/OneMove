@@ -30,7 +30,11 @@ from services.api.repositories.artifact_catalog import ArtifactCorrupt, Artifact
 from services.api.services.observatory import ObservatoryService, get_observatory_service
 from services.zonepilot.assistant.contracts import AssistantToolCall, ToolName
 from services.zonepilot.assistant.tools import build_assistant_registry
-from services.zonepilot.assumptions.application import AssumptionSetView
+from services.zonepilot.assumptions.application import (
+    CANONICAL_SCENARIO_IDS,
+    AssumptionSetView,
+    ScenarioBindingError,
+)
 from services.zonepilot.assumptions.registry import default_assumption_registry
 from services.zonepilot.decisions.ledger import DecisionLedger
 from services.zonepilot.decisions.lineage_validation import (
@@ -250,7 +254,10 @@ class OptimizationRequest(BaseModel):
     # network to be served; partial coverage is an explicit opt-in.
     allow_uncovered_demand: bool = False
     capacity_mode: CapacityMode = CapacityMode.NOT_MODELED
-    scenarios: list[str] = ["s1_free_flow", "s2_congested", "s3_congested_outage"]
+    # The ladder owns these labels; the default names them rather than
+    # re-declaring them, so the request model cannot drift away from the tiers
+    # it is validated against.
+    scenarios: list[str] = Field(default_factory=lambda: list(CANONICAL_SCENARIO_IDS))
 
 
 def _build_real_94x12x3_problem(
@@ -316,18 +323,15 @@ def _build_real_94x12x3_problem(
         for did in demand_ids
     )
 
-    tiers = view.scenario_tiers
-    if len(req.scenarios) != len(tiers):
-        raise ValueError(
-            f"SCENARIO_LADDER_MISMATCH: assumption set {view.token} defines {len(tiers)} scenario tiers "
-            f"({', '.join(tier.role for tier in tiers)}) but {len(req.scenarios)} scenarios were requested. "
-            f"Refusing to invent probabilities or multipliers for the difference."
-        )
+    # Counting the caller's scenario names was the only check here, so any three
+    # strings validated and were zipped positionally onto the sealed tiers. The
+    # ladder now owns its own labels; the request may only name them, in order.
+    tiers = view.bind_scenarios(req.scenarios)
 
     scenarios = []
     baseline_matrix_id: str | None = None
-    for s_name, tier in zip(req.scenarios, tiers, strict=True):
-        matrix_id = f"matrix-{s_name}"
+    for tier in tiers:
+        matrix_id = f"matrix-{tier.scenario_id}"
         if tier.is_baseline:
             baseline_matrix_id = matrix_id
 
@@ -347,7 +351,7 @@ def _build_real_94x12x3_problem(
 
         scenarios.append(
             UncertaintyScenario(
-                scenario_id=s_name,
+                scenario_id=tier.scenario_id,
                 probability_basis_points=tier.probability_basis_points,
                 travel_matrix=mat,
                 capacity_adjustments=(),
@@ -385,6 +389,12 @@ def run_optimization(
         problem = _build_real_94x12x3_problem(payload)
     except FileNotFoundError as fnf_err:
         standard_error("MATRIX_UNAVAILABLE", str(fnf_err), 503)
+    except ScenarioBindingError as bad_ladder:
+        # Named separately from the generic case so the caller is told which
+        # rule it broke -- an unknown scenario id and an out-of-range facility
+        # count are not the same mistake, and the sibling POST /scenarios
+        # already enumerates its legal values.
+        standard_error(bad_ladder.code, str(bad_ladder), 422)
     except (ValueError, ValidationError) as invalid:
         # Only FileNotFoundError was caught here, so every domain-validation
         # failure from the problem builder escaped to the blanket handler and

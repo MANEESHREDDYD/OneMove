@@ -153,17 +153,16 @@ def _reconstruct_problem_from_payload(
         for did in demand_ids
     )
 
-    tiers = view.scenario_tiers
-    if len(scenarios_list) != len(tiers):
-        raise ValueError(
-            f"SCENARIO_LADDER_MISMATCH: assumption set {view.token} defines {len(tiers)} scenario tiers "
-            f"but the frozen request carries {len(scenarios_list)}. Refusing to invent the difference."
-        )
+    # Same binding as the submission path. Reconstruction must refuse a frozen
+    # payload whose scenario labels do not name this set's ladder, or a job
+    # submitted before the labels were sealed would silently be re-solved with
+    # the caller's invented names re-attached to the tiers.
+    tiers = view.bind_scenarios(scenarios_list)
 
     scenarios = []
     baseline_matrix_id: str | None = None
-    for s_name, tier in zip(scenarios_list, tiers, strict=True):
-        matrix_id = f"matrix-{s_name}"
+    for tier in tiers:
+        matrix_id = f"matrix-{tier.scenario_id}"
         if tier.is_baseline:
             baseline_matrix_id = matrix_id
 
@@ -182,7 +181,7 @@ def _reconstruct_problem_from_payload(
         )
         scenarios.append(
             UncertaintyScenario(
-                scenario_id=s_name,
+                scenario_id=tier.scenario_id,
                 probability_basis_points=tier.probability_basis_points,
                 travel_matrix=mat,
                 capacity_adjustments=(),

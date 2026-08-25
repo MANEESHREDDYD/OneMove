@@ -12,8 +12,10 @@ Public surface:
 """
 
 from services.zonepilot.assumptions.application import (
+    CANONICAL_SCENARIO_IDS,
     AssumptionApplicationError,
     AssumptionSetView,
+    ScenarioBindingError,
     ScenarioTier,
 )
 from services.zonepilot.assumptions.contracts import (
@@ -70,6 +72,8 @@ __all__ = [
     "R1_PILOT_PROXY_SET_ID",
     "R1_PILOT_PROXY_V1_0_0",
     "SEED_ASSUMPTION_SETS",
+    "CANONICAL_SCENARIO_IDS",
+    "ScenarioBindingError",
     "ScenarioTier",
     "SensitivityBand",
     "SensitivityCase",
