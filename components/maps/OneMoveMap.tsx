@@ -25,7 +25,11 @@
  * infer which parts of the picture are real.
  */
 
-import * as maplibregl from 'maplibre-gl';
+// maplibre-gl v5, deliberately not v6. v6 is ESM-only and ships its worker as a
+// separate module that this bundler does not resolve, so every GeoJSON source
+// stays permanently unparsed: the style reports layers, the canvas sizes
+// correctly, and absolutely nothing renders. v5 bundles its worker.
+import maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -110,7 +114,12 @@ const ROAD_WIDTH: maplibregl.DataDrivenPropertyValueSpecification<number> = [
  */
 const CONGESTION_COLOR: maplibregl.DataDrivenPropertyValueSpecification<string> = [
   'case',
-  ['==', ['get', 'congestionRatio'], null],
+  // A zone with no reading has NO congestionRatio property at all. Setting it to
+  // null instead would be the obvious thing to write and does not work:
+  // MapLibre expressions cannot compare a property against a null literal, and
+  // `addLayer` throws, which silently aborts every layer registered after it and
+  // leaves an empty canvas that still looks like a working map.
+  ['!', ['has', 'congestionRatio']],
   '#3f3f46',
   [
     'interpolate',
@@ -148,6 +157,7 @@ export function OneMoveMap({
     () => Object.fromEntries(LAYERS.map((l) => [l.id, l.defaultOn])) as Record<LayerId, boolean>,
   );
   const [hovered, setHovered] = useState<string | null>(null);
+  const [labelPositions, setLabelPositions] = useState<{ name: string; x: number; y: number }[]>([]);
 
   // --- load the basemap artifact --------------------------------------------
 
@@ -185,8 +195,9 @@ export function OneMoveMap({
     for (const zone of load.basemap.zones) {
       const reading = data.traffic?.get(zone.h3);
       attributes.set(zone.h3, {
-        // Explicitly null, never 0. Null takes the unavailable colour branch.
-        congestionRatio: reading?.congestionRatio ?? null,
+        // Present only when there is a real reading. Absence of the property IS
+        // the unavailable state -- never 0, which would render as free-flowing.
+        ...(reading?.congestionRatio != null ? { congestionRatio: reading.congestionRatio } : {}),
         trafficEvidence: reading?.evidence ?? UNAVAILABLE,
       });
     }
@@ -206,7 +217,11 @@ export function OneMoveMap({
         version: 8,
         sources: {},
         layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#0b0f14' } }],
-        glyphs: undefined,
+        // No `glyphs` key at all. MapLibre's style validator rejects an
+        // explicit `undefined`, and pointing at a font server would reintroduce
+        // exactly the external dependency this style exists to avoid. Place
+        // names are therefore rendered as HTML overlays below rather than as
+        // GL symbol layers.
       },
       bounds: boundsOf(load.basemap),
       fitBoundsOptions: { padding: 32 },
@@ -227,6 +242,7 @@ export function OneMoveMap({
     instance.touchZoomRotate.disableRotation();
 
     instance.on('load', () => {
+      try {
       instance.addSource('roads', { type: 'geojson', data: roadsToGeoJSON(load.basemap) as never });
       instance.addSource('zones', { type: 'geojson', data: emptyCollection() as never });
       instance.addSource('labels', { type: 'geojson', data: labelsToGeoJSON(load.basemap) as never });
@@ -274,11 +290,17 @@ export function OneMoveMap({
           'line-width': ROAD_WIDTH,
           // The 8,708 local ways would smother the arterials at low zoom, so
           // they fade in only once the viewer is close enough to want them.
+          // The zoom interpolation has to be the OUTERMOST expression: MapLibre
+          // rejects a `zoom` input nested inside a `case`, and the style then
+          // fails to load entirely rather than degrading.
           'line-opacity': [
-            'case',
-            ['==', ['get', 'roadClass'], 4],
-            ['interpolate', ['linear'], ['zoom'], 11, 0, 13.5, 0.55],
-            0.9,
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            ['case', ['==', ['get', 'roadClass'], 4], 0, 0.9],
+            13.5,
+            ['case', ['==', ['get', 'roadClass'], 4], 0.55, 0.9],
           ],
         },
       });
@@ -333,11 +355,16 @@ export function OneMoveMap({
         type: 'circle',
         source: 'orders',
         paint: {
+          // Same rule as the road opacity above: zoom outermost, the
+          // selection test inside each stop.
           'circle-radius': [
-            'case',
-            ['get', 'selected'],
-            8,
-            ['interpolate', ['linear'], ['zoom'], 10, 3.5, 15, 6.5],
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10,
+            ['case', ['get', 'selected'], 8, 3.5],
+            15,
+            ['case', ['get', 'selected'], 11, 6.5],
           ],
           // Pickup and dropoff must be distinguishable at a glance, or a
           // sixteen-order map is just confetti.
@@ -349,7 +376,31 @@ export function OneMoveMap({
       });
 
       setStyleReady(true);
+      } catch (err: unknown) {
+        // Adding a source or layer can throw on an invalid expression. Without
+        // this the remaining layers are never registered and the canvas renders
+        // as an empty background -- which reads as a working map of nowhere.
+        setLoad({
+          status: 'failed',
+          reason: `map layer setup failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
     });
+
+    // Place names as HTML, reprojected whenever the camera moves. This keeps
+    // the style free of any font dependency while still giving the viewer the
+    // orientation cues a bare road mesh cannot.
+    const reprojectLabels = () => {
+      setLabelPositions(
+        load.basemap.labels.map((label) => {
+          const point = instance.project([label.lon, label.lat]);
+          return { name: label.name, x: point.x, y: point.y };
+        }),
+      );
+    };
+    instance.on('load', reprojectLabels);
+    instance.on('move', reprojectLabels);
+    instance.on('zoom', reprojectLabels);
 
     instance.on('error', (event) => {
       // A style or source failure must be visible, never a silently empty frame.
@@ -357,6 +408,11 @@ export function OneMoveMap({
     });
 
     map.current = instance;
+    // Exposed so end-to-end tests can assert on real rendered features rather
+    // than on a screenshot. A blank canvas and a correct canvas are the same
+    // picture to a pixel diff, which is precisely how a silently broken map
+    // ships.
+    (window as unknown as { __omMap?: MapLibreMap }).__omMap = instance;
     return () => {
       instance.remove();
       map.current = null;
@@ -471,9 +527,12 @@ export function OneMoveMap({
 
   // --- render ----------------------------------------------------------------
 
+  // Credit only what actually produced what is on screen. Routes are computed
+  // by our own shortest-path search over the OpenStreetMap extract, NOT by
+  // OSRM, so crediting OSRM here would be a false attribution -- the mirror
+  // image of a missing one, and just as wrong.
   const sources: MapSource[] = ['osm'];
   if (data.traffic && data.traffic.size > 0) sources.push('tomtom');
-  if (data.routes && data.routes.features.length > 0) sources.push('osrm');
 
   if (load.status === 'failed') {
     return (
@@ -493,6 +552,20 @@ export function OneMoveMap({
   return (
     <div className={`relative h-full w-full ${className}`} data-map-state={load.status}>
       <div ref={container} className="h-full w-full" data-testid="onemove-map" />
+
+      {/* Place names. Deduplicated by position so overlapping labels do not
+          stack into an unreadable smear at low zoom. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" data-testid="map-labels">
+        {labelPositions.map((label) => (
+          <span
+            key={label.name}
+            className="absolute -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-slate-300/85 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]"
+            style={{ left: label.x, top: label.y }}
+          >
+            {label.name}
+          </span>
+        ))}
+      </div>
 
       {load.status === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80">
