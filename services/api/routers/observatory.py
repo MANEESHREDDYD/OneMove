@@ -935,11 +935,28 @@ def get_shadow(shadow_id: str, _user: dict = Depends(get_current_user)):
 # --- R2 Forecast API ---
 
 
+#: The furthest ahead a forecast for these targets can ever be scored.
+#:
+#: Every ForecastTarget is an hourly observable sourced from the Open-Meteo
+#: collector, whose own acquisition bound is 1..16 forecast days
+#: (services/collectors/execution/openmeteo_forecast.acquire). A prediction
+#: issued past that horizon can never be joined to an observation, so it is not
+#: a forecast that is merely wrong -- it is one that is permanently unscorable.
+MAX_FORECAST_HORIZON_HOURS = 16 * 24
+
+
 class ForecastRequest(BaseModel):
     zone_id: str = "88618925d3fffff"
     target: str = "WEATHER_TRAVEL_INFLATION_PERCENT"
     model: str = "LAST_OBSERVATION"
-    horizon_hours: int = 1
+    # An unbounded int here meant target_time = now + horizon*3600 was computed
+    # from a number nothing constrained. horizon_hours <= 0 produced a "forecast"
+    # whose target_time was at or before its own issue time -- a backdated claim
+    # about the past, stored in the same table and indistinguishable from a real
+    # prediction to every reader -- and a huge value overflowed the platform
+    # time_t inside datetime.fromtimestamp, raising an unhandled OSError that
+    # the blanket handler served as a retryable 500.
+    horizon_hours: int = Field(default=1, ge=1, le=MAX_FORECAST_HORIZON_HOURS)
 
 
 @router.post("/forecast/predict", status_code=201)
