@@ -11,8 +11,8 @@
  * The rules it exists to enforce, all of which have been got wrong before:
  *   - UNAVAILABLE renders as UNAVAILABLE. Not a dash styled like a value, not a
  *     zero, not a neutral grey that reads as fine.
- *   - A stale reading is never labelled LIVE. It says LAST KNOWN with its true
- *     age, because a label that outruns its evidence is the whole failure mode.
+ *   - A stale reading is never labelled LIVE. The provider contract's exact
+ *     freshness verdict is shown with its true age.
  *   - Geography and the mission are VERSIONED, not graded on a clock. An OSM
  *     extract does not go stale by the minute; it changes when it is recut.
  */
@@ -76,25 +76,11 @@ export function formatAge(seconds: number | null): string {
 }
 
 /**
- * The word shown beside a source. Deliberately NOT always "live".
- * A reading past its provider's expected cadence is last-known, and saying so
- * costs nothing while claiming otherwise costs the whole demo's credibility.
+ * Preserve the API's closed freshness vocabulary in the UI. Friendly aliases
+ * such as "current" or "recent" hide the threshold that was actually applied.
  */
 export function currencyLabel(freshness: string): string {
-  switch (freshness) {
-    case 'FRESH':
-      return 'CURRENT';
-    case 'DEGRADED':
-      return 'RECENT';
-    case 'STALE':
-      return 'LAST KNOWN';
-    case 'UNAVAILABLE':
-      return 'UNAVAILABLE';
-    case 'VERSIONED':
-      return 'VERSIONED';
-    default:
-      return freshness;
-  }
+  return freshness;
 }
 
 function SourceRow({ source }: { source: SourceContext }) {

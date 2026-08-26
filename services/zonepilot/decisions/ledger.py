@@ -88,7 +88,10 @@ class DecisionLedger:
 
         obj_info = res_doc.get("objective")
         if isinstance(obj_info, dict):
-            obj_val = obj_info.get("weighted_total")
+            # Freeze the exact integer CP-SAT ranked. ``weighted_total`` is a
+            # human-facing projection that floors at a different point and is
+            # retained only as a legacy fallback.
+            obj_val = obj_info.get("solver_objective_total") or obj_info.get("weighted_total")
             exp_travel = obj_info.get("expected_travel_probability_demand_seconds")
             p95_travel = obj_info.get("p95_travel_demand_seconds")
         else:
@@ -120,7 +123,10 @@ class DecisionLedger:
         if not dataset_version:
             raise ValueError("DECISION_LINEAGE_INCOMPLETE: dataset_version missing from job lineage")
 
-        req_fp = job.get("request_fingerprint") or res_doc.get("problem_fingerprint")
+        # Replay loads the immutable problem snapshot by the problem's content
+        # hash. The request fingerprint also covers transport fields such as the
+        # idempotency key and optional demo baseline, so it is not a snapshot id.
+        req_fp = res_doc.get("problem_fingerprint") or job.get("request_fingerprint")
         if not req_fp:
             raise ValueError("DECISION_LINEAGE_INCOMPLETE: request_fingerprint missing from job lineage")
 
@@ -155,11 +161,11 @@ class DecisionLedger:
                 pass
 
         if not osrm_bundle_hash:
-            rel_manifest_path = default_data_root().parent.parent / "release_manifest.json"
+            rel_manifest_path = default_data_root().parent / "release_manifest.json"
             if rel_manifest_path.is_file():
                 try:
                     rel_m = json.loads(rel_manifest_path.read_text(encoding="utf-8"))
-                    osrm_bundle_hash = rel_m.get("artifacts", {}).get("r1_osrm_travel_matrix.json", {}).get("sha256")
+                    osrm_bundle_hash = rel_m.get("osrm", {}).get("bundle_sha")
                 except Exception:
                     pass
 
@@ -601,7 +607,13 @@ class DecisionLedger:
             reason = "Recomputed action, facilities, and objective matched frozen decision lineage exactly."
         elif action_match and facilities_match:
             match_status = "SEMANTIC_MATCH"
-            reason = "Recomputed action and facilities matched, slight numeric tolerance in objective value."
+            abs_diff = abs(recomputed_obj - orig.objective_value)
+            rel_diff = (abs_diff / max(1.0, float(abs(orig.objective_value)))) * 100.0
+            reason = (
+                f"Action and facilities reproduce exactly. The published objective differs by "
+                f"{rel_diff:.4f}% because the replay compares a fixed-point solver-scaled "
+                f"representation with a separately reconstructed normalized representation."
+            )
         else:
             match_status = "DRIFT"
             reason = f"Decision outputs drifted: recomputed facilities={res.opened_facility_ids}, frozen={orig.opened_facilities}"
@@ -619,7 +631,10 @@ class DecisionLedger:
         if not facilities_match:
             diff["facilities"] = list(res.opened_facility_ids)
         if not obj_match:
-            diff["objective_diff"] = recomputed_obj - orig.objective_value
+            diff["objective_diff"] = abs(recomputed_obj - orig.objective_value)
+            diff["frozen_objective"] = orig.objective_value
+            diff["recomputed_objective"] = recomputed_obj
+            diff["relative_diff_basis_points"] = (abs(recomputed_obj - orig.objective_value) / max(1.0, float(abs(orig.objective_value)))) * 10000.0
 
         replay_res = DecisionReplayResult(
             original_decision_id=original_decision_id,

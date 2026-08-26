@@ -1,4 +1,6 @@
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { expect, test } from '@playwright/test';
@@ -10,34 +12,25 @@ const run = promisify(execFile);
 const API = process.env.ONEMOVE_API_URL || 'http://127.0.0.1:8000';
 const OPERATE = '/demo/operate';
 const RECORD = process.env.ONEMOVE_DEMO_RECORD === '1';
+const VERSION = process.env.ONEMOVE_DEMO_VERSION;
+const PRECHECK = process.env.ONEMOVE_DEMO_PRECHECK === '1';
 
-const HOLD = RECORD
-  ? {
-      opening: 10_000,
-      network: 22_000,
-      live: 20_000,
-      mission: 30_000,
-      disruption: 23_000,
-      comparison: 42_000,
-      why: 47_000,
-      freeze: 25_000,
-      evidence: 27_000,
-      replay: 32_000,
-      closing: 12_000,
-    }
-  : {
-      opening: 200,
-      network: 200,
-      live: 200,
-      mission: 200,
-      disruption: 200,
-      comparison: 200,
-      why: 200,
-      freeze: 200,
-      evidence: 200,
-      replay: 200,
-      closing: 200,
-    };
+const sceneHold = (scene: string) => {
+  if (!RECORD) return 200;
+  if (!VERSION) throw new Error('ONEMOVE_DEMO_VERSION is required while recording.');
+  const audioPath = path.join(process.cwd(), 'artifacts', 'demo', 'audio', VERSION, `${scene}.mp3`);
+  const ffprobe = process.env.ONEMOVE_FFPROBE || 'ffprobe';
+  const seconds = Number(execFileSync(ffprobe, [
+    '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', audioPath,
+  ], { encoding: 'utf8' }).trim());
+  if (!Number.isFinite(seconds) || seconds <= 0) throw new Error(`No valid narration duration for ${scene}.`);
+  return Math.ceil(seconds * 1000) + 700;
+};
+
+const HOLD = Object.fromEntries([
+  'opening', 'network', 'live', 'mission', 'disruption', 'comparison', 'why',
+  'architecture', 'freeze', 'evidence', 'replay', 'closing',
+].map((scene) => [scene, sceneHold(scene)])) as Record<string, number>;
 
 const required = (name: string) => {
   const value = process.env[name];
@@ -46,7 +39,13 @@ const required = (name: string) => {
 };
 
 test('records the OPERATE → recommend → evidence → replay golden path', async ({ page, request }) => {
-  test.setTimeout(RECORD ? 600_000 : 240_000);
+  test.setTimeout(RECORD ? 900_000 : 420_000);
+
+  const screenshotDir = path.join(process.cwd(), 'artifacts', 'demo', 'precheck');
+  if (PRECHECK) mkdirSync(screenshotDir, { recursive: true });
+  const shot = async (name: string) => {
+    if (PRECHECK) await page.screenshot({ path: path.join(screenshotDir, `${name}.png`), fullPage: false });
+  };
 
   const authResponse = await request.post(
     `${required('NEXT_PUBLIC_SUPABASE_URL')}/auth/v1/token?grant_type=password`,
@@ -69,6 +68,8 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
     expect(response.ok(), `GET ${path}: ${await response.text()}`).toBeTruthy();
     return response.json();
   };
+
+  const liveContext = await apiGet('/api/v1/demo/live-context');
 
   const push = async (payload: Record<string, unknown>) => {
     await page.evaluate((next) => {
@@ -118,8 +119,10 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   expect(['FRESH', 'DEGRADED', 'STALE', 'UNAVAILABLE']).toContain(trafficFreshness);
 
   await push({ stage: 'opening' });
+  await shot('01-opening');
   await page.waitForTimeout(HOLD.opening);
   await push({ stage: 'network' });
+  await shot('02-network');
   await page.waitForTimeout(HOLD.network);
   await page.waitForTimeout(HOLD.live);
 
@@ -127,6 +130,7 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   await page.locator('[data-order-id="ORD-009"]').click();
   await expect(page.getByTestId('order-detail')).toContainText('ORD-009');
   await expect(page.getByTestId('order-detail')).toContainText('not traffic-aware');
+  await shot('03-mission');
   await page.waitForTimeout(HOLD.mission);
 
   const facilitiesResponse = await request.get('http://localhost:3000/demo/facilities.json');
@@ -141,6 +145,7 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
 
   await push({ stage: 'disruption' });
   await expect(page.getByTestId('simulated-disruption')).toContainText('SIMULATED SCENARIO');
+  await shot('04-disruption');
   await page.waitForTimeout(HOLD.disruption);
 
   const sha = (await run('git', ['rev-parse', 'HEAD'], { cwd: process.cwd() })).stdout.trim();
@@ -172,7 +177,7 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
       await run('python', ['scripts/demo/local_worker.py', '--job-id', jobId], {
         cwd: process.cwd(),
         env: workerEnv,
-        timeout: 180_000,
+        timeout: 300_000,
         maxBuffer: 2 * 1024 * 1024,
       });
     } catch {
@@ -182,7 +187,7 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   }
 
   let optimization: Record<string, unknown> | null = null;
-  const solveDeadline = Date.now() + 190_000;
+  const solveDeadline = Date.now() + 330_000;
   while (Date.now() < solveDeadline) {
     const current = await apiGet(`/api/v1/optimizations/${jobId}`);
     if (current.status === 'SUCCESS' || current.status === 'FAILED') {
@@ -211,12 +216,21 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   await expect(page.getByTestId('do-nothing')).toContainText('SIMULATED DEMO BASELINE');
   await expect(page.getByTestId('recommended')).toContainText('RECOMMENDED');
   await expect(page.getByTestId('comparison-delta')).toBeVisible();
+  await shot('05-comparison');
   await page.waitForTimeout(HOLD.comparison);
 
   await push({ stage: 'why', optimization: optimizationScene });
-  await expect(page.getByTestId('why-decision')).toContainText('Why this decision?');
+  await expect(page.getByTestId('why-decision')).toContainText('WHY THIS DECISION?');
   await expect(page.getByTestId('why-decision')).toContainText('Objective components');
+  await shot('06-why');
   await page.waitForTimeout(HOLD.why);
+
+  await push({ stage: 'architecture', optimization: optimizationScene });
+  await expect(page.getByTestId('architecture-story')).toContainText('OR-Tools CP-SAT');
+  await expect(page.getByTestId('architecture-story')).toContainText('PostgreSQL Decision Ledger');
+  await expect(page.getByTestId('architecture-story')).toContainText('Point-in-Time Replay');
+  await shot('07-architecture');
+  await page.waitForTimeout(HOLD.architecture);
 
   const freezeResponse = await request.post(`${API}/api/v1/decisions/freeze`, {
     headers,
@@ -229,6 +243,7 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   const decision = await freezeResponse.json();
   await push({ stage: 'freeze', optimization: optimizationScene, decision });
   await expect(page.getByTestId('frozen-decision')).toContainText(decision.decision_id);
+  await shot('08-freeze');
   await page.waitForTimeout(HOLD.freeze);
 
   const scenarioInputs = result.scenario_inputs as {
@@ -247,11 +262,16 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
     })),
     { label: 'Demo baseline', id: baseline.baseline_id, evidence_class: 'SIMULATED' },
     { label: 'Assumption set', id: result.assumption_version, evidence_class: 'ASSUMPTION' },
+    { label: 'Traffic context', id: `${liveContext.capture_run_id}:traffic`, evidence_class: 'PROVIDER_ESTIMATED' },
+    { label: 'Weather context', id: `${liveContext.capture_run_id}:weather`, evidence_class: 'PUBLIC_OFFICIAL' },
     { label: 'Release', id: decision.code_sha, evidence_class: 'DERIVED' },
   ];
   await push({ stage: 'evidence', optimization: optimizationScene, decision, evidence });
   await expect(page.getByTestId('decision-evidence')).toContainText('Decision evidence');
   await expect(page.getByTestId('decision-evidence')).toContainText('SIMULATED');
+  await expect(page.getByTestId('decision-evidence')).toContainText('PROVIDER_ESTIMATED');
+  await expect(page.getByTestId('decision-evidence')).toContainText('PUBLIC_OFFICIAL');
+  await shot('09-evidence');
   await page.waitForTimeout(HOLD.evidence);
 
   const replayResponse = await request.post(
@@ -260,10 +280,14 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   );
   expect(replayResponse.ok(), `decision replay: ${await replayResponse.text()}`).toBeTruthy();
   const replay = await replayResponse.json();
-  expect(typeof replay.match_status).toBe('string');
+  expect(['EXACT_MATCH', 'SEMANTIC_MATCH']).toContain(replay.match_status);
+  expect(replay.pit_valid).toBe(true);
+  expect(replay.reproduced_exact_action).toBe(true);
+  expect(replay.reproduced_exact_facilities).toBe(true);
   await push({ stage: 'replay', optimization: optimizationScene, decision, evidence, replay });
   await expect(page.getByTestId('decision-replay')).toContainText(replay.match_status);
   await expect(page.getByTestId('decision-replay')).not.toContainText('No replay result');
+  await shot('10-replay');
   await page.waitForTimeout(HOLD.replay);
 
   const html = await page.content();
@@ -273,6 +297,9 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   expect(html).not.toContain(token);
 
   await push({ stage: 'closing', optimization: optimizationScene, decision, evidence, replay });
-  await expect(page.getByTestId('demo-closing')).toContainText('Operate. Simulate. Decide. Prove.');
+  await expect(page.getByTestId('demo-closing')).toContainText('Operate.');
+  await expect(page.getByTestId('demo-closing')).toContainText("OneMove doesn't just recommend an action.");
+  await expect(page.getByTestId('demo-closing')).toContainText('The goal is not another dashboard.');
+  await shot('11-closing');
   await page.waitForTimeout(HOLD.closing);
 });

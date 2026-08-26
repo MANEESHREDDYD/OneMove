@@ -9,6 +9,7 @@ export type DemoStage =
   | 'disruption'
   | 'comparison'
   | 'why'
+  | 'architecture'
   | 'freeze'
   | 'evidence'
   | 'replay'
@@ -104,6 +105,7 @@ export type ReplayScene = {
   objective_match: boolean;
   match_status: string;
   reason: string;
+  difference?: Record<string, any>;
 };
 
 export type EvidenceItem = { label: string; id: string | null | undefined; evidence_class: string };
@@ -122,6 +124,7 @@ const STORY: { stage: DemoStage; label: string }[] = [
   { stage: 'disruption', label: 'Disruption' },
   { stage: 'comparison', label: 'Decision' },
   { stage: 'why', label: 'Why' },
+  { stage: 'architecture', label: 'System' },
   { stage: 'freeze', label: 'Freeze' },
   { stage: 'evidence', label: 'Evidence' },
   { stage: 'replay', label: 'Replay' },
@@ -134,20 +137,29 @@ const STAGE_ORDER: Record<DemoStage, number> = {
   disruption: 2,
   comparison: 3,
   why: 4,
-  freeze: 5,
-  evidence: 6,
-  replay: 7,
-  closing: 8,
+  architecture: 5,
+  freeze: 6,
+  evidence: 7,
+  replay: 8,
+  closing: 9,
 };
 
 const number = (value: number | null | undefined) =>
   value == null ? 'UNAVAILABLE' : Intl.NumberFormat('en-US').format(value);
+
+const compact = (value: number | null | undefined) =>
+  value == null
+    ? 'UNAVAILABLE'
+    : Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(value);
 
 const percent = (basisPoints: number | null | undefined, signed = false) => {
   if (basisPoints == null) return 'UNAVAILABLE';
   const value = basisPoints / 100;
   return `${signed && value > 0 ? '+' : ''}${value.toFixed(1)}%`;
 };
+
+const percentagePoints = (basisPoints: number | null | undefined) =>
+  basisPoints == null ? 'UNAVAILABLE' : `${(basisPoints / 100).toFixed(1)} pp`;
 
 const facility = (id: string) => id.replace(/^fac:/, '');
 const title = (name: string) => name.replaceAll('_', ' ');
@@ -199,41 +211,77 @@ function Comparison({ optimization }: { optimization?: OptimizationScene | null 
   }
 
   const travel = comparison.component_deltas.find((item) => item.name === 'expected_travel');
+  const p95 = comparison.component_deltas.find((item) => item.name === 'p95_travel');
+  const exposure = comparison.component_deltas.find((item) => item.name === 'failure_exposure');
   return (
     <section data-testid="decision-comparison">
       <div className="mb-4 flex items-end justify-between">
         <div><p className="text-[10px] uppercase tracking-[0.22em] text-sky-300">Same problem · snapshot · matrices · assumptions · policy</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Do nothing vs recommended</h2></div>
         <Badge>DERIVED</Badge>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <article data-testid="do-nothing" className="rounded-xl border border-pink-500/25 bg-[#0c1423]/94 p-4">
-          <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">DO NOTHING</h3><Badge tone="pink">SIMULATED DEMO BASELINE</Badge></div>
-          <p className="mt-2 text-[11px] text-slate-400">Declared in scenario definition. Not a retailer network.</p>
-          <FacilitySet ids={comparison.baseline_facility_ids} />
-          <dl className="mt-3">
-            <Metric label="Facility set" value={`${comparison.baseline_facility_ids.length} sites`} />
-            <Metric label="Worst-scenario coverage" value={percent(comparison.baseline_coverage_basis_points)} />
-            <Metric label="Expected travel load" value={number(travel?.baseline_raw_value)} />
-            <Metric label="Solver objective" value={number(comparison.baseline_solver_objective_total)} />
-          </dl>
-        </article>
-        <article data-testid="recommended" className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4">
-          <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">RECOMMENDED</h3><Badge tone="green">DERIVED</Badge></div>
-          <p className="mt-2 text-[11px] text-slate-400">OR-Tools CP-SAT proved optimal under the same yardstick.</p>
-          <FacilitySet ids={comparison.recommended_facility_ids} />
-          <dl className="mt-3">
-            <Metric label="Facility set" value={`${comparison.recommended_facility_ids.length} sites`} />
-            <Metric label="Worst-scenario coverage" value={percent(comparison.recommended_coverage_basis_points)} accent />
-            <Metric label="Expected travel load" value={number(travel?.recommended_raw_value)} accent />
-            <Metric label="Solver objective" value={number(comparison.recommended_solver_objective_total)} accent />
-          </dl>
-        </article>
+      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-5">
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Facilities</h3>
+            <p className="mt-1 text-xl font-medium text-slate-200">
+              {comparison.baseline_facility_ids.length} <span className="text-slate-500 px-1">→</span> {comparison.recommended_facility_ids.length}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Coverage</h3>
+            <p className="mt-1 text-xl font-medium text-slate-200">
+              {percent(comparison.baseline_coverage_basis_points)} <span className="text-slate-500 px-1">→</span> {percent(comparison.recommended_coverage_basis_points)}
+            </p>
+            <p className="mt-0.5 text-[10px] text-slate-400">Coverage change: {percentagePoints(comparison.coverage_delta_basis_points)}</p>
+          </div>
+          <div>
+            <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Expected travel</h3>
+            <p className="mt-1 text-xl font-medium text-slate-200">
+              {compact(travel?.baseline_raw_value)} <span className="text-slate-500 px-1">→</span> {compact(travel?.recommended_raw_value)}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Objective</h3>
+            <p data-testid="comparison-delta" className="mt-1 text-xl font-medium text-emerald-400">
+              {percent(comparison.improvement_basis_points).replace('+', '')} improvement
+            </p>
+          </div>
+          <div>
+            <h3 className="text-[10px] uppercase tracking-wider text-slate-500">P95 travel</h3>
+            <p className="mt-1 text-xl font-medium text-slate-200">
+              {compact(p95?.baseline_raw_value)} <span className="px-1 text-slate-500">→</span> {compact(p95?.recommended_raw_value)}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Failure exposure</h3>
+            <p className="mt-1 text-xl font-medium text-slate-200">
+              {compact(exposure?.baseline_raw_value)} <span className="px-1 text-slate-500">→</span> {compact(exposure?.recommended_raw_value)}
+            </p>
+          </div>
+        </div>
       </div>
-      <div data-testid="comparison-delta" className="mt-3 grid grid-cols-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.06] px-4 py-3">
-        <Metric label="Objective improvement" value={number(comparison.absolute_improvement)} accent />
-        <Metric label="Relative improvement" value={percent(comparison.improvement_basis_points)} accent />
-        <Metric label="Coverage delta" value={percent(comparison.coverage_delta_basis_points, true)} accent />
-      </div>
+      <details open className="mt-3 group rounded-xl border border-slate-700/70 bg-[#0c1423]/94 p-4 cursor-pointer">
+        <summary className="text-xs font-semibold uppercase tracking-wider text-slate-400 outline-none select-none hover:text-slate-200 transition-colors">
+          Engineering details <span className="ml-1 opacity-50 group-open:rotate-180 inline-block transition-transform duration-200">▼</span>
+        </summary>
+        <div className="mt-4 grid grid-cols-2 gap-3 cursor-default">
+          <article data-testid="do-nothing" className="rounded-xl border border-pink-500/25 bg-[#070d18] p-4">
+            <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">DO NOTHING</h3><Badge tone="pink">SIMULATED DEMO BASELINE</Badge></div>
+            <FacilitySet ids={comparison.baseline_facility_ids} />
+            <dl className="mt-3 pt-3 border-t border-slate-800">
+              <Metric label="Solver objective" value={number(comparison.baseline_solver_objective_total)} />
+            </dl>
+          </article>
+          <article data-testid="recommended" className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.04] p-4">
+            <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">RECOMMENDED</h3><Badge tone="green">DERIVED</Badge></div>
+            <FacilitySet ids={comparison.recommended_facility_ids} />
+            <dl className="mt-3 pt-3 border-t border-slate-800">
+              <Metric label="Solver objective" value={number(comparison.recommended_solver_objective_total)} accent />
+              <Metric label="Absolute improvement" value={number(comparison.absolute_improvement)} accent />
+            </dl>
+          </article>
+        </div>
+      </details>
     </section>
   );
 }
@@ -247,7 +295,7 @@ function Why({ optimization }: { optimization?: OptimizationScene | null }) {
 
   return (
     <section data-testid="why-decision">
-      <div className="flex items-end justify-between"><div><p className="text-[10px] uppercase tracking-[0.22em] text-sky-300">Deterministic explanation</p><h2 className="mt-1 text-2xl font-semibold">Why this decision?</h2></div><Badge>DERIVED</Badge></div>
+      <div className="flex items-end justify-between"><div><p className="text-[10px] uppercase tracking-[0.22em] text-sky-300">Deterministic explanation</p><h2 className="mt-1 text-2xl font-semibold">WHY THIS DECISION?</h2></div><Badge>DERIVED</Badge></div>
       <div className="mt-4 grid grid-cols-2 gap-3 text-[11px]">
         <article className="rounded-xl border border-slate-700/70 bg-[#0c1423]/94 p-4">
           <p className="text-[10px] uppercase tracking-wider text-slate-500">Action</p>
@@ -255,9 +303,10 @@ function Why({ optimization }: { optimization?: OptimizationScene | null }) {
           <FacilitySet ids={optimization?.opened_facilities ?? []} />
         </article>
         <article className="rounded-xl border border-slate-700/70 bg-[#0c1423]/94 p-4">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500">Change</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-500">Change from baseline</p>
           <p className="mt-1 text-sm text-slate-100">{comparison?.baseline_facility_ids.length ?? 'UNAVAILABLE'} baseline sites → {comparison?.recommended_facility_ids.length ?? 'UNAVAILABLE'} recommended</p>
-          <p className="mt-2 text-slate-400">Coverage {percent(comparison?.coverage_delta_basis_points, true)} · objective improvement {number(comparison?.absolute_improvement)}</p>
+          <p className="mt-2 text-[10px] uppercase tracking-wider text-slate-500">Service effect</p>
+          <p className="mt-1 text-slate-400">Coverage {percentagePoints(comparison?.coverage_delta_basis_points)} · objective {percent(comparison?.improvement_basis_points).replace('+', '')} better</p>
         </article>
       </div>
       <article className="mt-3 rounded-xl border border-slate-700/70 bg-[#0c1423]/94 p-4">
@@ -287,6 +336,42 @@ function Why({ optimization }: { optimization?: OptimizationScene | null }) {
   );
 }
 
+function Architecture() {
+  const layers = [
+    { name: 'OpenStreetMap / H3', detail: 'Road network + canonical zones', badge: 'PUBLIC_GEOGRAPHIC' },
+    { name: 'TomTom Traffic / Open-Meteo', detail: 'Current external context', badge: 'PROVIDER_ESTIMATED · PUBLIC_OFFICIAL' },
+    { name: 'Data / Evidence Layer', detail: 'Versioned identity, event time and availability', badge: 'NORMALIZED' },
+    { name: 'Scenario Construction', detail: 'Controlled disruption + declared business inputs', badge: 'SIMULATED · ASSUMPTION' },
+    { name: 'Road / Graph Routing', detail: 'Versioned travel matrices over real roads', badge: 'DERIVED' },
+    { name: 'OR-Tools CP-SAT', detail: 'Facility placement under the frozen problem', badge: 'DERIVED' },
+    { name: 'Do Nothing vs Recommended', detail: 'Same snapshot, scenario, matrices, policy and objective', badge: 'DERIVED' },
+    { name: 'Deterministic WHY', detail: 'Components, service effect and tradeoffs', badge: 'DERIVED' },
+    { name: 'PostgreSQL Decision Ledger', detail: 'Release-bound immutable decision record', badge: 'PERSISTED' },
+    { name: 'Point-in-Time Replay', detail: 'Recompute and compare action, facilities, objective and hash', badge: 'PROVED' },
+    { name: 'FastAPI → Next.js → MapLibre', detail: 'Authenticated API to the current operating surface', badge: 'PRODUCT' },
+  ];
+
+  return (
+    <section data-testid="architecture-story">
+      <div className="flex items-end justify-between">
+        <div><p className="text-[10px] uppercase tracking-[0.22em] text-sky-300">System of decision record</p><h2 className="mt-1 text-2xl font-semibold">From operating state to proof.</h2></div>
+        <Badge>ARCHITECTURE</Badge>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-slate-400">Every layer preserves the identity and time of its inputs. The UI does not manufacture a successful outcome.</p>
+      <ol className="mt-3 space-y-1">
+        {layers.map((layer, index) => (
+          <li key={layer.name} className="relative grid grid-cols-[24px_1fr_auto] items-center gap-2 rounded-lg border border-slate-700/70 bg-[#0c1423]/94 px-3 py-1.5">
+            <span className="flex h-5 w-5 items-center justify-center rounded border border-sky-400/30 bg-sky-400/10 font-mono text-[9px] text-sky-200">{index + 1}</span>
+            <div className="min-w-0"><h3 className="text-[11px] font-medium leading-tight text-slate-100">{layer.name}</h3><p className="truncate text-[9px] text-slate-500">{layer.detail}</p></div>
+            <span className="max-w-[210px] text-right font-mono text-[8px] leading-tight text-emerald-300">{layer.badge}</span>
+            {index < layers.length - 1 && <span aria-hidden className="absolute -bottom-2 left-[21px] z-10 text-[10px] text-sky-500">↓</span>}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 function Freeze({ decision }: { decision?: DecisionScene | null }) {
   return (
     <section data-testid="frozen-decision">
@@ -295,9 +380,9 @@ function Freeze({ decision }: { decision?: DecisionScene | null }) {
         <Metric label="Decision ID" value={decision?.decision_id ?? 'UNAVAILABLE'} accent />
         <Metric label="Selected action" value={decision?.selected_action ?? 'UNAVAILABLE'} />
         <Metric label="Decision time" value={decision?.decision_time ?? 'UNAVAILABLE'} />
-        <Metric label="Release SHA" value={decision?.code_sha ?? 'UNAVAILABLE'} />
+        <Metric label="Release SHA" value={decision?.code_sha ? decision.code_sha.slice(0, 12) : 'UNAVAILABLE'} />
         <Metric label="Policy / solver" value={decision?.solver_version ?? 'UNAVAILABLE'} />
-        <Metric label="Feature snapshot" value={decision?.feature_snapshot_hash ?? 'UNAVAILABLE'} />
+        <Metric label="Feature snapshot" value={decision?.feature_snapshot_hash ? decision.feature_snapshot_hash.slice(0, 16) : 'UNAVAILABLE'} />
       </dl>
       <p className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 text-sm leading-relaxed text-slate-300">The recommendation is now bound to its release, inputs, solver output, evidence references, and decision time.</p>
     </section>
@@ -326,15 +411,27 @@ function Replay({ replay }: { replay?: ReplayScene | null }) {
   return (
     <section data-testid="decision-replay">
       <div className="flex items-center justify-between"><div><p className="text-[10px] uppercase tracking-[0.22em] text-sky-300">Point-in-time verification</p><h2 className="mt-1 text-2xl font-semibold">Replay verdict</h2></div><Badge tone={exact ? 'green' : 'amber'}>{replay?.match_status ?? 'UNAVAILABLE'}</Badge></div>
-      <div className="mt-5 grid grid-cols-3 gap-2">
+      <div className="mt-5 grid grid-cols-4 gap-2">
         <Metric label="PIT valid" value={replay ? (replay.pit_valid ? 'YES' : 'NO') : 'UNAVAILABLE'} accent={replay?.pit_valid} />
         <Metric label="Action reproduced" value={replay ? (replay.reproduced_exact_action ? 'YES' : 'NO') : 'UNAVAILABLE'} accent={replay?.reproduced_exact_action} />
+        <Metric label="Facilities reproduced" value={replay ? (replay.reproduced_exact_facilities ? 'YES' : 'NO') : 'UNAVAILABLE'} accent={replay?.reproduced_exact_facilities} />
         <Metric label="Objective match" value={replay ? (replay.objective_match ? 'YES' : 'NO') : 'UNAVAILABLE'} accent={replay?.objective_match} />
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 font-mono text-[10px]">
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"><p className="mb-1 uppercase tracking-wider text-slate-500">Frozen hash</p><p className="text-slate-200">{replay?.expected_hash ?? 'UNAVAILABLE'}</p></div>
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"><p className="mb-1 uppercase tracking-wider text-slate-500">Recomputed hash</p><p className="text-slate-200">{replay?.actual_hash ?? 'UNAVAILABLE'}</p></div>
       </div>
+      {replay?.match_status === 'SEMANTIC_MATCH' && replay.difference?.objective_diff != null && (
+        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 font-mono text-[10px]">
+          <p className="mb-2 font-semibold text-amber-400">OBJECTIVE EXACT MATCH: NO</p>
+          <div className="grid grid-cols-2 gap-2 text-slate-300">
+            <div><span className="text-slate-500">Frozen objective:</span> <br/>{number(replay.difference.frozen_objective ?? 0)}</div>
+            <div><span className="text-slate-500">Recomputed objective:</span> <br/>{number(replay.difference.recomputed_objective ?? 0)}</div>
+            <div><span className="text-slate-500">Absolute difference:</span> <br/>{number(replay.difference.objective_diff)}</div>
+            <div><span className="text-slate-500">Relative difference:</span> <br/>{percent(replay.difference.relative_diff_basis_points ?? 0)}</div>
+          </div>
+        </div>
+      )}
       <p className="mt-4 rounded-xl border border-slate-700/70 bg-[#0c1423]/94 p-4 text-sm leading-relaxed text-slate-300">{replay?.reason ?? 'No replay result has been returned.'}</p>
       <p className="mt-4 text-sm leading-relaxed text-slate-400">OneMove records what was known, why the decision was made, and whether that decision can be reproduced later.</p>
     </section>
@@ -351,7 +448,7 @@ export function DecisionJourney({ scene }: { scene: OperateDemoScene }) {
           {STORY.map((item, index) => (
             <li key={item.stage} className="flex min-w-0 flex-1 items-center gap-1">
               <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[9px] ${index <= active ? 'border-sky-400/60 bg-sky-400/15 text-sky-200' : 'border-slate-700 text-slate-600'}`}>{index + 1}</span>
-              <span className={`truncate text-[9px] uppercase tracking-wide ${index === active ? 'text-slate-100' : 'text-slate-600'}`}>{item.label}</span>
+              <span className={`text-[8px] uppercase ${index === active ? 'text-slate-100' : 'text-slate-600'}`}>{item.label}</span>
             </li>
           ))}
         </ol>
@@ -359,9 +456,18 @@ export function DecisionJourney({ scene }: { scene: OperateDemoScene }) {
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
         {stage === 'opening' && (
           <section data-testid="demo-opening" className="flex h-full flex-col justify-center py-8">
-            <Badge>OPERATE · SIMULATE · DECIDE</Badge>
-            <h1 className="mt-5 max-w-lg text-5xl font-semibold leading-[1.03] tracking-[-0.04em] text-white">Physical-commerce decisions, connected.</h1>
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-slate-300">OneMove links geographic state, current context, uncertainty, optimization, and decision evidence in one reproducible operating surface.</p>
+            <Badge>OPERATE · SIMULATE · DECIDE · PROVE</Badge>
+            <h1 className="mt-5 max-w-lg text-6xl font-semibold leading-none tracking-[-0.05em] text-white">OneMove</h1>
+            <p className="mt-4 text-xl font-medium text-sky-200">Physical-commerce network decision intelligence.</p>
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-300">OneMove turns changing network conditions into explainable, reproducible operating decisions.</p>
+            <div className="mt-7 grid grid-cols-2 gap-2 text-[10px] text-slate-200">
+              {[
+                ['OPERATE', 'What is happening?'],
+                ['SIMULATE', 'What could happen?'],
+                ['DECIDE', 'What should we do?'],
+                ['PROVE', 'Why—and can we reproduce it?'],
+              ].map(([mode, question]) => <div key={mode} className="rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2"><strong className="tracking-wider text-sky-200">{mode}</strong><span className="ml-2 text-slate-400">{question}</span></div>)}
+            </div>
           </section>
         )}
         {stage === 'network' && (
@@ -381,11 +487,17 @@ export function DecisionJourney({ scene }: { scene: OperateDemoScene }) {
         )}
         {stage === 'comparison' && <Comparison optimization={scene.optimization} />}
         {stage === 'why' && <Why optimization={scene.optimization} />}
+        {stage === 'architecture' && <Architecture />}
         {stage === 'freeze' && <Freeze decision={scene.decision} />}
         {stage === 'evidence' && <Evidence items={scene.evidence} />}
         {stage === 'replay' && <Replay replay={scene.replay} />}
         {stage === 'closing' && (
-          <section data-testid="demo-closing" className="flex h-full flex-col justify-center py-8"><Badge tone="green">ONE DECISION RECORD</Badge><h2 className="mt-5 text-5xl font-semibold leading-[1.05] tracking-[-0.04em]">Operate. Simulate. Decide. Prove.</h2><p className="mt-5 max-w-xl text-lg leading-relaxed text-slate-300">From real network context to a simulated mission, a derived recommendation, its evidence, and a reproducible replay.</p></section>
+          <section data-testid="demo-closing" className="flex h-full flex-col justify-center py-8">
+            <Badge tone="green">ONE DECISION RECORD</Badge>
+            <h2 className="mt-5 text-5xl font-semibold leading-[1.05] tracking-[-0.04em]">Operate.<br />Simulate.<br />Decide.<br /><span className="text-emerald-300">Prove.</span></h2>
+            <p className="mt-6 max-w-xl text-base leading-relaxed text-slate-300">OneMove doesn&apos;t just recommend an action. It records what was known, why the decision was made, and whether that decision can be reproduced later.</p>
+            <p className="mt-4 border-l-2 border-emerald-400 pl-4 text-sm leading-relaxed text-slate-400">The goal is not another dashboard. It is a defensible decision system for physical-commerce operations.</p>
+          </section>
         )}
       </div>
     </aside>
