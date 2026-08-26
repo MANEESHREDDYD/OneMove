@@ -86,6 +86,13 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   );
   await expect(page.locator('[data-map-state="ready"]')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('canvas.maplibregl-canvas')).toBeVisible({ timeout: 30_000 });
+  await page.waitForFunction(() => {
+    const map = (window as unknown as {
+      __omMap?: { queryRenderedFeatures: (options: { layers: string[] }) => unknown[] };
+    }).__omMap;
+    return (map?.queryRenderedFeatures({ layers: ['roads-line'] }).length ?? 0) > 0
+      && (map?.queryRenderedFeatures({ layers: ['routes-line'] }).length ?? 0) > 0;
+  });
 
   const rendered = await page.evaluate(() => {
     const map = (window as unknown as {
