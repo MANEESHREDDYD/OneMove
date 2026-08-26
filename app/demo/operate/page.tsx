@@ -225,6 +225,10 @@ export default function OperatePage() {
   const showDisruption = ['disruption', 'comparison', 'why', 'freeze', 'evidence', 'replay', 'closing'].includes(scene.stage);
   const showRecommendation = ['comparison', 'why', 'freeze', 'evidence', 'replay', 'closing'].includes(scene.stage);
 
+  useEffect(() => {
+    if (scene.stage === 'disruption') setSelectedOrderId(null);
+  }, [scene.stage]);
+
   const disruption = useMemo(() => {
     if (!showDisruption || !disruptedFacility) return undefined;
     const cell = disruptedFacility.replace(/^fac:/, '');
@@ -252,6 +256,20 @@ export default function OperatePage() {
     }));
   }, [scene.optimization, showRecommendation]);
 
+  const baseline = useMemo(() => {
+    if (!showRecommendation) return undefined;
+    const ids = scene.optimization?.result_document.baseline_comparison?.baseline_facility_ids ?? [];
+    return collection(ids.map((id) => {
+      const [lat, lon] = cellToLatLng(id.replace(/^fac:/, ''));
+      return {
+        type: 'Feature' as const,
+        id: `baseline-${id}`,
+        geometry: { type: 'Point' as const, coordinates: [lon, lat] },
+        properties: { facilityId: id, evidenceClass: 'SIMULATED' },
+      };
+    }));
+  }, [scene.optimization, showRecommendation]);
+
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#04070d] font-sans text-slate-100">
       <header className="z-20 flex shrink-0 items-center justify-between border-b border-slate-800/80 bg-[#070c16] px-6 py-2.5">
@@ -274,7 +292,7 @@ export default function OperatePage() {
       <div className="relative flex min-h-0 flex-1">
         <div className="absolute inset-0" data-testid="map-stage">
           <OneMoveMap
-            data={{ orders: orderFeatures, routes: routeFeatures, traffic, facilities, scenario: disruption, recommended }}
+            data={{ orders: orderFeatures, routes: routeFeatures, traffic, facilities, baseline, scenario: disruption, recommended }}
             selectedOrderId={selectedOrderId}
             onSelectOrder={setSelectedOrderId}
           />

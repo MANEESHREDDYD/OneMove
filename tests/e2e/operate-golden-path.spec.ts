@@ -98,6 +98,25 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   });
   expect(rendered.roads, 'rendered road features').toBeGreaterThan(0);
   expect(rendered.routes, 'rendered route features').toBeGreaterThan(0);
+  await expect(page.getByTestId('map-geographic-context')).toContainText('BENGALURU · KARNATAKA, INDIA');
+  await expect(page.getByTestId('map-geographic-context')).toContainText('Jayanagar · Koramangala · Indiranagar · HSR');
+  await expect(page.getByTestId('map-locator')).toContainText('PILOT');
+  await expect(page.locator('[data-label-kind="locality"]')).toHaveCount(7);
+  await expect(page.locator('[data-label-kind="road"]', { hasText: 'Outer Ring Road' }).first()).toBeAttached();
+  await expect(page.locator('[data-label-kind="road"]', { hasText: 'Hosur Road' }).first()).toBeAttached();
+  await expect(page.getByTestId('map-operational-legend')).toContainText('Recommended');
+
+  const geographicLayers = await page.evaluate(() => {
+    const map = (window as unknown as {
+      __omMap?: { queryRenderedFeatures: (options: { layers: string[] }) => unknown[] };
+    }).__omMap;
+    return {
+      pilot: map?.queryRenderedFeatures({ layers: ['pilot-area-outline'] }).length ?? 0,
+      h3: map?.queryRenderedFeatures({ layers: ['zones-outline'] }).length ?? 0,
+    };
+  });
+  expect(geographicLayers.pilot, 'rendered pilot boundary').toBeGreaterThan(0);
+  expect(geographicLayers.h3, 'rendered H3 context').toBeGreaterThan(0);
 
   const basemapResponse = await request.get('http://localhost:3000/demo/bengaluru-basemap.json');
   const basemap = await basemapResponse.json();
@@ -216,6 +235,25 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   await expect(page.getByTestId('do-nothing')).toContainText('SIMULATED DEMO BASELINE');
   await expect(page.getByTestId('recommended')).toContainText('RECOMMENDED');
   await expect(page.getByTestId('comparison-delta')).toBeVisible();
+  await expect(page.locator('[data-decision-kind="recommended"]')).toHaveCount(4);
+  await page.waitForFunction(() => {
+    const map = (window as unknown as {
+      __omMap?: { queryRenderedFeatures: (options: { layers: string[] }) => unknown[] };
+    }).__omMap;
+    return (map?.queryRenderedFeatures({ layers: ['baseline-point'] }).length ?? 0) > 0
+      && (map?.queryRenderedFeatures({ layers: ['recommended-point'] }).length ?? 0) > 0;
+  });
+  const decisionGeography = await page.evaluate(() => {
+    const map = (window as unknown as {
+      __omMap?: { queryRenderedFeatures: (options: { layers: string[] }) => unknown[] };
+    }).__omMap;
+    return {
+      baseline: map?.queryRenderedFeatures({ layers: ['baseline-point'] }).length ?? 0,
+      recommended: map?.queryRenderedFeatures({ layers: ['recommended-point'] }).length ?? 0,
+    };
+  });
+  expect(decisionGeography.baseline, 'Do Nothing facilities on map').toBeGreaterThan(0);
+  expect(decisionGeography.recommended, 'recommended facilities on map').toBeGreaterThan(0);
   await shot('05-comparison');
   await page.waitForTimeout(HOLD.comparison);
 

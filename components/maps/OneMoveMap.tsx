@@ -50,8 +50,10 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 export type LayerId =
   | 'roads'
+  | 'pilot'
   | 'zones'
   | 'facilities'
+  | 'baseline'
   | 'traffic'
   | 'orders'
   | 'routes'
@@ -71,8 +73,10 @@ type LayerSpec = {
  */
 export const LAYERS: LayerSpec[] = [
   { id: 'roads', label: 'Road network', evidence: 'PUBLIC_GEOGRAPHIC', defaultOn: true },
+  { id: 'pilot', label: 'OneMove pilot area', evidence: 'PUBLIC_GEOGRAPHIC', defaultOn: true },
   { id: 'zones', label: '94 H3 service zones', evidence: 'PUBLIC_GEOGRAPHIC', defaultOn: true },
   { id: 'facilities', label: 'Candidate facilities', evidence: 'ASSUMPTION', defaultOn: true },
+  { id: 'baseline', label: 'Do Nothing facilities', evidence: 'SIMULATED', defaultOn: false },
   { id: 'traffic', label: 'Current traffic', evidence: 'PROVIDER_ESTIMATED', defaultOn: true },
   { id: 'orders', label: 'Delivery orders', evidence: 'SIMULATED', defaultOn: true },
   { id: 'routes', label: 'Delivery routes', evidence: 'SIMULATED', defaultOn: true },
@@ -84,6 +88,7 @@ export type MapData = {
   /** Live traffic per zone, keyed by H3 index. Absent means UNAVAILABLE, not free-flowing. */
   traffic?: Map<string, { congestionRatio: number | null; evidence: EvidenceState }>;
   facilities?: FeatureCollection;
+  baseline?: FeatureCollection;
   orders?: FeatureCollection;
   routes?: FeatureCollection;
   scenario?: FeatureCollection;
@@ -136,6 +141,134 @@ const CONGESTION_COLOR: maplibregl.DataDrivenPropertyValueSpecification<string> 
   ],
 ];
 
+type GeographicLabel = {
+  name: string;
+  lon: number;
+  lat: number;
+  kind: 'city' | 'locality' | 'road' | 'landmark';
+};
+
+type DecisionPosition = {
+  key: string;
+  x: number;
+  y: number;
+  label: string;
+  detail: string;
+  kind: 'recommended' | 'disruption';
+};
+
+/**
+ * Orientation labels extracted from the same OSM pilot corridor used to build
+ * the road artifact. The coordinates are the actual `place=*`, named-road and
+ * named-feature coordinates in `pilot_corridor.osm.pbf`, not hand-positioned
+ * presentation labels.
+ */
+const GEOGRAPHIC_LABELS: GeographicLabel[] = [
+  { name: 'BENGALURU', lon: 77.590082, lat: 12.976794, kind: 'city' },
+  { name: 'Jayanagar', lon: 77.582423, lat: 12.929273, kind: 'locality' },
+  { name: 'Koramangala', lon: 77.624081, lat: 12.935737, kind: 'locality' },
+  { name: 'Domlur', lon: 77.638196, lat: 12.962467, kind: 'locality' },
+  { name: 'Indiranagar', lon: 77.640467, lat: 12.973291, kind: 'locality' },
+  { name: 'HSR Layout', lon: 77.638862, lat: 12.911623, kind: 'locality' },
+  { name: 'BTM Layout', lon: 77.610282, lat: 12.914001, kind: 'locality' },
+  { name: 'Madiwala', lon: 77.617629, lat: 12.923815, kind: 'locality' },
+  { name: 'Outer Ring Road', lon: 77.621481, lat: 12.916916, kind: 'road' },
+  { name: 'Hosur Road', lon: 77.613795, lat: 12.931605, kind: 'road' },
+  { name: 'Sarjapur Road', lon: 77.638103, lat: 12.924671, kind: 'road' },
+  { name: 'HAL Old Airport Road', lon: 77.631095, lat: 12.962084, kind: 'road' },
+  { name: 'Cubbon Park', lon: 77.593283, lat: 12.974988, kind: 'landmark' },
+  { name: 'Lalbagh Botanical Gardens', lon: 77.585708, lat: 12.948279, kind: 'landmark' },
+  { name: 'Embassy GolfLinks', lon: 77.644071, lat: 12.950254, kind: 'landmark' },
+  { name: 'Central Silk Board', lon: 77.621306, lat: 12.91602, kind: 'landmark' },
+];
+
+// Simplified from OpenStreetMap relation 7902476 (Bengaluru) via Nominatim.
+const BENGALURU_BOUNDARY: [number, number][] = [
+  [77.45988, 12.90469], [77.48297, 12.88629], [77.50455, 12.87701],
+  [77.51841, 12.86117], [77.55448, 12.84803], [77.58702, 12.83349],
+  [77.61684, 12.85753], [77.64309, 12.85058], [77.67377, 12.89314],
+  [77.70835, 12.90806], [77.74467, 12.91363], [77.76467, 12.95945],
+  [77.77414, 13.01316], [77.7239, 13.03357], [77.67913, 13.06287],
+  [77.6427, 13.08689], [77.6306, 13.12594], [77.58563, 13.1326],
+  [77.55602, 13.10014], [77.51796, 13.07418], [77.49097, 13.0451],
+  [77.46845, 12.9867], [77.47325, 12.94033], [77.45988, 12.90469],
+];
+
+const CITY_BOUNDS = { minLon: 77.4598797, maxLon: 77.7840639, minLat: 12.8334905, maxLat: 13.1426196 };
+const OPERATING_PADDING = { top: 92, bottom: 135, left: 690, right: 340 };
+
+function cross(origin: [number, number], a: [number, number], b: [number, number]) {
+  return (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0]);
+}
+
+function convexHull(points: [number, number][]): [number, number][] {
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (sorted.length <= 1) return sorted;
+  const lower: [number, number][] = [];
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) lower.pop();
+    lower.push(point);
+  }
+  const upper: [number, number][] = [];
+  for (const point of [...sorted].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) upper.pop();
+    upper.push(point);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+function pilotGeometry(basemap: RawBasemap) {
+  const points = basemap.zones.flatMap((zone) => zone.b) as [number, number][];
+  const hull = convexHull(points);
+  if (hull.length) hull.push(hull[0]);
+  return {
+    collection: {
+      type: 'FeatureCollection' as const,
+      features: [{
+        type: 'Feature' as const,
+        id: 'onemove-pilot-area',
+        geometry: { type: 'Polygon', coordinates: [hull] },
+        properties: { name: 'ONEMOVE PILOT AREA', evidenceClass: 'PUBLIC_GEOGRAPHIC' },
+      }],
+    } as FeatureCollection,
+    bounds: {
+      minLon: Math.min(...points.map((point) => point[0])),
+      maxLon: Math.max(...points.map((point) => point[0])),
+      minLat: Math.min(...points.map((point) => point[1])),
+      maxLat: Math.max(...points.map((point) => point[1])),
+    },
+  };
+}
+
+function nearestLocality(coordinates: [number, number]) {
+  return GEOGRAPHIC_LABELS
+    .filter((label) => label.kind === 'locality')
+    .map((label) => ({ label, distance: (label.lon - coordinates[0]) ** 2 + (label.lat - coordinates[1]) ** 2 }))
+    .sort((a, b) => a.distance - b.distance)[0]?.label.name ?? 'Bengaluru pilot area';
+}
+
+function LocatorMap({ pilot }: { pilot: ReturnType<typeof pilotGeometry>['bounds'] }) {
+  const width = 190;
+  const height = 92;
+  const x = (lon: number) => ((lon - CITY_BOUNDS.minLon) / (CITY_BOUNDS.maxLon - CITY_BOUNDS.minLon)) * width;
+  const y = (lat: number) => height - ((lat - CITY_BOUNDS.minLat) / (CITY_BOUNDS.maxLat - CITY_BOUNDS.minLat)) * height;
+  const outline = BENGALURU_BOUNDARY.map(([lon, lat]) => `${x(lon).toFixed(1)},${y(lat).toFixed(1)}`).join(' ');
+  const pilotX = x(pilot.minLon);
+  const pilotY = y(pilot.maxLat);
+  const pilotWidth = x(pilot.maxLon) - pilotX;
+  const pilotHeight = y(pilot.minLat) - pilotY;
+  return (
+    <div data-testid="map-locator" className="rounded-lg border border-slate-600/70 bg-[#07101d]/94 p-2 shadow-xl backdrop-blur">
+      <div className="mb-1 flex items-baseline justify-between"><strong className="text-[10px] tracking-[0.16em] text-slate-100">BENGALURU</strong><span className="text-[8px] text-slate-500">Karnataka · India</span></div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-[74px] w-full" role="img" aria-label="Bengaluru locator with OneMove pilot highlighted">
+        <polygon points={outline} fill="#172033" stroke="#64748b" strokeWidth="1" />
+        <rect x={pilotX} y={pilotY} width={pilotWidth} height={pilotHeight} rx="1.5" fill="#38bdf8" fillOpacity="0.32" stroke="#7dd3fc" strokeWidth="1.5" />
+        <text x={Math.min(width - 36, pilotX + pilotWidth + 3)} y={pilotY + Math.max(9, pilotHeight / 2)} fill="#bae6fd" fontSize="7" fontWeight="700">PILOT</text>
+      </svg>
+    </div>
+  );
+}
+
 export function OneMoveMap({
   data = {},
   selectedOrderId = null,
@@ -157,7 +290,8 @@ export function OneMoveMap({
     () => Object.fromEntries(LAYERS.map((l) => [l.id, l.defaultOn])) as Record<LayerId, boolean>,
   );
   const [hovered, setHovered] = useState<string | null>(null);
-  const [labelPositions, setLabelPositions] = useState<{ name: string; x: number; y: number }[]>([]);
+  const [labelPositions, setLabelPositions] = useState<{ name: string; x: number; y: number; kind: GeographicLabel['kind'] }[]>([]);
+  const [decisionPositions, setDecisionPositions] = useState<DecisionPosition[]>([]);
 
   // --- load the basemap artifact --------------------------------------------
 
@@ -204,6 +338,8 @@ export function OneMoveMap({
     return zonesToGeoJSON(load.basemap, attributes);
   }, [load, data.traffic]);
 
+  const pilot = useMemo(() => load.status === 'ready' ? pilotGeometry(load.basemap) : null, [load]);
+
   // --- create the map --------------------------------------------------------
 
   useEffect(() => {
@@ -244,11 +380,19 @@ export function OneMoveMap({
     instance.on('load', () => {
       try {
       instance.addSource('roads', { type: 'geojson', data: roadsToGeoJSON(load.basemap) as never });
+      instance.addSource('pilot', { type: 'geojson', data: pilot?.collection as never });
       instance.addSource('zones', { type: 'geojson', data: emptyCollection() as never });
       instance.addSource('labels', { type: 'geojson', data: labelsToGeoJSON(load.basemap) as never });
-      for (const id of ['facilities', 'orders', 'routes', 'scenario', 'recommended'] as const) {
+      for (const id of ['facilities', 'baseline', 'orders', 'routes', 'scenario', 'recommended'] as const) {
         instance.addSource(id, { type: 'geojson', data: emptyCollection() as never });
       }
+
+      instance.addLayer({
+        id: 'pilot-area-fill',
+        type: 'fill',
+        source: 'pilot',
+        paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.035 },
+      });
 
       // Zone fill sits UNDER the roads: the arterials are the thing a reader
       // orients by, and a translucent congestion wash over them muddies both.
@@ -263,6 +407,12 @@ export function OneMoveMap({
         type: 'line',
         source: 'zones',
         paint: { 'line-color': '#64748b', 'line-width': 0.6, 'line-opacity': 0.5 },
+      });
+      instance.addLayer({
+        id: 'pilot-area-outline',
+        type: 'line',
+        source: 'pilot',
+        paint: { 'line-color': '#7dd3fc', 'line-width': 1.6, 'line-opacity': 0.72, 'line-dasharray': [3, 2] },
       });
       instance.addLayer({
         id: 'zones-hover',
@@ -325,6 +475,12 @@ export function OneMoveMap({
         source: 'scenario',
         paint: { 'fill-color': '#a855f7', 'fill-opacity': 0.3 },
       });
+      instance.addLayer({
+        id: 'scenario-outline',
+        type: 'line',
+        source: 'scenario',
+        paint: { 'line-color': '#d8b4fe', 'line-width': 2.5, 'line-opacity': 0.95, 'line-dasharray': [2, 1.5] },
+      });
 
       instance.addLayer({
         id: 'facilities-point',
@@ -335,6 +491,19 @@ export function OneMoveMap({
           'circle-color': '#f8fafc',
           'circle-stroke-color': '#0f172a',
           'circle-stroke-width': 1.5,
+        },
+      });
+
+      instance.addLayer({
+        id: 'baseline-point',
+        type: 'circle',
+        source: 'baseline',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 7, 15, 13],
+          'circle-color': '#ec4899',
+          'circle-opacity': 0.28,
+          'circle-stroke-color': '#f9a8d4',
+          'circle-stroke-width': 2.5,
         },
       });
 
@@ -375,6 +544,12 @@ export function OneMoveMap({
         },
       });
 
+      if (pilot) {
+        instance.fitBounds(
+          [[pilot.bounds.minLon, pilot.bounds.minLat], [pilot.bounds.maxLon, pilot.bounds.maxLat]],
+          { padding: OPERATING_PADDING, duration: 0 },
+        );
+      }
       setStyleReady(true);
       } catch (err: unknown) {
         // Adding a source or layer can throw on an invalid expression. Without
@@ -392,9 +567,12 @@ export function OneMoveMap({
     // orientation cues a bare road mesh cannot.
     const reprojectLabels = () => {
       setLabelPositions(
-        load.basemap.labels.map((label) => {
+        [
+          ...load.basemap.labels.map((label) => ({ ...label, kind: 'road' as const })),
+          ...GEOGRAPHIC_LABELS,
+        ].map((label) => {
           const point = instance.project([label.lon, label.lat]);
-          return { name: label.name, x: point.x, y: point.y };
+          return { name: label.name, x: point.x, y: point.y, kind: label.kind };
         }),
       );
     };
@@ -418,7 +596,7 @@ export function OneMoveMap({
       map.current = null;
       setStyleReady(false);
     };
-  }, [load]);
+  }, [load, pilot]);
 
   // --- interaction -----------------------------------------------------------
 
@@ -482,6 +660,7 @@ export function OneMoveMap({
 
   useEffect(() => setSource('zones', zoneCollection), [setSource, zoneCollection]);
   useEffect(() => setSource('facilities', data.facilities), [setSource, data.facilities]);
+  useEffect(() => setSource('baseline', data.baseline), [setSource, data.baseline]);
   useEffect(() => setSource('scenario', data.scenario), [setSource, data.scenario]);
   useEffect(() => setSource('recommended', data.recommended), [setSource, data.recommended]);
 
@@ -490,6 +669,9 @@ export function OneMoveMap({
   useEffect(() => {
     if (data.scenario?.features.length) setVisible((current) => ({ ...current, scenario: true }));
   }, [data.scenario]);
+  useEffect(() => {
+    if (data.baseline?.features.length) setVisible((current) => ({ ...current, baseline: true }));
+  }, [data.baseline]);
   useEffect(() => {
     if (data.recommended?.features.length) setVisible((current) => ({ ...current, recommended: true }));
   }, [data.recommended]);
@@ -515,6 +697,68 @@ export function OneMoveMap({
     setSource('routes', mark(data.routes));
   }, [setSource, data.orders, data.routes, selectedOrderId]);
 
+  // Labels follow their decision geometry as the camera moves. Recommended
+  // sites get executive names while their H3 identifiers remain in details.
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !styleReady) return;
+    const markers: { key: string; coordinates: [number, number]; label: string; detail: string; kind: DecisionPosition['kind'] }[] = [];
+    data.recommended?.features.forEach((feature, index) => {
+      const coordinates = feature.geometry.coordinates as [number, number];
+      markers.push({
+        key: String(feature.id ?? `recommended-${index}`),
+        coordinates,
+        label: `FACILITY ${String.fromCharCode(65 + index)}`,
+        detail: `Near ${nearestLocality(coordinates)}`,
+        kind: 'recommended',
+      });
+    });
+    data.scenario?.features.forEach((feature, index) => {
+      const ring = (feature.geometry.coordinates as [number, number][][])[0] ?? [];
+      if (!ring.length) return;
+      const coordinates: [number, number] = [
+        ring.reduce((sum, point) => sum + point[0], 0) / ring.length,
+        ring.reduce((sum, point) => sum + point[1], 0) / ring.length,
+      ];
+      markers.push({
+        key: String(feature.id ?? `disruption-${index}`),
+        coordinates,
+        label: 'SIMULATED DISRUPTION',
+        detail: `Near ${nearestLocality(coordinates)}`,
+        kind: 'disruption',
+      });
+    });
+    const project = () => setDecisionPositions(markers.map((marker) => {
+      const point = instance.project(marker.coordinates);
+      return { ...marker, x: point.x, y: point.y };
+    }));
+    project();
+    instance.on('move', project);
+    return () => { instance.off('move', project); };
+  }, [styleReady, data.recommended, data.scenario]);
+
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !styleReady || !selectedOrderId) return;
+    const route = data.routes?.features.find((feature) => feature.properties.orderId === selectedOrderId);
+    const coordinates = route?.geometry.coordinates as [number, number][] | undefined;
+    if (!coordinates?.length) return;
+    const bounds = coordinates.reduce(
+      (current, coordinate) => current.extend(coordinate),
+      new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
+    );
+    instance.fitBounds(bounds, { padding: OPERATING_PADDING, duration: 850, maxZoom: 14.2 });
+  }, [styleReady, selectedOrderId, data.routes]);
+
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !styleReady || !data.scenario?.features.length || !pilot) return;
+    instance.fitBounds(
+      [[pilot.bounds.minLon, pilot.bounds.minLat], [pilot.bounds.maxLon, pilot.bounds.maxLat]],
+      { padding: OPERATING_PADDING, duration: 850 },
+    );
+  }, [styleReady, data.scenario, pilot]);
+
   useEffect(() => {
     const instance = map.current;
     if (!instance || !styleReady) return;
@@ -529,10 +773,13 @@ export function OneMoveMap({
   }, [visible, styleReady]);
 
   const fitToNetwork = useCallback(() => {
-    if (load.status === 'ready') {
-      map.current?.fitBounds(boundsOf(load.basemap), { padding: 32, duration: 600 });
+    if (pilot) {
+      map.current?.fitBounds(
+        [[pilot.bounds.minLon, pilot.bounds.minLat], [pilot.bounds.maxLon, pilot.bounds.maxLat]],
+        { padding: OPERATING_PADDING, duration: 600 },
+      );
     }
-  }, [load]);
+  }, [pilot]);
 
   // --- render ----------------------------------------------------------------
 
@@ -567,8 +814,17 @@ export function OneMoveMap({
       <div className="pointer-events-none absolute inset-0 overflow-hidden" data-testid="map-labels">
         {labelPositions.map((label) => (
           <span
-            key={label.name}
-            className="absolute -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-slate-300/85 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]"
+            key={`${label.kind}-${label.name}`}
+            data-label-kind={label.kind}
+            className={`absolute -translate-x-1/2 whitespace-nowrap [text-shadow:0_1px_4px_rgba(0,0,0,1)] ${
+              label.kind === 'city'
+                ? 'rounded border border-sky-300/30 bg-slate-950/75 px-2 py-0.5 text-[13px] font-bold tracking-[0.18em] text-white'
+                : label.kind === 'locality'
+                  ? 'text-[11px] font-semibold text-slate-100'
+                  : label.kind === 'landmark'
+                    ? 'text-[9px] font-medium text-emerald-200/90'
+                    : 'text-[9px] font-medium italic text-slate-300/80'
+            }`}
             style={{ left: label.x, top: label.y }}
           >
             {label.name}
@@ -576,10 +832,59 @@ export function OneMoveMap({
         ))}
       </div>
 
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" data-testid="map-decision-labels">
+        {decisionPositions.map((marker) => (
+          <div
+            key={marker.key}
+            data-decision-kind={marker.kind}
+            className={`absolute ml-3 -translate-y-1/2 rounded-md border px-2 py-1 shadow-lg backdrop-blur ${
+              marker.kind === 'recommended'
+                ? 'border-emerald-400/50 bg-emerald-950/90 text-emerald-100'
+                : 'border-purple-400/60 bg-purple-950/90 text-purple-100'
+            }`}
+            style={{ left: marker.x, top: marker.y }}
+          >
+            <p className="text-[9px] font-bold tracking-wide">{marker.label}</p>
+            <p className="mt-0.5 text-[8px] text-slate-300">{marker.detail}</p>
+          </div>
+        ))}
+      </div>
+
       {load.status === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80">
           <p className="text-xs text-slate-400">Loading Bengaluru geographic evidence…</p>
         </div>
+      )}
+
+      {pilot && (
+        <>
+          <div data-testid="map-geographic-context" className="pointer-events-none absolute left-[35%] top-3 rounded-lg border border-sky-400/30 bg-[#07101d]/94 px-3 py-2 shadow-xl backdrop-blur">
+            <div className="flex items-center gap-2"><strong className="text-[11px] tracking-[0.14em] text-white">BENGALURU · KARNATAKA, INDIA</strong><span className="rounded border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-sky-200">PUBLIC_GEOGRAPHIC</span></div>
+            <p className="mt-1 text-[9px] text-slate-400">PILOT AREA · Jayanagar · Koramangala · Indiranagar · HSR</p>
+          </div>
+
+          <div className="pointer-events-none absolute bottom-3 left-[35%] w-[210px]">
+            <LocatorMap pilot={pilot.bounds} />
+          </div>
+
+          <div data-testid="map-operational-legend" className="pointer-events-none absolute bottom-3 left-[47%] w-[430px] rounded-lg border border-slate-700/70 bg-[#07101d]/94 p-2 shadow-xl backdrop-blur">
+            <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400">Base geography · OneMove decision layers</p>
+            <div className="grid grid-cols-5 gap-x-3 gap-y-1 text-[8px] text-slate-300">
+              {[
+                ['bg-slate-200', 'Road network'],
+                ['border border-dashed border-sky-300', 'Pilot area'],
+                ['border border-slate-400 bg-slate-700/30', 'H3 demand zone'],
+                ['rounded-full bg-white', 'Facility'],
+                ['rounded-full border-2 border-pink-300 bg-pink-500/30', 'Do Nothing'],
+                ['rounded-full bg-emerald-400', 'Recommended'],
+                ['rounded-full bg-amber-400', 'Pickup'],
+                ['rounded-full bg-pink-400', 'Dropoff'],
+                ['bg-sky-400', 'Road route'],
+                ['border border-purple-300 bg-purple-500/40', 'Disruption'],
+              ].map(([style, name]) => <div key={name} className="flex items-center gap-1.5"><span className={`h-2 w-4 shrink-0 ${style}`} /><span>{name}</span></div>)}
+            </div>
+          </div>
+        </>
       )}
 
       <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-2">
@@ -637,11 +942,13 @@ export function OneMoveMap({
 
 const LAYER_TO_MAPLIBRE: Record<LayerId, string[]> = {
   roads: ['roads-line'],
+  pilot: ['pilot-area-fill', 'pilot-area-outline'],
   zones: ['zones-outline', 'zones-hover'],
   facilities: ['facilities-point'],
+  baseline: ['baseline-point'],
   traffic: ['zones-fill'],
   orders: ['orders-point'],
   routes: ['routes-line'],
-  scenario: ['scenario-fill'],
+  scenario: ['scenario-fill', 'scenario-outline'],
   recommended: ['recommended-point'],
 };

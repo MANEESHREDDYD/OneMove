@@ -36,7 +36,7 @@ STAGES = (
 SCRIPTS: dict[str, dict[str, str]] = {
     "executive": {
         "opening": "OneMove is physical-commerce network decision intelligence. It turns changing network conditions into explainable, reproducible operating decisions.",
-        "network": "We begin with real Bengaluru geography: more than eleven thousand roads and ninety-four canonical demand zones, rendered in the current MapLibre product.",
+        "network": "This is the OneMove Bengaluru pilot network. Public roads, H3 zones, localities, major corridors, and the highlighted pilot area keep every decision geographically interpretable.",
         "live": "Current traffic is provider-estimated. Weather is public-official. Each source shows provenance and freshness, and unavailable data is never silently replaced with zero.",
         "mission": "This controlled mission contains sixteen simulated orders on real roads. It uses no retailer, customer, merchant, or rider data.",
         "disruption": "Now we simulate a facility outage with compounded congestion. This is explicitly counterfactual, and the system evaluates a versioned scenario matrix.",
@@ -50,7 +50,7 @@ SCRIPTS: dict[str, dict[str, str]] = {
     },
     "technical": {
         "opening": "OneMove is physical-commerce network decision intelligence. The product connects four jobs that are normally split across maps, spreadsheets, solver notebooks, and audit logs: operate the network, simulate a disruption, decide on capacity placement, and prove later why that decision was taken. This walkthrough uses only the current MapLibre operating surface and a real API-backed workflow.",
-        "network": "The base layer is a public OpenStreetMap extract for Bengaluru. It contains more than eleven thousand drivable ways and named arterials. Ninety-four H3 resolution-eight cells provide the canonical analysis geography. Candidate facility points and the order routes are product layers on the same interactive map, so the presenter can pan, zoom, inspect a route, and preserve geographic context throughout the decision journey.",
+        "network": "This is the OneMove Bengaluru pilot network. The base layer is a public OpenStreetMap extract with more than eleven thousand drivable ways and named arterials. OSM locality and landmark labels, the persistent Karnataka context badge, and the locator inset show exactly where the pilot sits within Bengaluru. Ninety-four translucent H3 resolution-eight cells define the analysis geography without hiding the roads. Candidate facilities and order routes remain separate product layers on the same interactive MapLibre surface, so every scenario and recommendation stays geographically interpretable.",
         "live": "The live-context endpoint reads normalized temporal observations from Postgres. Traffic is TomTom provider-estimated evidence; weather is Open-Meteo public-official evidence. The response carries capture time, age, observation count, failure history, and an explicit freshness verdict. If a provider is absent or outside its freshness window, OneMove returns unavailable or stale. It does not translate missing data into zero congestion or zero rainfall, and provider credentials never reach the browser.",
         "mission": "The mission overlay contains sixteen simulated orders placed on real Bengaluru coordinates, with pickup and drop-off points routed over the public road graph. Selecting an order isolates its actual routed geometry and the product states that routing is not traffic-aware. This is controlled demo evidence: there is no private retailer network, customer, merchant, rider, or order feed anywhere in the journey.",
         "disruption": "The highlighted scenario marks a simulated facility outage and uses the existing congested-outage travel matrix. That matrix is versioned and referenced by the optimization problem; it is not an observed incident. The question is now concrete: under identical inputs and policy, what is the outcome if the current simulated facility set remains unchanged, and what facility placement does the solver recommend instead?",
@@ -82,7 +82,7 @@ async def build(version: str, voice: str) -> Path:
     for stage in STAGES:
         text = SCRIPTS[version][stage]
         (output / f"{stage}.txt").write_text(text + "\n", encoding="utf-8")
-        rate = "+22%" if version == "executive" else "+8%"
+        rate = "+24%" if version == "executive" else "+8%"
         await edge_tts.Communicate(text, voice, rate=rate).save(str(output / f"{stage}.mp3"))
 
     ffmpeg = find_ffmpeg()
