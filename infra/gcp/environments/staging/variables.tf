@@ -46,3 +46,9 @@ variable "release_sha" {
   default     = ""
 }
 
+variable "notification_email" {
+  type        = string
+  description = "Email address for monitoring alert notifications"
+  default     = ""
+}
+

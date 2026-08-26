@@ -1,5 +1,10 @@
 name: SQL Quality
 on: [push, pull_request]
+# Least privilege: this workflow only reads the repository. No job here uses
+# OIDC, uploads SARIF, publishes packages, or comments on pull requests.
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest

@@ -45,3 +45,9 @@ variable "release_sha" {
   description = "Source code Git SHA for release identity"
   default     = ""
 }
+
+variable "notification_email" {
+  type        = string
+  description = "Email address for monitoring alert notifications"
+  default     = ""
+}

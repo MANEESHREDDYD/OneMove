@@ -12,6 +12,11 @@ on:
       - "infra/gcp/**"
       - ".github/workflows/terraform-ci.yml"
 
+# Least privilege: this workflow only reads the repository. No job here uses
+# OIDC, uploads SARIF, publishes packages, or comments on pull requests.
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Terraform Format & Validate

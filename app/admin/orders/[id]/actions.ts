@@ -2,16 +2,14 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { requireAdminApi } from '@/lib/auth/dal'
 
 export async function adminUpdateOrderStatus(orderId: string, newStatus: string) {
+  const guard = await requireAdminApi()
+  if (!guard.ok) return { error: guard.error }
+
   const supabase = await createClient()
   if (!supabase) return { error: 'Database not connected' }
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Unauthorized' }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') return { error: 'Admin only action' }
 
   const { error } = await supabase
     .from('orders')
@@ -26,7 +24,7 @@ export async function adminUpdateOrderStatus(orderId: string, newStatus: string)
   await supabase.from('order_status_events').insert({
     order_id: orderId,
     status: newStatus,
-    notes: `Admin ${user.id} forced status to ${newStatus}`
+    notes: `Admin ${guard.userId} forced status to ${newStatus}`
   })
 
   // Revalidate everything admin
@@ -37,6 +35,9 @@ export async function adminUpdateOrderStatus(orderId: string, newStatus: string)
 }
 
 export async function adminAssignPartner(orderId: string, partnerId: string) {
+  const guard = await requireAdminApi()
+  if (!guard.ok) return { error: guard.error }
+
   const supabase = await createClient()
   if (!supabase) return { error: 'Database not connected' }
 
@@ -58,6 +59,9 @@ export async function adminAssignPartner(orderId: string, partnerId: string) {
 }
 
 export async function adminRefundPayment(orderId: string) {
+  const guard = await requireAdminApi()
+  if (!guard.ok) return { error: guard.error }
+
   const supabase = await createClient()
   if (!supabase) return { error: 'Database not connected' }
 

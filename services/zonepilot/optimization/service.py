@@ -6,10 +6,13 @@ import hashlib
 import json
 import logging
 import os
+import socket
 import time
+import uuid
 from typing import Any
 
 from services.zonepilot.optimization.contracts import (
+    DoNothingBaseline,
     OptimizationProblem,
 )
 from services.zonepilot.optimization.r1_catalog import default_data_root
@@ -18,6 +21,25 @@ from services.zonepilot.optimization.solver import optimize_facilities
 from services.zonepilot.release import current_release_sha
 
 logger = logging.getLogger("onemove.optimization.service")
+
+
+def _resolve_solver_version() -> str:
+    """Report the solver version actually installed, not a literal.
+
+    Recording "ortools-cp-sat" told a replay nothing about which solver produced a
+    result. The installed distribution version is real provenance and changes when
+    the solver changes (F-011).
+    """
+    try:
+        from importlib.metadata import version
+
+        return f"ortools-cp-sat-{version('ortools')}"
+    except Exception:
+        # Provenance we cannot establish is reported as such, never guessed.
+        return "ortools-cp-sat-UNKNOWN_VERSION"
+
+
+SOLVER_VERSION = _resolve_solver_version()
 
 
 class OptimizationService:
@@ -85,9 +107,18 @@ class OptimizationService:
         result_job["dispatch_status"] = dispatch_status
         return result_job
 
-    def dispatch_outbox_events(self, limit: int = 10) -> int:
-        """Claim and publish pending outbox events to Google Cloud Pub/Sub."""
-        pending_events = self.repository.claim_pending_outbox_events(limit=limit)
+    def dispatch_outbox_events(self, limit: int = 10, lease_seconds: int = 60) -> int:
+        """Claim and publish pending outbox events to Google Cloud Pub/Sub.
+
+        Claiming and publishing are strictly ordered: the claim transaction commits
+        before any publish happens, and every finalize carries the fencing token
+        issued at claim time. A dispatcher whose lease expired and was stolen sees
+        a False return and leaves the row alone (AUDIT-3 / F-008, F-009).
+        """
+        lease_owner = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+        pending_events = self.repository.claim_pending_outbox_events(
+            limit=limit, owner=lease_owner, lease_seconds=lease_seconds
+        )
         if not pending_events:
             return 0
 
@@ -108,10 +139,48 @@ class OptimizationService:
 
         for event in pending_events:
             event_id = str(event["event_id"])
-            payload = event["payload"] if isinstance(event["payload"], dict) else json.loads(event["payload"])
-            job_id = str(event["aggregate_id"])
-            workspace_id = str(event["workspace_id"])
-            attempts = int(event.get("attempts", 0))
+            attempts = int(event.get("attempt_count", event.get("attempts", 0)))
+            fencing_token = str(event.get("fencing_token") or "")
+
+            # Per-event isolation. Payload decoding used to sit outside the try
+            # below, so a single malformed row raised out of the whole loop and
+            # abandoned every sibling this dispatcher had already CLAIMED --
+            # each one holding a lease and a burned attempt, publishable by
+            # nobody until the lease expired. One poison event must not take a
+            # batch with it.
+            try:
+                raw = event["payload"]
+                payload = raw if isinstance(raw, dict) else json.loads(raw)
+                job_id = str(event["aggregate_id"])
+                workspace_id = str(event["workspace_id"])
+            except (TypeError, ValueError, KeyError) as decode_err:
+                logger.error(
+                    "OUTBOX_POISON_PAYLOAD",
+                    extra={
+                        "event": "OUTBOX_POISON_PAYLOAD",
+                        "event_id": event_id,
+                        "attempts": attempts,
+                        "error": str(decode_err),
+                    },
+                )
+                # Release the lease so the row is not stranded, and let the normal
+                # attempt ceiling dead-letter it rather than retrying forever.
+                self.repository.mark_outbox_failed(
+                    event_id,
+                    f"POISON_PAYLOAD: {decode_err}",
+                    fencing_token=fencing_token,
+                    lease_owner=lease_owner,
+                    backoff_seconds=600,
+                )
+                continue
+
+            # Rows the claim transaction dead-lettered are returned for
+            # observability only. They hold no lease and must not be published.
+            if str(event.get("status")) == "DEAD":
+                logger.error(
+                    f"Outbox event {event_id} for job {job_id} dead-lettered after {attempts} attempts; not publishing."
+                )
+                continue
 
             try:
                 from google.cloud import pubsub_v1
@@ -121,14 +190,37 @@ class OptimizationService:
                 msg_bytes = json.dumps(payload).encode("utf-8")
                 future = publisher.publish(topic_path, msg_bytes, job_id=job_id, workspace_id=workspace_id)
                 msg_id = future.result(timeout=10) if hasattr(future, "result") else str(future)
-                self.repository.mark_outbox_published(event_id, pubsub_message_id=str(msg_id))
+                finalized = self.repository.mark_outbox_published(
+                    event_id,
+                    fencing_token=fencing_token,
+                    lease_owner=lease_owner,
+                    pubsub_message_id=str(msg_id),
+                )
+                if not finalized:
+                    # Published, but the lease was lost before we could record it.
+                    # The new holder will publish again; the worker is idempotent.
+                    # Never mutate the row - it belongs to another dispatcher now.
+                    logger.error(
+                        f"LOST_LEASE finalizing outbox event {event_id} (job {job_id}); "
+                        f"published as {msg_id} but the row was re-claimed. Possible duplicate delivery."
+                    )
+                    continue
                 dispatched_count += 1
                 logger.info(f"Outbox event {event_id} for job {job_id} published to Pub/Sub msg {msg_id}")
             except Exception as pub_err:
                 backoff = min(600, 10 * (2**attempts))
-                self.repository.mark_outbox_failed(event_id, str(pub_err), backoff_seconds=backoff)
+                released = self.repository.mark_outbox_failed(
+                    event_id,
+                    str(pub_err),
+                    fencing_token=fencing_token,
+                    lease_owner=lease_owner,
+                    backoff_seconds=backoff,
+                )
+                if not released:
+                    logger.error(f"LOST_LEASE releasing outbox event {event_id}; leaving it to the new holder.")
+                    continue
                 logger.warning(
-                    f"Outbox publish attempt {attempts + 1} failed for event {event_id}: {pub_err}. Backoff: {backoff}s"
+                    f"Outbox publish attempt {attempts} failed for event {event_id}: {pub_err}. Backoff: {backoff}s"
                 )
 
         return dispatched_count
@@ -142,6 +234,37 @@ class OptimizationService:
         """Execute CP-SAT solver explicitly (for offline / test / worker runner only)."""
         effective_code_sha = code_sha or current_release_sha()
         start_time = time.perf_counter()
+
+        # Resolve the owning tenant from the authoritative job row rather than trusting
+        # a caller-supplied value. Snapshots must never be persisted unscoped
+        # (P0-AUTH-SNAPSHOT-001).
+        job_row = self.repository.get_job_system(job_id)
+        if not job_row:
+            raise LookupError(f"Optimization job {job_id} not found; cannot resolve owning workspace")
+        job_workspace_id = str(job_row["workspace_id"] or "").strip()
+        # Lineage comes from the frozen job context. A solver failure may still be
+        # recorded, but it must reference the REAL context it was solving -- a
+        # placeholder like "UNKNOWN"/"UNVERSIONED" is invented provenance and is
+        # exactly what F-011 exists to forbid. If the job row lacks lineage, that is
+        # a data defect upstream, so fail closed rather than paper over it.
+        job_graph_version = str(job_row.get("graph_version") or "").strip()
+        job_assumption_version = str(job_row.get("assumption_version") or "").strip()
+        missing_lineage = [
+            name
+            for name, value in (
+                ("graph_version", job_graph_version),
+                ("assumption_version", job_assumption_version),
+            )
+            if not value
+        ]
+        if missing_lineage:
+            raise ValueError(
+                f"Optimization job {job_id} is missing frozen lineage: {', '.join(missing_lineage)}. "
+                "Refusing to persist a result with invented provenance."
+            )
+        if not job_workspace_id:
+            raise ValueError(f"Optimization job {job_id} has no workspace_id; refusing to persist a global snapshot")
+
         try:
             from services.zonepilot.optimization.contracts import create_problem_snapshot
 
@@ -172,9 +295,24 @@ class OptimizationService:
                 gold_manifest_sha256=gold_sha,
                 evidence_ids=evidence_ids,
             )
-            self.repository.save_problem_snapshot(snapshot)
+            # The snapshot is the authoritative frozen assumption reference. If it
+            # carries none, the result cannot claim one.
+            snapshot_assumption_version = str(getattr(snapshot, "assumption_version", "") or "").strip()
+            if not snapshot_assumption_version:
+                snapshot_assumption_version = job_assumption_version
 
-            result = optimize_facilities(problem)
+            self.repository.save_problem_snapshot(snapshot, workspace_id=job_workspace_id)
+
+            request_payload = job_row.get("request_payload") or {}
+            if isinstance(request_payload, str):
+                request_payload = json.loads(request_payload)
+            baseline_doc = request_payload.get("do_nothing_baseline") if isinstance(request_payload, dict) else None
+            baseline = (
+                DoNothingBaseline.model_validate(baseline_doc, strict=False)
+                if baseline_doc is not None
+                else None
+            )
+            result = optimize_facilities(problem, baseline=baseline)
             run_ms = int((time.perf_counter() - start_time) * 1000)
 
             result_doc = result.model_dump()
@@ -183,7 +321,7 @@ class OptimizationService:
             result_doc["problem_snapshot_sha256"] = snapshot.problem_snapshot_sha256
             result_doc["dataset_version"] = "1.0.0"
             result_doc["network_version"] = graph_ver
-            result_doc["solver_version"] = "ortools-cp-sat"
+            result_doc["solver_version"] = SOLVER_VERSION
 
             self.repository.save_result(
                 job_id=job_id,
@@ -194,6 +332,9 @@ class OptimizationService:
                 action=result.action.value,
                 fail_closed=result.fail_closed,
                 code_sha=effective_code_sha,
+                graph_version=graph_ver,
+                assumption_version=snapshot_assumption_version,
+                solver_version=SOLVER_VERSION,
                 run_duration_ms=run_ms,
             )
         except Exception as exc:
@@ -214,10 +355,13 @@ class OptimizationService:
                 action="NONE",
                 fail_closed=True,
                 code_sha=effective_code_sha,
+                graph_version=job_graph_version,
+                assumption_version=job_assumption_version,
+                solver_version=SOLVER_VERSION,
                 run_duration_ms=run_ms,
             )
-        return self.repository.get_job(job_id) or {}
+        return self.repository.get_job_system(job_id) or {}
 
-    def get_optimization(self, job_id: str, workspace_id: str | None = None) -> dict[str, Any] | None:
+    def get_optimization(self, job_id: str, workspace_id: str) -> dict[str, Any] | None:
         """Fetch verbatim job state and stored result from PostgreSQL."""
         return self.repository.get_job(job_id, workspace_id)

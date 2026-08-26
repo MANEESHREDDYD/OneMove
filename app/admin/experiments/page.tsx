@@ -1,10 +1,13 @@
 import { createClient } from '@/utils/supabase/server'
 import { SetupRequired } from '@/components/common/SetupRequired'
 import { Beaker, RefreshCw } from 'lucide-react'
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function AdminExperimentsPage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
 
   const { data: experiments } = await supabase
     .from('experiments')

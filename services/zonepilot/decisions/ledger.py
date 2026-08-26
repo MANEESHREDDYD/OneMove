@@ -8,6 +8,12 @@ from datetime import datetime, timezone
 from typing import Any, Sequence
 
 from services.temporal.contracts import OutcomeStatus
+from services.zonepilot.assumptions.application import AssumptionSetView
+from services.zonepilot.assumptions.registry import (
+    AssumptionRegistry,
+    AssumptionRegistryError,
+    default_assumption_registry,
+)
 from services.zonepilot.decisions.contracts import (
     DecisionRecord,
     DecisionReplayResult,
@@ -15,6 +21,9 @@ from services.zonepilot.decisions.contracts import (
     ShadowState,
 )
 from services.zonepilot.decisions.repository import DecisionRepository
+from services.zonepilot.optimization.contracts import (
+    OPTIMIZATION_POLICY_VERSION as _OPTIMIZATION_POLICY_VERSION,
+)
 from services.zonepilot.optimization.repository import OptimizationRepository
 from services.zonepilot.release import current_release_sha
 
@@ -25,10 +34,28 @@ class DecisionLedger:
         code_sha: str | None = None,
         repository: DecisionRepository | None = None,
         opt_repository: OptimizationRepository | None = None,
+        assumption_registry: AssumptionRegistry | None = None,
     ) -> None:
         self.code_sha = code_sha or current_release_sha()
         self.repository = repository or DecisionRepository()
         self.opt_repository = opt_repository or OptimizationRepository()
+        self.assumption_registry = assumption_registry or default_assumption_registry()
+
+    def load_replay_assumptions(self, problem: Any) -> AssumptionSetView:
+        """Load the assumption set a frozen problem was actually built under (F-019).
+
+        Resolution is pinned: assumption_set_id + version + sha256, taken from the
+        frozen problem's own lineage and verified against the registry. It is not
+        "the current set", and it is not "the newest version of that set". A replay
+        that silently adopts today's assumptions has not reproduced the original
+        decision -- it has made a new one and filed it under the old decision's id,
+        which is exactly the class of false reproduction this ledger exists to
+        prevent.
+
+        Raises AssumptionRegistryError when the set cannot be recovered. The caller
+        must fail the replay closed rather than substituting anything.
+        """
+        return self.assumption_registry.resolve_view_for_token(problem.objective_weights.assumption_version)
 
     def freeze_decision_from_optimization(
         self,
@@ -61,7 +88,10 @@ class DecisionLedger:
 
         obj_info = res_doc.get("objective")
         if isinstance(obj_info, dict):
-            obj_val = obj_info.get("weighted_total")
+            # Freeze the exact integer CP-SAT ranked. ``weighted_total`` is a
+            # human-facing projection that floors at a different point and is
+            # retained only as a legacy fallback.
+            obj_val = obj_info.get("solver_objective_total") or obj_info.get("weighted_total")
             exp_travel = obj_info.get("expected_travel_probability_demand_seconds")
             p95_travel = obj_info.get("p95_travel_demand_seconds")
         else:
@@ -93,7 +123,10 @@ class DecisionLedger:
         if not dataset_version:
             raise ValueError("DECISION_LINEAGE_INCOMPLETE: dataset_version missing from job lineage")
 
-        req_fp = job.get("request_fingerprint") or res_doc.get("problem_fingerprint")
+        # Replay loads the immutable problem snapshot by the problem's content
+        # hash. The request fingerprint also covers transport fields such as the
+        # idempotency key and optional demo baseline, so it is not a snapshot id.
+        req_fp = res_doc.get("problem_fingerprint") or job.get("request_fingerprint")
         if not req_fp:
             raise ValueError("DECISION_LINEAGE_INCOMPLETE: request_fingerprint missing from job lineage")
 
@@ -128,11 +161,11 @@ class DecisionLedger:
                 pass
 
         if not osrm_bundle_hash:
-            rel_manifest_path = default_data_root().parent.parent / "release_manifest.json"
+            rel_manifest_path = default_data_root().parent / "release_manifest.json"
             if rel_manifest_path.is_file():
                 try:
                     rel_m = json.loads(rel_manifest_path.read_text(encoding="utf-8"))
-                    osrm_bundle_hash = rel_m.get("artifacts", {}).get("r1_osrm_travel_matrix.json", {}).get("sha256")
+                    osrm_bundle_hash = rel_m.get("osrm", {}).get("bundle_sha")
                 except Exception:
                     pass
 
@@ -170,11 +203,13 @@ class DecisionLedger:
             objective_value=int(obj_val),
             expected_travel_seconds=int(exp_travel),
             p95_travel_seconds=int(p95_travel),
+            p95_scenario_total_travel_demand_seconds=int(p95_travel),
             coverage_basis_points=int(cov_bps),
             graph_version=graph_version,
             osrm_bundle_hash=osrm_bundle_hash,
             solver_version=solver_version,
             code_sha=job.get("code_sha") or self.code_sha,
+            optimization_policy_version=_OPTIMIZATION_POLICY_VERSION,
             evidence_ids=tuple(evidence_ids),
             recorded_at=rec_time,
         )
@@ -192,17 +227,45 @@ class DecisionLedger:
         feature_snapshot_hash: str,
         selected_action: str,
         opened_facilities: Sequence[str],
-        objective_value: int,
-        expected_travel_seconds: int,
-        p95_travel_seconds: int,
-        coverage_basis_points: int,
+        objective_value: int | None,
+        expected_travel_seconds: int | None,
+        p95_travel_seconds: int | None,
+        coverage_basis_points: int | None,
         graph_version: str,
         osrm_bundle_hash: str,
         solver_version: str,
         evidence_ids: Sequence[str] = (),
         recorded_at: datetime | None = None,
         recorded_by: str | None = None,
+        decision_class: str = "OPTIMIZER_DECISION",
+        operator_rationale: str | None = None,
+        operator_claims: dict[str, Any] | None = None,
+        lineage_verified: dict[str, str] | None = None,
     ) -> DecisionRecord:
+        """Record a decision.
+
+        The metric parameters are Optional because a MANUAL_OPERATOR_DECISION has
+        no solver-derived values: NULL is the truthful entry, and the operator's
+        own figures belong in operator_claims marked UNVERIFIED (F-005). An
+        OPTIMIZER_DECISION must still supply all four; the database CHECK enforces
+        that, so nullability cannot become a loophole for the optimizer path.
+        """
+        if decision_class == "OPTIMIZER_DECISION":
+            missing = [
+                name
+                for name, value in (
+                    ("objective_value", objective_value),
+                    ("expected_travel_seconds", expected_travel_seconds),
+                    ("p95_travel_seconds", p95_travel_seconds),
+                    ("coverage_basis_points", coverage_basis_points),
+                )
+                if value is None
+            ]
+            if missing:
+                raise ValueError(
+                    "DECISION_LINEAGE_INCOMPLETE: an OPTIMIZER_DECISION requires every derived metric; "
+                    f"missing: {', '.join(missing)}"
+                )
         h = hashlib.sha256(
             f"{workspace_id}:{decision_time.isoformat()}:{feature_snapshot_hash}:{osrm_bundle_hash}:{selected_action}:{','.join(sorted(opened_facilities))}:{self.code_sha}".encode()
         ).hexdigest()[:16]
@@ -223,18 +286,30 @@ class DecisionLedger:
             objective_value=objective_value,
             expected_travel_seconds=expected_travel_seconds,
             p95_travel_seconds=p95_travel_seconds,
+            p95_scenario_total_travel_demand_seconds=p95_travel_seconds,
             coverage_basis_points=coverage_basis_points,
             graph_version=graph_version,
             osrm_bundle_hash=osrm_bundle_hash,
             solver_version=solver_version,
             code_sha=self.code_sha,
+            # A hand-authored decision was not produced by the optimizer, so it
+            # has no optimization policy. Stamping one would make it replayable
+            # as though a solver had produced it.
+            optimization_policy_version=(
+                _OPTIMIZATION_POLICY_VERSION
+                if decision_class == "OPTIMIZER_DECISION"
+                else None
+            ),
+            decision_class=decision_class,
+            operator_rationale=operator_rationale,
             evidence_ids=tuple(evidence_ids),
             recorded_at=rec_time,
         )
         self.repository.record_decision(rec, recorded_by=recorded_by)
         return rec
 
-    def get_decision(self, decision_id: str, workspace_id: str | None = None) -> DecisionRecord | None:
+    def get_decision(self, decision_id: str, workspace_id: str) -> DecisionRecord | None:
+        """Workspace scope is mandatory; the repository enforces it."""
         return self.repository.get_decision(decision_id, workspace_id)
 
     def list_decisions(self, workspace_id: str, limit: int = 50) -> list[DecisionRecord]:
@@ -261,11 +336,17 @@ class DecisionLedger:
         Loads original decision from PostgreSQL, reconstructs problem from frozen lineage,
         reruns solver, compares reproduced outputs, and stores replay record.
         """
+        # Fail closed: without a caller-supplied workspace the decision lookup would be
+        # unscoped, and ws_id would then be back-filled from the *victim's* record --
+        # re-opening the cross-tenant replay path (P0-AUTH-SNAPSHOT-001).
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("replay_decision requires an explicit workspace_id")
+
         orig = self.get_decision(original_decision_id, workspace_id)
         if orig is None:
             raise LookupError(f"Decision {original_decision_id} not found in ledger")
 
-        ws_id = workspace_id or orig.workspace_id
+        ws_id = workspace_id
         pit_valid = self.verify_pit_lineage(orig.decision_time, feature_cutoff)
 
         if not pit_valid or (feature_cutoff and feature_cutoff > orig.decision_time):
@@ -286,6 +367,7 @@ class DecisionLedger:
         snapshot_doc = self.opt_repository.get_problem_snapshot(orig.feature_snapshot_hash, workspace_id=ws_id)
 
         from services.zonepilot.optimization.contracts import (
+            OPTIMIZATION_POLICY_VERSION,
             OptimizationProblem,
             problem_fingerprint,
         )
@@ -379,11 +461,29 @@ class DecisionLedger:
                     code_sha=self.code_sha,
                 )
         else:
-            # Reconstruct from authentic artifacts if legacy record without explicit snapshot row
+            # Reconstruct from authentic artifacts if legacy record without explicit snapshot row.
+            # F-019: this record names no assumption set, so the set is resolved as
+            # of the frozen decision_time. A set that only became effective after
+            # the decision was made is not eligible, however current it is.
             from services.zonepilot.optimization.pubsub_worker import _reconstruct_problem_from_payload
 
             try:
-                problem = _reconstruct_problem_from_payload({})
+                as_of_assumptions = self.assumption_registry.view_as_of(orig.decision_time)
+            except AssumptionRegistryError as assumption_err:
+                return DecisionReplayResult(
+                    original_decision_id=original_decision_id,
+                    replayed_at=datetime.now(timezone.utc),
+                    pit_valid=False,
+                    reproduced_exact_action=False,
+                    reproduced_exact_facilities=False,
+                    objective_match=False,
+                    match_status="NON_REPLAYABLE",
+                    reason=f"ASSUMPTION_SET_UNRESOLVABLE: {assumption_err}",
+                    code_sha=self.code_sha,
+                )
+
+            try:
+                problem = _reconstruct_problem_from_payload({}, assumptions=as_of_assumptions)
             except Exception as rec_err:
                 return DecisionReplayResult(
                     original_decision_id=original_decision_id,
@@ -397,11 +497,109 @@ class DecisionLedger:
                     code_sha=self.code_sha,
                 )
 
+        # F-019: the assumptions this replay runs under must be the ones the frozen
+        # problem was built under, recovered by id + version + sha256. If they cannot
+        # be recovered, the honest outcome is "not replayable", never a silent
+        # substitution of whatever is current.
+        try:
+            pinned_assumptions = self.load_replay_assumptions(problem)
+        except AssumptionRegistryError as assumption_err:
+            return DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=False,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="NON_REPLAYABLE",
+                reason=f"ASSUMPTION_SET_UNRESOLVABLE: {assumption_err}",
+                code_sha=self.code_sha,
+            )
+
+        historical_weights = pinned_assumptions.objective_weights(
+            allow_uncovered_demand=problem.constraints.allow_uncovered_demand
+        )
+        if historical_weights != problem.objective_weights:
+            return DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=False,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="NON_REPLAYABLE",
+                reason=(
+                    "ASSUMPTION_SET_DRIFT: the frozen problem's objective weights do not match assumption set "
+                    f"{pinned_assumptions.assumption_set_id}@{pinned_assumptions.version} "
+                    f"(sha256 {pinned_assumptions.sha256[:16]}...) that it claims to have been built from."
+                ),
+                code_sha=self.code_sha,
+            )
+
+        # A decision produced under a different mathematical policy cannot be
+        # meaningfully recomputed under the current one: capacity semantics, the
+        # objective normalisation and the assignment rule all changed at 2.0.0.
+        # Recomputing anyway and reporting the difference as DRIFT would read as
+        # "same model, different answer", which is false and is exactly how a
+        # historical decision gets silently restated under new mathematics.
+        # A hand-authored decision has no solver run to reproduce. Saying
+        # "legacy policy" would be imprecise: the policy is not old, it is
+        # absent, because the optimizer never produced this decision. The
+        # operator's choice is preserved as governance evidence either way.
+        if getattr(orig, "decision_class", "OPTIMIZER_DECISION") != "OPTIMIZER_DECISION":
+            return DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=pit_valid,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="MANUAL_DECISION_NOT_REPLAYABLE",
+                reason=(
+                    "MANUAL_DECISION: this decision was recorded as "
+                    f"{getattr(orig, 'decision_class', 'UNKNOWN')} by an operator and was not "
+                    "produced by the optimizer. There is no solver run to reproduce; the "
+                    "operator's rationale is retained as governance evidence."
+                ),
+                code_sha=self.code_sha,
+            )
+
+        frozen_policy = getattr(orig, "optimization_policy_version", None)
+        if frozen_policy != OPTIMIZATION_POLICY_VERSION:
+            return DecisionReplayResult(
+                original_decision_id=original_decision_id,
+                replayed_at=datetime.now(timezone.utc),
+                pit_valid=pit_valid,
+                reproduced_exact_action=False,
+                reproduced_exact_facilities=False,
+                objective_match=False,
+                match_status="LEGACY_POLICY_NOT_REPLAYABLE",
+                reason=(
+                    "LEGACY_POLICY: decision was frozen under optimization policy "
+                    f"{frozen_policy or 'pre-versioning'}, and the current policy is "
+                    f"{OPTIMIZATION_POLICY_VERSION}. The capacity semantics, objective "
+                    "normalisation and assignment rule differ, so a recomputation would "
+                    "not be a replay of this decision."
+                ),
+                code_sha=self.code_sha,
+            )
+
         res = optimize_facilities(problem)
 
         action_match = res.action.value == orig.selected_action
         facilities_match = set(res.opened_facility_ids) == set(orig.opened_facilities)
-        recomputed_obj = res.objective.weighted_total if res.objective else 0
+        # Verify against the objective CP-SAT actually minimised, not the
+        # human-facing basis-point projection. The two round at different points
+        # and are not equal, so comparing the projection would let a decision
+        # "reproduce" against a number the solver never ranked solutions by.
+        # Legacy records written before the solver total existed fall back to
+        # the projection so they stay verifiable on their own terms.
+        if res.objective is None:
+            recomputed_obj = 0
+        elif res.objective.solver_objective_total:
+            recomputed_obj = res.objective.solver_objective_total
+        else:
+            recomputed_obj = res.objective.weighted_total
         obj_match = recomputed_obj == orig.objective_value
 
         if action_match and facilities_match and obj_match:
@@ -409,7 +607,13 @@ class DecisionLedger:
             reason = "Recomputed action, facilities, and objective matched frozen decision lineage exactly."
         elif action_match and facilities_match:
             match_status = "SEMANTIC_MATCH"
-            reason = "Recomputed action and facilities matched, slight numeric tolerance in objective value."
+            abs_diff = abs(recomputed_obj - orig.objective_value)
+            rel_diff = (abs_diff / max(1.0, float(abs(orig.objective_value)))) * 100.0
+            reason = (
+                f"Action and facilities reproduce exactly. The published objective differs by "
+                f"{rel_diff:.4f}% because the replay compares a fixed-point solver-scaled "
+                f"representation with a separately reconstructed normalized representation."
+            )
         else:
             match_status = "DRIFT"
             reason = f"Decision outputs drifted: recomputed facilities={res.opened_facility_ids}, frozen={orig.opened_facilities}"
@@ -427,7 +631,10 @@ class DecisionLedger:
         if not facilities_match:
             diff["facilities"] = list(res.opened_facility_ids)
         if not obj_match:
-            diff["objective_diff"] = recomputed_obj - orig.objective_value
+            diff["objective_diff"] = abs(recomputed_obj - orig.objective_value)
+            diff["frozen_objective"] = orig.objective_value
+            diff["recomputed_objective"] = recomputed_obj
+            diff["relative_diff_basis_points"] = (abs(recomputed_obj - orig.objective_value) / max(1.0, float(abs(orig.objective_value)))) * 10000.0
 
         replay_res = DecisionReplayResult(
             original_decision_id=original_decision_id,
@@ -516,13 +723,14 @@ class DecisionLedger:
         self.repository.create_shadow(shadow, workspace_id=ws_id)
         return shadow
 
-    def get_shadow(self, shadow_id: str, workspace_id: str | None = None) -> ShadowEvaluation | None:
+    def get_shadow(self, shadow_id: str, workspace_id: str) -> ShadowEvaluation | None:
+        """Workspace scope is mandatory; the repository enforces it."""
         return self.repository.get_shadow(shadow_id, workspace_id)
 
     def evaluate_shadow(
         self,
         shadow_id: str,
-        workspace_id: str | None = None,
+        workspace_id: str,
         *,
         actual_observed_p95_seconds: int,
         observation_valid_time: datetime | None = None,

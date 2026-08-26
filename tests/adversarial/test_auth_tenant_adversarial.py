@@ -20,7 +20,7 @@ from __future__ import annotations
 import base64
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
@@ -46,7 +46,16 @@ def client():
 
 
 def _mint(payload: dict, secret: str = JWT_SECRET, alg: str = "HS256") -> str:
-    return jwt.encode(payload, secret, algorithm=alg)
+    """Mint a test token, defaulting `exp` so tokens are valid unless a test says otherwise.
+
+    Since F-016 the verifier requires `exp`; a token without one is rejected as
+    non-expiring. These tests exercise IDOR and tenancy, not expiry, so they need
+    a valid token. Tests that deliberately probe expiry set `exp` themselves and
+    that value is preserved.
+    """
+    claims = dict(payload)
+    claims.setdefault("exp", datetime.now(timezone.utc) + timedelta(hours=1))
+    return jwt.encode(claims, secret, algorithm=alg)
 
 
 def test_missing_auth_header(client):
@@ -144,8 +153,15 @@ def test_cross_workspace_decision_idor_isolation(client, monkeypatch):
     monkeypatch.setattr("services.api.routers.observatory._dec_ledger.get_decision", lambda did, wid: None)
 
     res = client.get(f"/api/v1/decisions/{fake_dec_id}", headers={"Authorization": f"Bearer {token_b}"})
-    assert res.status_code == 404
-    assert res.json()["error"]["code"] == "NOT_FOUND"
+    # Membership is resolved server-side BEFORE any resource lookup, so a token
+    # claiming a workspace the subject does not belong to is denied at
+    # authorization. That is stronger than the 404 this test originally expected:
+    # the request never reaches the decision store at all, and the denial concerns
+    # the caller's own claim, so nothing about the target resource is disclosed.
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "FORBIDDEN"
+    # Whatever the code, no tenant data may appear in the body.
+    assert "decision_id" not in res.text and "opened_facilities" not in res.text
 
 
 def test_cross_workspace_optimization_idor_isolation(client, monkeypatch):
@@ -163,5 +179,12 @@ def test_cross_workspace_optimization_idor_isolation(client, monkeypatch):
     monkeypatch.setattr("services.api.routers.observatory._opt_service.get_optimization", lambda oid, wid: None)
 
     res = client.get(f"/api/v1/optimizations/{fake_opt_id}", headers={"Authorization": f"Bearer {token_b}"})
-    assert res.status_code == 404
-    assert res.json()["error"]["code"] == "NOT_FOUND"
+    # Membership is resolved server-side BEFORE any resource lookup, so a token
+    # claiming a workspace the subject does not belong to is denied at
+    # authorization. That is stronger than the 404 this test originally expected:
+    # the request never reaches the decision store at all, and the denial concerns
+    # the caller's own claim, so nothing about the target resource is disclosed.
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "FORBIDDEN"
+    # Whatever the code, no tenant data may appear in the body.
+    assert "decision_id" not in res.text and "opened_facilities" not in res.text

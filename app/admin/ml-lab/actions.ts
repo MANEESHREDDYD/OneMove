@@ -1,15 +1,18 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { requireAdminApi } from '@/lib/auth/dal'
 
 export async function askAI(query: string) {
   await new Promise(resolve => setTimeout(resolve, 1500))
 
+  // This action returns platform-wide financials, so it is admin-only, not merely
+  // authenticated. It previously accepted any signed-in customer or partner.
+  const guard = await requireAdminApi()
+  if (!guard.ok) return { error: `${guard.error}.` }
+
   const supabase = await createClient()
   if (!supabase) return { error: 'Supabase is not configured.' }
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Unauthorized.' }
 
   const q = query.toLowerCase()
 

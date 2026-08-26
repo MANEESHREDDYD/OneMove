@@ -17,6 +17,8 @@ RUN pip install --no-cache-dir -e .
 COPY services/ ./services/
 COPY data_root/ ./data_root/
 
+ARG RELEASE_SHA
+ENV ZONEPILOT_GIT_SHA=${RELEASE_SHA}
 ENV PORT=8080
 ENV PYTHONPATH=/app
 EXPOSE 8080

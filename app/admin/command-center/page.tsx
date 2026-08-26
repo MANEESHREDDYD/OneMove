@@ -7,26 +7,19 @@ import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { AdminDashboardClient } from "./AdminDashboardClient"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function AdminCommandCenter() {
   const supabase = await createClient()
   if (!supabase) {
     return <SetupRequired />
   }
+
+  await requireAdmin()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
     redirect('/auth/login')
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'admin') {
-    redirect(`/${profile?.role || 'customer'}`)
   }
 
   // Admin God Mode: Fetch metrics via optimized RPC

@@ -1,55 +1,55 @@
-# ZonePilot Technical Architecture
+# OneMove Architecture
 
-## 1. System Overview
+OneMove is designed to capture changing network conditions and produce explainable, reproducible decisions.
 
-ZonePilot is a deterministic spatial decision platform designed for urban logistics network optimization, multi-scenario resilience stress testing, and Point-In-Time auditable decision replay.
+```mermaid
+graph TD
+    classDef publicGeo fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#e2e8f0
+    classDef provEst fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#e2e8f0
+    classDef pubOff fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#e2e8f0
+    classDef sim fill:#1e293b,stroke:#ec4899,stroke-width:2px,color:#e2e8f0
+    classDef derived fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#e2e8f0
 
+    A["OpenStreetMap / H3<br/><small><i>PUBLIC_GEOGRAPHIC</i></small>"]:::publicGeo
+    B["TomTom Traffic<br/><small><i>PROVIDER_ESTIMATED</i></small>"]:::provEst
+    C["Open-Meteo<br/><small><i>PUBLIC_OFFICIAL</i></small>"]:::pubOff
+
+    A --> E[Evidence / Data Layer]
+    B --> E
+    C --> E
+
+    Mission["Mission Data<br/><small><i>SIMULATED</i></small>"]:::sim --> F
+
+    E --> F["Scenario Construction<br/><small><i>SIMULATED / ASSUMPTION</i></small>"]:::sim
+
+    F --> R["Road / Graph Routing<br/><small><i>DERIVED</i></small>"]:::derived
+    R --> G["OR-Tools CP-SAT<br/><small><i>DERIVED</i></small>"]:::derived
+
+    G --> H["Baseline vs Recommendation<br/><small><i>DERIVED</i></small>"]:::derived
+
+    H --> I[Deterministic WHY]
+
+    I --> J[(PostgreSQL Decision Ledger)]
+
+    J --> K[PIT Replay]
+
+    K --> L[FastAPI]
+    L --> M[Next.js]
+    M --> N[MapLibre]
 ```
-+-------------------------------------------------------------------------+
-|                       Observatory Frontend (Next.js)                    |
-|  /network | /optimize | /resilience | /decisions | /replay | /evidence   |
-+------------------------------------+------------------------------------+
-                                     | Authenticated HTTPS / Proxy
-                                     v
-+-------------------------------------------------------------------------+
-|                        FastAPI Operational Gateway                      |
-|       - Request ID / Telemetry Middleware                               |
-|       - Supabase JWT Verification & Tenancy Principal Resolution        |
-|       - Rate Limiting & Audit Logging                                   |
-+----------+-------------------+-------------------+----------------------+
-           |                   |                   |
-           v                   v                   v
-+--------------------+ +-------------------+ +----------------------------+
-|  CP-SAT Optimizer  | | Resilience Engine | | Decision Ledger & Replay   |
-|  - 94x12x3 Network | | - Network Breaker | | - Point-In-Time Verification|
-|  - Tie-Breaking    | | - Latency P50/95  | | - Prospective Shadows      |
-|  - Pareto Analysis | | - Exposure Index  | | - Exact Reproducibility    |
-+----------+---------+ +---------+---------+ +--------------+-------------+
-           |                     |                          |
-           +---------------------+--------------------------+
-                                 |
-                                 v
-+-------------------------------------------------------------------------+
-|                       PostgreSQL 15 (Supabase Hosted)                   |
-|  Tables: optimization_jobs, optimization_results, resilience_scenarios, |
-|          resilience_results, decision_records, decision_replays,        |
-|          shadow_evaluations, weather_observations, workspaces           |
-+-------------------------------------------------------------------------+
-```
 
-## 2. Spatial Partitioning & Network Domain
-- **Grid Topology:** 94 Uber H3 Resolution 8 spatial cells covering Bengaluru Urban core.
-- **Lineage Verification:** Every zone is anchored to verified OpenStreetMap geometries and Uber H3 spatial indexes.
-- **Facility Candidates:** 12 geographically distributed candidate locations (`fac:01` to `fac:12`).
+## Evidence Provenance
 
-## 3. Mathematical Optimization (R3)
-- **Engine:** Google OR-Tools CP-SAT integer programming solver.
-- **Multi-Scenario Uncertainty:** Formulated across 3 simultaneous scenarios:
-  1. `s1_free_flow` (Base velocity conditions).
-  2. `s2_congested` (Peak travel inflation).
-  3. `s3_congested_outage` (Peak traffic compound with facility outage).
-- **Determinism:** Strict lexicographical tie-breaking over candidate facility sets ensures bitwise-identical outputs on repeated solves.
+- **OpenStreetMap / H3**: Base geographic topology and canonical regional divisions (PUBLIC_GEOGRAPHIC)
+- **TomTom**: Current traffic speeds and congestion estimates (PROVIDER_ESTIMATED)
+- **Open-Meteo**: Weather context (PUBLIC_OFFICIAL)
+- **Mission & Scenario**: 16-order delivery data and a controlled facility disruption (SIMULATED)
+- **Business inputs**: Declared optimization inputs (ASSUMPTION); capacity is not modeled in this demo
+- **Optimization & Recommendation**: The CP-SAT output and expected objective comparisons (DERIVED)
 
-## 4. Multi-Tenant Tenancy Model
-- Every request resolves a trusted `WorkspacePrincipal` from the server-side database.
-- RLS policies and table constraints ensure strict cross-workspace data isolation.
+## Core Stack
+
+- **Frontend**: Next.js (React), MapLibre GL JS
+- **API**: FastAPI (Python)
+- **Solver**: OR-Tools CP-SAT
+- **Storage**: PostgreSQL (psycopg 3)

@@ -4,10 +4,13 @@ import { SetupRequired } from "@/components/common/SetupRequired"
 import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import { ShieldAlert, CarFront, CheckCircle2 } from "lucide-react"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function PartnerIntelligencePage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -42,7 +45,7 @@ export default async function PartnerIntelligencePage() {
                   <CarFront className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg">{(partner.profiles as { full_name?: string } | null)?.full_name || 'Unknown Partner'}</h3>
+                  <h2 className="font-bold text-lg">{(partner.profiles as { full_name?: string } | null)?.full_name || 'Unknown Partner'}</h2>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
                       partner.status === 'AT_RISK' ? 'bg-destructive/20 text-destructive' :

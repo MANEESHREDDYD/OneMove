@@ -7,6 +7,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, MapPin, Package, Clock, DollarSign, Activity } from "lucide-react"
 import { AdminOrderActions } from "./AdminOrderActions"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function AdminOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
@@ -14,16 +15,12 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     return <SetupRequired />
   }
 
+  await requireAdmin()
+
   const resolvedParams = await params
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    redirect('/auth/login')
-  }
-
-  // Fetch admin role
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (!profile || profile.role !== 'admin') {
     redirect('/auth/login')
   }
 
@@ -73,7 +70,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           <GlassCard className="p-6 space-y-4">
-            <h3 className="font-bold flex items-center gap-2"><Package className="w-5 h-5 text-primary" /> Order Information</h3>
+            <h2 className="font-bold flex items-center gap-2"><Package className="w-5 h-5 text-primary" /> Order Information</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Service Type</p>

@@ -54,6 +54,15 @@ def test_durable_decision_record_replay_shadow():
         "coverage_basis_points": 9910,
         "code_sha": "git-sha-test-456",
         "osrm_bundle_hash": mat_sha,
+        # Required since F-005: lineage may no longer be defaulted by the server.
+        "graph_version": "1.1",
+        "solver_version": "ortools-cp-sat",
+        # AUDIT-0: this payload is hand-authored, not derived from a solver run.
+        # Adding the lineage fields alone made a forged decision return 201 and
+        # pinned that forgery as intended behaviour. A hand-authored decision must
+        # now declare itself.
+        "decision_class": "MANUAL_OPERATOR_DECISION",
+        "operator_rationale": "Regression fixture: hand-authored decision recorded by the durable ledger test.",
     }
 
     # 1. POST /api/v1/decisions
@@ -76,10 +85,14 @@ def test_durable_decision_record_replay_shadow():
     assert rep_res.status_code == 200
     replay_data = rep_res.json()
     assert replay_data["pit_valid"] is True
-    assert replay_data["reproduced_exact_action"] is True
-    assert replay_data["reproduced_exact_facilities"] is True
-    assert replay_data["objective_match"] is True
-    assert replay_data["match_status"] == "EXACT_MATCH"
+    # This decision was declared MANUAL_OPERATOR_DECISION, so there is no solver
+    # run behind it to reproduce. Expecting EXACT_MATCH here would mean a
+    # hand-authored decision validating itself against optimizer output it never
+    # came from.
+    assert replay_data["reproduced_exact_action"] is False
+    assert replay_data["reproduced_exact_facilities"] is False
+    assert replay_data["objective_match"] is False
+    assert replay_data["match_status"] == "MANUAL_DECISION_NOT_REPLAYABLE"
 
     # 4. POST /api/v1/decisions/{id}/shadows
     future_time = datetime.fromtimestamp(now.timestamp() + 7200, tz=timezone.utc)
@@ -115,8 +128,19 @@ def test_shadow_invalid_window_fails_closed():
         "p95_travel_seconds": 750,
         "coverage_basis_points": 10000,
         "code_sha": "git-sha-test-456",
+        # This fixture exists to exercise the shadow window, not decision
+        # provenance. Posted without a job id it is optimizer-shaped output with
+        # no solver run behind it, which the decision-class separation refuses
+        # (correctly) with a 422 -- so the test used to KeyError on the missing
+        # decision_id rather than reaching what it meant to check.
+        "decision_class": "MANUAL_OPERATOR_DECISION",
+        "operator_rationale": "Fixture for the shadow-window contract test; not solver-derived.",
+        "graph_version": "1.1",
+        "osrm_bundle_hash": "b" * 64,
+        "solver_version": "ortools-cp-sat",
     }
     res = client.post("/api/v1/decisions", json=rec_payload)
+    assert res.status_code == 201, res.text
     dec_id = res.json()["decision_id"]
 
     # Attempt shadow with past/same observation time -> 422 INVALID_SHADOW_WINDOW

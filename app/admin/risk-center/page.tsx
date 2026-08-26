@@ -5,10 +5,13 @@ import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import { ShieldAlert, ShieldCheck, Shield } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function RiskCenterPage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -39,7 +42,7 @@ export default async function RiskCenterPage() {
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-bold font-mono text-sm uppercase">ORDER: {risk.entity_id.split('-')[0]}</h3>
+                  <h2 className="font-bold font-mono text-sm uppercase">ORDER: {risk.entity_id.split('-')[0]}</h2>
                   <Badge variant={risk.risk_level === 'CRITICAL' ? 'destructive' : 'outline'}>{risk.risk_level}</Badge>
                 </div>
                 <ul className="space-y-1 mt-2">

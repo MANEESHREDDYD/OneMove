@@ -25,7 +25,7 @@ export default async function CustomerSupportPage() {
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center mb-8">
-        <LifeBuoy className="w-8 h-8 text-blue-600 mr-3" />
+        <LifeBuoy aria-hidden="true" focusable="false" className="w-8 h-8 text-blue-600 mr-3" />
         <div>
           <h1 className="text-3xl font-bold">Help & Support</h1>
           <p className="text-gray-500">MVP deterministic rule-based intelligence, not a production LLM or trained ML model.</p>
@@ -37,10 +37,15 @@ export default async function CustomerSupportPage() {
           <h2 className="text-xl font-semibold mb-4">Create a Ticket</h2>
           <form action="/customer/support/actions" method="POST" className="space-y-4">
             <input type="hidden" name="action" value="create_ticket" />
-            
+
+            {/*
+               Neither label was associated with its control (no htmlFor, no
+               wrapping), so the select and the textarea both announced without
+               a name.
+            */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Related Order (Optional)</label>
-              <select name="order_id" className="w-full border-gray-300 rounded shadow-sm py-2 px-3 border">
+              <label htmlFor="support-order" className="block text-sm font-medium text-gray-700 mb-1">Related Order (Optional)</label>
+              <select id="support-order" name="order_id" className="w-full border-gray-300 rounded shadow-sm py-2 px-3 border text-gray-900">
                 <option value="">None / General Inquiry</option>
                 {recentOrders?.map(order => (
                   <option key={order.id} value={order.id}>
@@ -51,11 +56,12 @@ export default async function CustomerSupportPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">How can we help?</label>
-              <textarea 
-                name="description" 
-                rows={4} 
-                required 
+              <label htmlFor="support-description" className="block text-sm font-medium text-gray-700 mb-1">How can we help?</label>
+              <textarea
+                id="support-description"
+                name="description"
+                rows={4}
+                required
                 className="w-full border-gray-300 rounded shadow-sm py-2 px-3 border"
                 placeholder="E.g., My item was missing, my food arrived late..."
               ></textarea>
@@ -82,7 +88,7 @@ export default async function CustomerSupportPage() {
                     </span>
                   </div>
                   <p className="text-gray-800 text-sm mb-3">&quot;{ticket.description}&quot;</p>
-                  
+
                   {ticket.assistant_explanation && (
                     <div className="bg-blue-50 text-blue-800 p-2 text-xs rounded mb-2 border border-blue-100">
                       <strong>AI Review:</strong> {ticket.assistant_explanation}

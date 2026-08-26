@@ -3,7 +3,8 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build',
-      '-t', 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-api:latest',
+      '--build-arg', 'RELEASE_SHA=${_RELEASE_SHA}',
+      '-t', 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-api:${_RELEASE_SHA}',
       '-f', 'docker/Dockerfile.api',
       '.'
     ]
@@ -12,31 +13,52 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build',
-      '-t', 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-worker:latest',
+      '--build-arg', 'RELEASE_SHA=${_RELEASE_SHA}',
+      '-t', 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-worker:${_RELEASE_SHA}',
       '-f', 'docker/Dockerfile.worker',
       '.'
     ]
 
-  # 3. Push API container
+  # 3. Build Dispatcher container
   - name: 'gcr.io/cloud-builders/docker'
     args: [
-      'push',
-      'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-api:latest'
+      'build',
+      '--build-arg', 'RELEASE_SHA=${_RELEASE_SHA}',
+      '-t', 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-dispatcher:${_RELEASE_SHA}',
+      '-f', 'docker/Dockerfile.dispatcher',
+      '.'
     ]
 
-  # 4. Push Worker container
+  # 4. Push API container
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'push',
-      'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-worker:latest'
+      'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-api:${_RELEASE_SHA}'
+    ]
+
+  # 5. Push Worker container
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'push',
+      'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-worker:${_RELEASE_SHA}'
+    ]
+
+  # 6. Push Dispatcher container
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'push',
+      'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-dispatcher:${_RELEASE_SHA}'
     ]
 
 substitutions:
   _REPO_NAME: 'zonepilot-containers-staging'
+  _RELEASE_SHA: 'ec4bb92d38914910bfc6f0faabfdaea3919d6c65'
 
 images:
-  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-api:latest'
-  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-worker:latest'
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-api:${_RELEASE_SHA}'
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-worker:${_RELEASE_SHA}'
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/zonepilot-dispatcher:${_RELEASE_SHA}'
 
 options:
   logging: CLOUD_LOGGING_ONLY
+

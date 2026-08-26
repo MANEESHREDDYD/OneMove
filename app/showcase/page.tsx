@@ -54,7 +54,7 @@ export default function ShowcasePage() {
             <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-6">
               <Database className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-bold mb-3">Data Engineering</h3>
+            <h2 className="text-xl font-bold mb-3">Data Engineering</h2>
             <p className="text-gray-600">Real-time event streams, automated quality checks, and a comprehensive Metric Store built directly on top of Postgres.</p>
           </div>
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">

@@ -51,7 +51,7 @@ export default function MapComponent({
     <div style={{ height: '100%', width: '100%', minHeight: '400px' }}>
       <MapContainer center={position} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/">OSM</a>'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &middot; &copy; <a href="https://carto.com/attributions">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
         

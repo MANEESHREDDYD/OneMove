@@ -4,10 +4,13 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { GlassCard } from '@/components/common/GlassCard'
 import { Database, CheckCircle, XCircle, AlertTriangle, Clock } from 'lucide-react'
 import { SetupRequired } from "@/components/common/SetupRequired"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function DataPlatformPage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')

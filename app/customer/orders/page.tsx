@@ -52,9 +52,9 @@ export default async function CustomerOrders() {
     <Link href={`/customer/orders/${order.id}`}>
       <GlassCard className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-white/5 transition-colors group">
         <div>
-          <h3 className="font-bold text-base capitalize">
+          <h2 className="font-bold text-base capitalize">
             {order.merchants?.name || `${order.service_type} Service`}
-          </h3>
+          </h2>
           <p className="text-sm text-muted-foreground mt-1">
             {new Date(order.created_at).toLocaleDateString()} • {order.status === 'completed' ? 'Completed' : 'Ordered'}
           </p>

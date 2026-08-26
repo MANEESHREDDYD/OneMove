@@ -64,7 +64,7 @@ export function EatsMenuClient({
           return (
             <GlassCard key={item.id} className="p-4 flex justify-between items-center group hover:bg-white/5 transition-colors">
               <div className="pr-4">
-                <h3 className="font-bold text-base">{item.name}</h3>
+                <h2 className="font-bold text-base">{item.name}</h2>
                 <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
                 <p className="font-semibold mt-1">${item.price.toFixed(2)}</p>
               </div>

@@ -1,0 +1,21 @@
+{
+ "source": "r1_osrm_travel_matrix.json",
+ "evidence_class": "PUBLIC_GEOGRAPHIC",
+ "graph_version": "1.1.0+bad320dd48da",
+ "router": "osrm-routed-table",
+ "facility_ids": [
+  "fac:8861892421fffff",
+  "fac:8861892537fffff",
+  "fac:8861892599fffff",
+  "fac:88618925a5fffff",
+  "fac:88618925a7fffff",
+  "fac:88618925c5fffff",
+  "fac:88618925c7fffff",
+  "fac:88618925e9fffff",
+  "fac:8861892ec3fffff",
+  "fac:8861892ecbfffff",
+  "fac:8861892ed5fffff",
+  "fac:8861892eddfffff"
+ ],
+ "demand_count": 94
+}

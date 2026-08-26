@@ -1,0 +1,300 @@
+# OneMove readiness matrix
+# seeded from measured state at 180d87e; statuses are evidence-backed, not aspirational
+# GREEN requires: owner done + H3 verified + X1 unable to break
+rows:
+  - id: OPT-01
+    area: optimizer
+    requirement: "All 94 demand zones accounted as assigned or uncovered"
+    status: READY_FOR_VERIFY
+    evidence: "tests/optimization/test_zone_accounting.py 7 passed @180d87e; live API: total=94 assigned=4 uncovered=90"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: OPT-02
+    area: optimizer
+    requirement: "Infeasible full-coverage returns typed state, not HTTP 500"
+    status: READY_FOR_VERIFY
+    evidence: "job 0e904dcd status=FAILED solver_status=INFEASIBLE readable @180d87e"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: OPT-03
+    area: optimizer
+    requirement: "Zero travel only for genuine self-loops"
+    status: READY_FOR_VERIFY
+    evidence: "12 zero pairs, all same-H3; 1116 non-zero preserved"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: OPT-04
+    area: optimizer
+    requirement: "Objective units commensurate (travel vs coverage_loss)"
+    status: READY_FOR_VERIFY
+    evidence: "objective normalised to basis points against declared references; 5 components reconcile exactly to weighted_total; tests/optimization/test_zone_accounting.py @8a84f9a"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: OPT-05
+    area: optimizer
+    requirement: "Capacity assumption scaled to demand proxy"
+    status: READY_FOR_VERIFY
+    evidence: "capacity_mode defaults NOT_MODELED; no throughput constraint posted; ASSUMPTION mode still enforced; verified 5/5 served on fixture @8a84f9a"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: OPT-06
+    area: optimizer
+    requirement: "allow_uncovered_demand default is defensible"
+    status: READY_FOR_VERIFY
+    evidence: "single canonical default allow_uncovered_demand=False in both API and domain contract @8a84f9a"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: OPT-07
+    area: optimizer
+    requirement: "Do-nothing baseline vs recommended"
+    status: RED
+    evidence: "not implemented"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: OPT-08
+    area: optimizer
+    requirement: "Structured WHY-decision record"
+    status: RED
+    evidence: "not implemented"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: GEO-01
+    area: geospatial
+    requirement: "Bengaluru artifacts validated by coordinates not filename"
+    status: READY_FOR_VERIFY
+    evidence: "tests/geo/test_pilot_roads_lineage.py 4 passed; proven to fail on reintroduced defect @180d87e"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: GEO-02
+    area: geospatial
+    requirement: "Mislabelled Andorra-as-Bengaluru artifact removed"
+    status: READY_FOR_VERIFY
+    evidence: "data/geo/bengaluru_clip.osm.pbf deleted (was untracked; never in public repo)"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: GEO-03
+    area: geospatial
+    requirement: "94 H3 r8 cells inside road extract"
+    status: READY_FOR_VERIFY
+    evidence: "test_h3_network_cells_fall_inside_the_road_extract"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: MAP-01
+    area: geospatial
+    requirement: "Interactive vector map (pan/zoom/labels/attribution)"
+    status: RED
+    evidence: "current map is static raster + SVG overlay"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: CI-01
+    area: cicd
+    requirement: "test_route_7_optimizations_lifecycle green"
+    status: READY_FOR_VERIFY
+    evidence: "split into submission contract + real-worker lifecycle using the production service path; both pass locally @9d45f58"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: CI-02
+    area: cicd
+    requirement: "test_ci_contracts CodeQL contract matches workflow"
+    status: READY_FOR_VERIFY
+    evidence: "CodeQL contract asserts SHA-pinning as a property; verified bumped SHA passes and @v4 tag fails @9d45f58"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: CI-03
+    area: cicd
+    requirement: "Required workflows green on main"
+    status: RED
+    evidence: "main has run only Dependabot Updates + CodeQL recently"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: CI-04
+    area: cicd
+    requirement: "Workflow consolidation toward 4"
+    status: YELLOW
+    evidence: "9 workflows on disk"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: REPO-01
+    area: repo
+    requirement: "main is authoritative"
+    status: RED
+    evidence: "branch head 59 commits ahead of main"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: REPO-02
+    area: repo
+    requirement: "README truthful, no broken badge, no agent language"
+    status: RED
+    evidence: "badge -> python.yml (missing); README:110 '17-Agent Engineering Architecture'"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DATA-01
+    area: data
+    requirement: "Traffic acquired continuously at runtime"
+    status: RED
+    evidence: "collectors exist; no scheduler in IaC; traffic_observations = 0 rows"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DATA-02
+    area: data
+    requirement: "Weather acquired continuously at runtime"
+    status: RED
+    evidence: "weather_observations = 0 rows"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DATA-03
+    area: data
+    requirement: "Freshness computed, degradation handled"
+    status: YELLOW
+    evidence: "computed in demo route only"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: SEC-01
+    area: security
+    requirement: "Exposed credentials rotated"
+    status: BLOCKED_EXTERNAL
+    evidence: "OWNER_ACTION_REQUIRED: provider consoles"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DEC-01
+    area: decisions
+    requirement: "Decision freeze from authoritative solver result"
+    status: READY_FOR_VERIFY
+    evidence: "dec-7d1f361ac3c9a368 reconstructed from solver output"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: DEC-02
+    area: decisions
+    requirement: "Evidence lineage with per-node evidence class"
+    status: READY_FOR_VERIFY
+    evidence: "8-node chain, real ids"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: DEC-03
+    area: decisions
+    requirement: "PIT replay, verdict not hardcoded"
+    status: READY_FOR_VERIFY
+    evidence: "expected_hash==actual_hash 32124ab6b7c7bdfc, EXACT_MATCH from API"
+    last_verified_sha: 180d87e
+    verified_by: principal (self-verified, pending H3)
+  - id: DEC-04
+    area: decisions
+    requirement: "Human review / override lifecycle"
+    status: RED
+    evidence: "not implemented"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: BT-01
+    area: backtest
+    requirement: "One defensible historical backtest"
+    status: RED
+    evidence: "no backtest code; historical traffic archive not identified"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: LOAD-01
+    area: perf
+    requirement: "Load / soak / chaos measured"
+    status: RED
+    evidence: "not run"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: SCALE-01
+    area: scale
+    requirement: "Multi-city configuration"
+    status: RED
+    evidence: "Bengaluru in domain constants"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DEP-01
+    area: deploy
+    requirement: "CTO-review deployment verified same SHA"
+    status: RED
+    evidence: "no access to deploy target from this session"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DOC-01
+    area: docs
+    requirement: "Executive one-pager"
+    status: READY_FOR_VERIFY
+    evidence: "docs/EXECUTIVE_OVERVIEW.md exists, 214 lines. The RED evidence string ('absent') was stale from 180d87e and was contradicted by the file on disk; corrected here rather than left to mislead."
+    last_verified_sha: 774522f
+    verified_by: "principal (self-verified, pending H3)"
+  - id: DOC-02
+    area: docs
+    requirement: "Cost model"
+    status: RED
+    evidence: "docs/COST_MODEL.md absent"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: DOC-03
+    area: docs
+    requirement: "Provider licensing review"
+    status: RED
+    evidence: "not started"
+    last_verified_sha: 180d87e
+    verified_by: unverified
+  - id: OPT-09
+    area: optimizer
+    requirement: "Corrected model provably optimal within the deterministic solver budget"
+    status: READY_FOR_VERIFY
+    evidence: "canonical assignment reconstruction + multi-worker proof: 5 production runs OPTIMAL in 7.6-8.7s, 94/94 served, identical facility set/assignment hash/objective, matching exhaustive oracle @3b39656"
+    last_verified_sha: 8a84f9a
+    verified_by: unverified
+  - id: OPT-10
+    area: optimizer
+    requirement: "Published objective is exactly the objective CP-SAT minimised"
+    status: READY_FOR_VERIFY
+    evidence: "shared _solver_coefficient feeds model and record; solver_objective_total == CP-SAT objective_value on fixture; 400k-trial divergence test recorded as F-OPT-008 @7f69448"
+    last_verified_sha: 7f69448
+    verified_by: "principal (self-verified, pending H3)"
+  - id: OPT-11
+    area: optimizer
+    requirement: "Pilot optimum independently certified against an exact oracle"
+    status: READY_FOR_VERIFY
+    evidence: "exhaustive enumeration of 793 permitted subsets in 0.08s; optimum 23,548,137,358,244 unique; CP-SAT agrees exactly; tests/optimization/test_pilot_exact_oracle.py @7f69448"
+    last_verified_sha: 7f69448
+    verified_by: "principal (self-verified, pending H3)"
+  - id: OPT-12
+    area: contracts
+    requirement: "P95 field name states its true unit"
+    status: YELLOW
+    evidence: "API response renamed to p95_scenario_total_travel_demand_seconds; DecisionRecord/ledger/lineage still carry the misnomer and need a versioned migration (F-OPT-009)"
+    last_verified_sha: 7f69448
+    verified_by: unverified
+  - id: OPT-13
+    area: optimizer
+    requirement: "Optimization policy is versioned and covered by the problem fingerprint"
+    status: READY_FOR_VERIFY
+    evidence: "OPTIMIZATION_POLICY_VERSION=2.0.0 on OptimizationProblem, included in problem_fingerprint via model_dump @3b39656"
+    last_verified_sha: 3b39656
+    verified_by: "principal (self-verified, pending H3)"
+  - id: DEC-05
+    area: decisions
+    requirement: "PIT replay verifies the objective the solver minimised"
+    status: READY_FOR_VERIFY
+    evidence: "ledger compares solver_objective_total with legacy fallback; tests/decisions 5 passed @3b39656"
+    last_verified_sha: 3b39656
+    verified_by: "principal (self-verified, pending H3)"
+  - id: DEC-06
+    area: decisions
+    requirement: "Cross-policy replay returns a typed legacy state, not DRIFT"
+    status: RED
+    evidence: "F-DEC-002: DecisionRecord does not carry optimization_policy_version"
+    last_verified_sha: 3b39656
+    verified_by: unverified
+  - id: WARROOM-01
+    area: orchestration
+    requirement: "All actual available agent execution capacity stays utilized while independent release work exists"
+    status: READY_FOR_VERIFY
+    evidence: >-
+      Restaffed to 12 concurrent workers at 2026-08-25 ~16:00 IST immediately after the
+      session-limit reset, without a human reminder. Prior to the reset all 12 workers were
+      terminated simultaneously by the account limit; their in-flight work was recovered from
+      the working tree and committed as 774522f before relaunch, so nothing was lost.
+      MAX_AVAILABLE_CAPACITY is recorded as at-least-12 rather than a round number: 12 launches
+      were accepted and none has terminated, which bounds capacity from below but not above.
+      Roles, ownership boundaries, base SHA and per-worker task are enumerated in
+      docs/readiness/program_state.json.
+    last_verified_sha: 774522f
+    verified_by: "principal (self-observed; GREEN requires repeated checkpoints showing automatic restaffing, not one observation)"
+

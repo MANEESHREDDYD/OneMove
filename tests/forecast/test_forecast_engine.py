@@ -58,10 +58,24 @@ def test_baseline_models():
 
 def test_chronological_evaluation_no_leakage():
     split_time = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+    # Every row states when it became knowable. The evaluator partitions on
+    # information_available_at, not on event time (F-020), so a row without one
+    # cannot be placed on the timeline and is excluded rather than assumed safe.
     observations = [
-        {"observation_time": split_time - timedelta(hours=i), "value": float(10 + (i % 5))}
+        {
+            "observation_time": split_time - timedelta(hours=i),
+            "information_available_at": split_time - timedelta(hours=i),
+            "value": float(10 + (i % 5)),
+        }
         for i in reversed(range(1, 48))
-    ] + [{"observation_time": split_time + timedelta(hours=i), "value": float(12 + (i % 3))} for i in range(1, 24)]
+    ] + [
+        {
+            "observation_time": split_time + timedelta(hours=i),
+            "information_available_at": split_time + timedelta(hours=i),
+            "value": float(12 + (i % 3)),
+        }
+        for i in range(1, 24)
+    ]
 
     res = evaluate_chronological(
         observations,
@@ -70,6 +84,8 @@ def test_chronological_evaluation_no_leakage():
         BaselineModelType.LAST_OBSERVATION,
     )
     assert res.sample_count == 23
+    assert res.candidate_sample_count == 23
+    assert res.excluded_record_count == 0
     assert res.mae >= 0.0
     assert res.rmse >= 0.0
     assert res.evaluation_status == "ENGINEERING_COMPLETE_EVIDENCE_ACCUMULATING"

@@ -1,0 +1,954 @@
+'use client';
+
+/**
+ * The flagship map. A real WebGL map engine, not a picture of one.
+ *
+ * What this replaces: two baked raster PNGs with an SVG overlay. Those were
+ * coordinate-correct, which was the hard part, but they could not pan, zoom,
+ * select, or reveal detail -- and a still image of a city is not a map.
+ *
+ * WHY MAPLIBRE WITH LOCAL GEOJSON AND NO TILE SERVER.
+ * The provider licence review found the OSMF and CARTO tile CDNs unacceptable as
+ * a commercial product's basemap at scale, and TomTom raster tiles require a
+ * Copyrights API caption this product does not generate. Serving our own
+ * geometry, from our own OpenStreetMap extract, sidesteps both. The only
+ * obligation left is ODbL attribution, which is rendered. It also removes the
+ * last render-time external dependency: no CDN outage can blank this surface.
+ *
+ * The trade is honest and worth stating: outside the pilot extract's bounding
+ * box there is no map, because we hold no data there. The surface says so rather
+ * than fading into an empty grey plane that looks like the sea.
+ *
+ * EVERY LAYER DECLARES WHAT IT IS. Geography is PUBLIC_GEOGRAPHIC, live traffic
+ * is PROVIDER_ESTIMATED, the delivery mission is SIMULATED, optimizer output is
+ * DERIVED. The legend shows the class beside the layer, so a viewer never has to
+ * infer which parts of the picture are real.
+ */
+
+// maplibre-gl v5, deliberately not v6. v6 is ESM-only and ships its worker as a
+// separate module that this bundler does not resolve, so every GeoJSON source
+// stays permanently unparsed: the style reports layers, the canvas sizes
+// correctly, and absolutely nothing renders. v5 bundles its worker.
+import maplibregl from 'maplibre-gl';
+import type { Map as MapLibreMap } from 'maplibre-gl';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { MapAttribution, type MapSource } from '@/components/maps/MapAttribution';
+import {
+  type FeatureCollection,
+  type RawBasemap,
+  boundsOf,
+  emptyCollection,
+  labelsToGeoJSON,
+  roadsToGeoJSON,
+  validateBasemap,
+  zonesToGeoJSON,
+} from '@/lib/geo/basemap';
+import { type EvidenceState, UNAVAILABLE } from '@/lib/geo/evidence';
+
+import 'maplibre-gl/dist/maplibre-gl.css';
+
+export type LayerId =
+  | 'roads'
+  | 'pilot'
+  | 'zones'
+  | 'facilities'
+  | 'baseline'
+  | 'traffic'
+  | 'orders'
+  | 'routes'
+  | 'scenario'
+  | 'recommended';
+
+type LayerSpec = {
+  id: LayerId;
+  label: string;
+  evidence: EvidenceState;
+  defaultOn: boolean;
+};
+
+/**
+ * The legend and the layer control are the same list, deliberately. Two lists
+ * drift, and a legend that disagrees with what is drawn is worse than none.
+ */
+export const LAYERS: LayerSpec[] = [
+  { id: 'roads', label: 'Road network', evidence: 'PUBLIC_GEOGRAPHIC', defaultOn: true },
+  { id: 'pilot', label: 'OneMove pilot area', evidence: 'PUBLIC_GEOGRAPHIC', defaultOn: true },
+  { id: 'zones', label: '94 H3 service zones', evidence: 'PUBLIC_GEOGRAPHIC', defaultOn: true },
+  { id: 'facilities', label: 'Candidate facilities', evidence: 'ASSUMPTION', defaultOn: true },
+  { id: 'baseline', label: 'Do Nothing facilities', evidence: 'SIMULATED', defaultOn: false },
+  { id: 'traffic', label: 'Current traffic', evidence: 'PROVIDER_ESTIMATED', defaultOn: true },
+  { id: 'orders', label: 'Delivery orders', evidence: 'SIMULATED', defaultOn: true },
+  { id: 'routes', label: 'Delivery routes', evidence: 'SIMULATED', defaultOn: true },
+  { id: 'scenario', label: 'Disruption scenario', evidence: 'SIMULATED', defaultOn: false },
+  { id: 'recommended', label: 'Recommended facilities', evidence: 'DERIVED', defaultOn: false },
+];
+
+export type MapData = {
+  /** Live traffic per zone, keyed by H3 index. Absent means UNAVAILABLE, not free-flowing. */
+  traffic?: Map<string, { congestionRatio: number | null; evidence: EvidenceState }>;
+  facilities?: FeatureCollection;
+  baseline?: FeatureCollection;
+  orders?: FeatureCollection;
+  routes?: FeatureCollection;
+  scenario?: FeatureCollection;
+  recommended?: FeatureCollection;
+};
+
+type LoadState =
+  | { status: 'loading' }
+  | { status: 'failed'; reason: string }
+  | { status: 'ready'; basemap: RawBasemap };
+
+const ROAD_WIDTH: maplibregl.DataDrivenPropertyValueSpecification<number> = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  10,
+  ['match', ['get', 'roadClass'], 0, 1.6, 1, 1.3, 2, 1.0, 3, 0.6, 0.25],
+  14,
+  ['match', ['get', 'roadClass'], 0, 5.0, 1, 4.0, 2, 3.0, 3, 2.0, 0.9],
+  17,
+  ['match', ['get', 'roadClass'], 0, 12.0, 1, 10.0, 2, 8.0, 3, 5.0, 2.5],
+];
+
+/**
+ * Congestion colour. `null` is NOT on this ramp: a zone with no reading is drawn
+ * in the explicit unavailable hatch colour rather than the free-flowing end,
+ * because "we do not know" must never look like "it is clear".
+ */
+const CONGESTION_COLOR: maplibregl.DataDrivenPropertyValueSpecification<string> = [
+  'case',
+  // A zone with no reading has NO congestionRatio property at all. Setting it to
+  // null instead would be the obvious thing to write and does not work:
+  // MapLibre expressions cannot compare a property against a null literal, and
+  // `addLayer` throws, which silently aborts every layer registered after it and
+  // leaves an empty canvas that still looks like a working map.
+  ['!', ['has', 'congestionRatio']],
+  '#3f3f46',
+  [
+    'interpolate',
+    ['linear'],
+    ['get', 'congestionRatio'],
+    1.0,
+    '#16a34a',
+    1.25,
+    '#eab308',
+    1.6,
+    '#f97316',
+    2.2,
+    '#dc2626',
+  ],
+];
+
+type GeographicLabel = {
+  name: string;
+  lon: number;
+  lat: number;
+  kind: 'city' | 'locality' | 'road' | 'landmark';
+};
+
+type DecisionPosition = {
+  key: string;
+  x: number;
+  y: number;
+  label: string;
+  detail: string;
+  kind: 'recommended' | 'disruption';
+};
+
+/**
+ * Orientation labels extracted from the same OSM pilot corridor used to build
+ * the road artifact. The coordinates are the actual `place=*`, named-road and
+ * named-feature coordinates in `pilot_corridor.osm.pbf`, not hand-positioned
+ * presentation labels.
+ */
+const GEOGRAPHIC_LABELS: GeographicLabel[] = [
+  { name: 'BENGALURU', lon: 77.590082, lat: 12.976794, kind: 'city' },
+  { name: 'Jayanagar', lon: 77.582423, lat: 12.929273, kind: 'locality' },
+  { name: 'Koramangala', lon: 77.624081, lat: 12.935737, kind: 'locality' },
+  { name: 'Domlur', lon: 77.638196, lat: 12.962467, kind: 'locality' },
+  { name: 'Indiranagar', lon: 77.640467, lat: 12.973291, kind: 'locality' },
+  { name: 'HSR Layout', lon: 77.638862, lat: 12.911623, kind: 'locality' },
+  { name: 'BTM Layout', lon: 77.610282, lat: 12.914001, kind: 'locality' },
+  { name: 'Madiwala', lon: 77.617629, lat: 12.923815, kind: 'locality' },
+  { name: 'Outer Ring Road', lon: 77.621481, lat: 12.916916, kind: 'road' },
+  { name: 'Hosur Road', lon: 77.613795, lat: 12.931605, kind: 'road' },
+  { name: 'Sarjapur Road', lon: 77.638103, lat: 12.924671, kind: 'road' },
+  { name: 'HAL Old Airport Road', lon: 77.631095, lat: 12.962084, kind: 'road' },
+  { name: 'Cubbon Park', lon: 77.593283, lat: 12.974988, kind: 'landmark' },
+  { name: 'Lalbagh Botanical Gardens', lon: 77.585708, lat: 12.948279, kind: 'landmark' },
+  { name: 'Embassy GolfLinks', lon: 77.644071, lat: 12.950254, kind: 'landmark' },
+  { name: 'Central Silk Board', lon: 77.621306, lat: 12.91602, kind: 'landmark' },
+];
+
+// Simplified from OpenStreetMap relation 7902476 (Bengaluru) via Nominatim.
+const BENGALURU_BOUNDARY: [number, number][] = [
+  [77.45988, 12.90469], [77.48297, 12.88629], [77.50455, 12.87701],
+  [77.51841, 12.86117], [77.55448, 12.84803], [77.58702, 12.83349],
+  [77.61684, 12.85753], [77.64309, 12.85058], [77.67377, 12.89314],
+  [77.70835, 12.90806], [77.74467, 12.91363], [77.76467, 12.95945],
+  [77.77414, 13.01316], [77.7239, 13.03357], [77.67913, 13.06287],
+  [77.6427, 13.08689], [77.6306, 13.12594], [77.58563, 13.1326],
+  [77.55602, 13.10014], [77.51796, 13.07418], [77.49097, 13.0451],
+  [77.46845, 12.9867], [77.47325, 12.94033], [77.45988, 12.90469],
+];
+
+const CITY_BOUNDS = { minLon: 77.4598797, maxLon: 77.7840639, minLat: 12.8334905, maxLat: 13.1426196 };
+const OPERATING_PADDING = { top: 92, bottom: 135, left: 690, right: 340 };
+
+function cross(origin: [number, number], a: [number, number], b: [number, number]) {
+  return (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0]);
+}
+
+function convexHull(points: [number, number][]): [number, number][] {
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (sorted.length <= 1) return sorted;
+  const lower: [number, number][] = [];
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) lower.pop();
+    lower.push(point);
+  }
+  const upper: [number, number][] = [];
+  for (const point of [...sorted].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) upper.pop();
+    upper.push(point);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+function pilotGeometry(basemap: RawBasemap) {
+  const points = basemap.zones.flatMap((zone) => zone.b) as [number, number][];
+  const hull = convexHull(points);
+  if (hull.length) hull.push(hull[0]);
+  return {
+    collection: {
+      type: 'FeatureCollection' as const,
+      features: [{
+        type: 'Feature' as const,
+        id: 'onemove-pilot-area',
+        geometry: { type: 'Polygon', coordinates: [hull] },
+        properties: { name: 'ONEMOVE PILOT AREA', evidenceClass: 'PUBLIC_GEOGRAPHIC' },
+      }],
+    } as FeatureCollection,
+    bounds: {
+      minLon: Math.min(...points.map((point) => point[0])),
+      maxLon: Math.max(...points.map((point) => point[0])),
+      minLat: Math.min(...points.map((point) => point[1])),
+      maxLat: Math.max(...points.map((point) => point[1])),
+    },
+  };
+}
+
+function nearestLocality(coordinates: [number, number]) {
+  return GEOGRAPHIC_LABELS
+    .filter((label) => label.kind === 'locality')
+    .map((label) => ({ label, distance: (label.lon - coordinates[0]) ** 2 + (label.lat - coordinates[1]) ** 2 }))
+    .sort((a, b) => a.distance - b.distance)[0]?.label.name ?? 'Bengaluru pilot area';
+}
+
+function LocatorMap({ pilot }: { pilot: ReturnType<typeof pilotGeometry>['bounds'] }) {
+  const width = 190;
+  const height = 92;
+  const x = (lon: number) => ((lon - CITY_BOUNDS.minLon) / (CITY_BOUNDS.maxLon - CITY_BOUNDS.minLon)) * width;
+  const y = (lat: number) => height - ((lat - CITY_BOUNDS.minLat) / (CITY_BOUNDS.maxLat - CITY_BOUNDS.minLat)) * height;
+  const outline = BENGALURU_BOUNDARY.map(([lon, lat]) => `${x(lon).toFixed(1)},${y(lat).toFixed(1)}`).join(' ');
+  const pilotX = x(pilot.minLon);
+  const pilotY = y(pilot.maxLat);
+  const pilotWidth = x(pilot.maxLon) - pilotX;
+  const pilotHeight = y(pilot.minLat) - pilotY;
+  return (
+    <div data-testid="map-locator" className="rounded-lg border border-slate-600/70 bg-[#07101d]/94 p-2 shadow-xl backdrop-blur">
+      <div className="mb-1 flex items-baseline justify-between"><strong className="text-[10px] tracking-[0.16em] text-slate-100">BENGALURU</strong><span className="text-[8px] text-slate-500">Karnataka · India</span></div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-[74px] w-full" role="img" aria-label="Bengaluru locator with OneMove pilot highlighted">
+        <polygon points={outline} fill="#172033" stroke="#64748b" strokeWidth="1" />
+        <rect x={pilotX} y={pilotY} width={pilotWidth} height={pilotHeight} rx="1.5" fill="#38bdf8" fillOpacity="0.32" stroke="#7dd3fc" strokeWidth="1.5" />
+        <text x={Math.min(width - 36, pilotX + pilotWidth + 3)} y={pilotY + Math.max(9, pilotHeight / 2)} fill="#bae6fd" fontSize="7" fontWeight="700">PILOT</text>
+      </svg>
+    </div>
+  );
+}
+
+export function OneMoveMap({
+  data = {},
+  selectedOrderId = null,
+  onSelectOrder,
+  onSelectZone,
+  className = '',
+}: {
+  data?: MapData;
+  selectedOrderId?: string | null;
+  onSelectOrder?: (orderId: string | null) => void;
+  onSelectZone?: (h3: string | null) => void;
+  className?: string;
+}) {
+  const container = useRef<HTMLDivElement | null>(null);
+  const map = useRef<MapLibreMap | null>(null);
+  const [load, setLoad] = useState<LoadState>({ status: 'loading' });
+  const [styleReady, setStyleReady] = useState(false);
+  const [visible, setVisible] = useState<Record<LayerId, boolean>>(
+    () => Object.fromEntries(LAYERS.map((l) => [l.id, l.defaultOn])) as Record<LayerId, boolean>,
+  );
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [labelPositions, setLabelPositions] = useState<{ name: string; x: number; y: number; kind: GeographicLabel['kind'] }[]>([]);
+  const [decisionPositions, setDecisionPositions] = useState<DecisionPosition[]>([]);
+
+  // --- load the basemap artifact --------------------------------------------
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/demo/bengaluru-basemap.json')
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<RawBasemap>;
+      })
+      .then((basemap) => {
+        if (cancelled) return;
+        // Refuse to draw geography that does not prove it is Bengaluru. An
+        // Andorra extract once shipped under a Bengaluru filename.
+        const problems = validateBasemap(basemap);
+        if (problems.length) {
+          setLoad({ status: 'failed', reason: problems.join('; ') });
+          return;
+        }
+        setLoad({ status: 'ready', basemap });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setLoad({ status: 'failed', reason: err instanceof Error ? err.message : String(err) });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const zoneCollection = useMemo(() => {
+    if (load.status !== 'ready') return emptyCollection();
+    const attributes = new Map<string, Record<string, unknown>>();
+    for (const zone of load.basemap.zones) {
+      const reading = data.traffic?.get(zone.h3);
+      attributes.set(zone.h3, {
+        // Present only when there is a real reading. Absence of the property IS
+        // the unavailable state -- never 0, which would render as free-flowing.
+        ...(reading?.congestionRatio != null ? { congestionRatio: reading.congestionRatio } : {}),
+        trafficEvidence: reading?.evidence ?? UNAVAILABLE,
+      });
+    }
+    return zonesToGeoJSON(load.basemap, attributes);
+  }, [load, data.traffic]);
+
+  const pilot = useMemo(() => load.status === 'ready' ? pilotGeometry(load.basemap) : null, [load]);
+
+  // --- create the map --------------------------------------------------------
+
+  useEffect(() => {
+    if (load.status !== 'ready' || !container.current || map.current) return;
+
+    const instance = new maplibregl.Map({
+      container: container.current,
+      // A style with no external sources at all: our own background, and the
+      // GeoJSON we add below. No tile server is contacted, ever.
+      style: {
+        version: 8,
+        sources: {},
+        layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#0b0f14' } }],
+        // No `glyphs` key at all. MapLibre's style validator rejects an
+        // explicit `undefined`, and pointing at a font server would reintroduce
+        // exactly the external dependency this style exists to avoid. Place
+        // names are therefore rendered as HTML overlays below rather than as
+        // GL symbol layers.
+      },
+      bounds: boundsOf(load.basemap),
+      fitBoundsOptions: { padding: 32 },
+      attributionControl: false,
+      // Keep the viewer inside the extract. Panning beyond it shows nothing,
+      // because we hold no data there.
+      maxBounds: [
+        [load.basemap.bbox.min_lon - 0.08, load.basemap.bbox.min_lat - 0.08],
+        [load.basemap.bbox.max_lon + 0.08, load.basemap.bbox.max_lat + 0.08],
+      ],
+      minZoom: 9,
+      maxZoom: 18,
+    });
+
+    instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    instance.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    instance.dragRotate.disable();
+    instance.touchZoomRotate.disableRotation();
+
+    instance.on('load', () => {
+      try {
+      instance.addSource('roads', { type: 'geojson', data: roadsToGeoJSON(load.basemap) as never });
+      instance.addSource('pilot', { type: 'geojson', data: pilot?.collection as never });
+      instance.addSource('zones', { type: 'geojson', data: emptyCollection() as never });
+      instance.addSource('labels', { type: 'geojson', data: labelsToGeoJSON(load.basemap) as never });
+      for (const id of ['facilities', 'baseline', 'orders', 'routes', 'scenario', 'recommended'] as const) {
+        instance.addSource(id, { type: 'geojson', data: emptyCollection() as never });
+      }
+
+      instance.addLayer({
+        id: 'pilot-area-fill',
+        type: 'fill',
+        source: 'pilot',
+        paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.035 },
+      });
+
+      // Zone fill sits UNDER the roads: the arterials are the thing a reader
+      // orients by, and a translucent congestion wash over them muddies both.
+      instance.addLayer({
+        id: 'zones-fill',
+        type: 'fill',
+        source: 'zones',
+        paint: { 'fill-color': CONGESTION_COLOR, 'fill-opacity': 0.28 },
+      });
+      instance.addLayer({
+        id: 'zones-outline',
+        type: 'line',
+        source: 'zones',
+        paint: { 'line-color': '#64748b', 'line-width': 0.6, 'line-opacity': 0.5 },
+      });
+      instance.addLayer({
+        id: 'pilot-area-outline',
+        type: 'line',
+        source: 'pilot',
+        paint: { 'line-color': '#7dd3fc', 'line-width': 1.6, 'line-opacity': 0.72, 'line-dasharray': [3, 2] },
+      });
+      instance.addLayer({
+        id: 'zones-hover',
+        type: 'line',
+        source: 'zones',
+        paint: { 'line-color': '#e2e8f0', 'line-width': 2 },
+        filter: ['==', ['get', 'h3'], ''],
+      });
+
+      instance.addLayer({
+        id: 'roads-line',
+        type: 'line',
+        source: 'roads',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': [
+            'match',
+            ['get', 'roadClass'],
+            0, '#e2e8f0',
+            1, '#cbd5e1',
+            2, '#94a3b8',
+            3, '#64748b',
+            '#475569',
+          ],
+          'line-width': ROAD_WIDTH,
+          // The 8,708 local ways would smother the arterials at low zoom, so
+          // they fade in only once the viewer is close enough to want them.
+          // The zoom interpolation has to be the OUTERMOST expression: MapLibre
+          // rejects a `zoom` input nested inside a `case`, and the style then
+          // fails to load entirely rather than degrading.
+          'line-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            ['case', ['==', ['get', 'roadClass'], 4], 0, 0.9],
+            13.5,
+            ['case', ['==', ['get', 'roadClass'], 4], 0.55, 0.9],
+          ],
+        },
+      });
+
+      instance.addLayer({
+        id: 'routes-line',
+        type: 'line',
+        source: 'routes',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': ['case', ['get', 'selected'], '#38bdf8', '#0ea5e9'],
+          'line-width': ['case', ['get', 'selected'], 4.5, 2],
+          // Unrelated routes dim rather than disappear, so the selected one
+          // reads in context instead of floating alone.
+          'line-opacity': ['case', ['get', 'selected'], 0.95, 0.22],
+        },
+      });
+
+      instance.addLayer({
+        id: 'scenario-fill',
+        type: 'fill',
+        source: 'scenario',
+        paint: { 'fill-color': '#a855f7', 'fill-opacity': 0.3 },
+      });
+      instance.addLayer({
+        id: 'scenario-outline',
+        type: 'line',
+        source: 'scenario',
+        paint: { 'line-color': '#d8b4fe', 'line-width': 2.5, 'line-opacity': 0.95, 'line-dasharray': [2, 1.5] },
+      });
+
+      instance.addLayer({
+        id: 'facilities-point',
+        type: 'circle',
+        source: 'facilities',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 15, 9],
+          'circle-color': '#f8fafc',
+          'circle-stroke-color': '#0f172a',
+          'circle-stroke-width': 1.5,
+        },
+      });
+
+      instance.addLayer({
+        id: 'baseline-point',
+        type: 'circle',
+        source: 'baseline',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 7, 15, 13],
+          'circle-color': '#ec4899',
+          'circle-opacity': 0.28,
+          'circle-stroke-color': '#f9a8d4',
+          'circle-stroke-width': 2.5,
+        },
+      });
+
+      instance.addLayer({
+        id: 'recommended-point',
+        type: 'circle',
+        source: 'recommended',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 7, 15, 14],
+          'circle-color': '#22c55e',
+          'circle-stroke-color': '#052e16',
+          'circle-stroke-width': 2,
+        },
+      });
+
+      instance.addLayer({
+        id: 'orders-point',
+        type: 'circle',
+        source: 'orders',
+        paint: {
+          // Same rule as the road opacity above: zoom outermost, the
+          // selection test inside each stop.
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10,
+            ['case', ['get', 'selected'], 8, 3.5],
+            15,
+            ['case', ['get', 'selected'], 11, 6.5],
+          ],
+          // Pickup and dropoff must be distinguishable at a glance, or a
+          // sixteen-order map is just confetti.
+          'circle-color': ['case', ['==', ['get', 'kind'], 'pickup'], '#fbbf24', '#f472b6'],
+          'circle-stroke-color': ['case', ['get', 'selected'], '#ffffff', '#0f172a'],
+          'circle-stroke-width': ['case', ['get', 'selected'], 2.5, 1],
+          'circle-opacity': ['case', ['get', 'dimmed'], 0.25, 1],
+        },
+      });
+
+      if (pilot) {
+        instance.fitBounds(
+          [[pilot.bounds.minLon, pilot.bounds.minLat], [pilot.bounds.maxLon, pilot.bounds.maxLat]],
+          { padding: OPERATING_PADDING, duration: 0 },
+        );
+      }
+      setStyleReady(true);
+      } catch (err: unknown) {
+        // Adding a source or layer can throw on an invalid expression. Without
+        // this the remaining layers are never registered and the canvas renders
+        // as an empty background -- which reads as a working map of nowhere.
+        setLoad({
+          status: 'failed',
+          reason: `map layer setup failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    });
+
+    // Place names as HTML, reprojected whenever the camera moves. This keeps
+    // the style free of any font dependency while still giving the viewer the
+    // orientation cues a bare road mesh cannot.
+    const reprojectLabels = () => {
+      setLabelPositions(
+        [
+          ...load.basemap.labels.map((label) => ({ ...label, kind: 'road' as const })),
+          ...GEOGRAPHIC_LABELS,
+        ].map((label) => {
+          const point = instance.project([label.lon, label.lat]);
+          return { name: label.name, x: point.x, y: point.y, kind: label.kind };
+        }),
+      );
+    };
+    instance.on('load', reprojectLabels);
+    instance.on('move', reprojectLabels);
+    instance.on('zoom', reprojectLabels);
+
+    instance.on('error', (event) => {
+      // A style or source failure must be visible, never a silently empty frame.
+      setLoad({ status: 'failed', reason: event.error?.message ?? 'map engine error' });
+    });
+
+    map.current = instance;
+    // Exposed so end-to-end tests can assert on real rendered features rather
+    // than on a screenshot. A blank canvas and a correct canvas are the same
+    // picture to a pixel diff, which is precisely how a silently broken map
+    // ships.
+    (window as unknown as { __omMap?: MapLibreMap }).__omMap = instance;
+    return () => {
+      instance.remove();
+      map.current = null;
+      setStyleReady(false);
+    };
+  }, [load, pilot]);
+
+  // --- interaction -----------------------------------------------------------
+
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !styleReady) return;
+
+    const onZoneMove = (e: maplibregl.MapLayerMouseEvent) => {
+      const h3 = e.features?.[0]?.properties?.h3 as string | undefined;
+      setHovered(h3 ?? null);
+      instance.getCanvas().style.cursor = h3 ? 'pointer' : '';
+    };
+    const onZoneLeave = () => {
+      setHovered(null);
+      instance.getCanvas().style.cursor = '';
+    };
+    const onZoneClick = (e: maplibregl.MapLayerMouseEvent) => {
+      onSelectZone?.((e.features?.[0]?.properties?.h3 as string) ?? null);
+    };
+    const onOrderClick = (e: maplibregl.MapLayerMouseEvent) => {
+      const orderId = e.features?.[0]?.properties?.orderId as string | undefined;
+      if (orderId) {
+        onSelectOrder?.(orderId);
+        e.preventDefault();
+      }
+    };
+    const onBackgroundClick = () => onSelectOrder?.(null);
+
+    instance.on('mousemove', 'zones-fill', onZoneMove);
+    instance.on('mouseleave', 'zones-fill', onZoneLeave);
+    instance.on('click', 'zones-fill', onZoneClick);
+    instance.on('click', 'orders-point', onOrderClick);
+    instance.on('click', onBackgroundClick);
+
+    return () => {
+      instance.off('mousemove', 'zones-fill', onZoneMove);
+      instance.off('mouseleave', 'zones-fill', onZoneLeave);
+      instance.off('click', 'zones-fill', onZoneClick);
+      instance.off('click', 'orders-point', onOrderClick);
+      instance.off('click', onBackgroundClick);
+    };
+  }, [styleReady, onSelectOrder, onSelectZone]);
+
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !styleReady) return;
+    instance.setFilter('zones-hover', ['==', ['get', 'h3'], hovered ?? '']);
+  }, [hovered, styleReady]);
+
+  // --- data in ---------------------------------------------------------------
+
+  const setSource = useCallback(
+    (id: string, collection: FeatureCollection | undefined) => {
+      const instance = map.current;
+      if (!instance || !styleReady) return;
+      const source = instance.getSource(id) as maplibregl.GeoJSONSource | undefined;
+      source?.setData((collection ?? emptyCollection()) as never);
+    },
+    [styleReady],
+  );
+
+  useEffect(() => setSource('zones', zoneCollection), [setSource, zoneCollection]);
+  useEffect(() => setSource('facilities', data.facilities), [setSource, data.facilities]);
+  useEffect(() => setSource('baseline', data.baseline), [setSource, data.baseline]);
+  useEffect(() => setSource('scenario', data.scenario), [setSource, data.scenario]);
+  useEffect(() => setSource('recommended', data.recommended), [setSource, data.recommended]);
+
+  // Scenario and recommendation layers start hidden in normal OPERATE mode,
+  // then reveal themselves when the executive journey supplies real features.
+  useEffect(() => {
+    if (data.scenario?.features.length) setVisible((current) => ({ ...current, scenario: true }));
+  }, [data.scenario]);
+  useEffect(() => {
+    if (data.baseline?.features.length) setVisible((current) => ({ ...current, baseline: true }));
+  }, [data.baseline]);
+  useEffect(() => {
+    if (data.recommended?.features.length) setVisible((current) => ({ ...current, recommended: true }));
+  }, [data.recommended]);
+
+  // Selection is applied to the data rather than to a filter, so a selected
+  // order can be emphasised while the rest stay drawn but dimmed.
+  useEffect(() => {
+    const mark = (collection: FeatureCollection | undefined) => {
+      if (!collection) return undefined;
+      return {
+        ...collection,
+        features: collection.features.map((f) => ({
+          ...f,
+          properties: {
+            ...f.properties,
+            selected: selectedOrderId != null && f.properties.orderId === selectedOrderId,
+            dimmed: selectedOrderId != null && f.properties.orderId !== selectedOrderId,
+          },
+        })),
+      };
+    };
+    setSource('orders', mark(data.orders));
+    setSource('routes', mark(data.routes));
+  }, [setSource, data.orders, data.routes, selectedOrderId]);
+
+  // Labels follow their decision geometry as the camera moves. Recommended
+  // sites get executive names while their H3 identifiers remain in details.
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !styleReady) return;
+    const markers: { key: string; coordinates: [number, number]; label: string; detail: string; kind: DecisionPosition['kind'] }[] = [];
+    data.recommended?.features.forEach((feature, index) => {
+      const coordinates = feature.geometry.coordinates as [number, number];
+      markers.push({
+        key: String(feature.id ?? `recommended-${index}`),
+        coordinates,
+        label: `FACILITY ${String.fromCharCode(65 + index)}`,
+        detail: `Near ${nearestLocality(coordinates)}`,
+        kind: 'recommended',
+      });
+    });
+    data.scenario?.features.forEach((feature, index) => {
+      const ring = (feature.geometry.coordinates as [number, number][][])[0] ?? [];
+      if (!ring.length) return;
+      const coordinates: [number, number] = [
+        ring.reduce((sum, point) => sum + point[0], 0) / ring.length,
+        ring.reduce((sum, point) => sum + point[1], 0) / ring.length,
+      ];
+      markers.push({
+        key: String(feature.id ?? `disruption-${index}`),
+        coordinates,
+        label: 'SIMULATED DISRUPTION',
+        detail: `Near ${nearestLocality(coordinates)}`,
+        kind: 'disruption',
+      });
+    });
+    const project = () => setDecisionPositions(markers.map((marker) => {
+      const point = instance.project(marker.coordinates);
+      return { ...marker, x: point.x, y: point.y };
+    }));
+    project();
+    instance.on('move', project);
+    return () => { instance.off('move', project); };
+  }, [styleReady, data.recommended, data.scenario]);
+
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !styleReady || !selectedOrderId) return;
+    const route = data.routes?.features.find((feature) => feature.properties.orderId === selectedOrderId);
+    const coordinates = route?.geometry.coordinates as [number, number][] | undefined;
+    if (!coordinates?.length) return;
+    const bounds = coordinates.reduce(
+      (current, coordinate) => current.extend(coordinate),
+      new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
+    );
+    instance.fitBounds(bounds, { padding: OPERATING_PADDING, duration: 850, maxZoom: 14.2 });
+  }, [styleReady, selectedOrderId, data.routes]);
+
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !styleReady || !data.scenario?.features.length || !pilot) return;
+    instance.fitBounds(
+      [[pilot.bounds.minLon, pilot.bounds.minLat], [pilot.bounds.maxLon, pilot.bounds.maxLat]],
+      { padding: OPERATING_PADDING, duration: 850 },
+    );
+  }, [styleReady, data.scenario, pilot]);
+
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !styleReady) return;
+    for (const [layerId, mapLayers] of Object.entries(LAYER_TO_MAPLIBRE)) {
+      const on = visible[layerId as LayerId];
+      for (const name of mapLayers) {
+        if (instance.getLayer(name)) {
+          instance.setLayoutProperty(name, 'visibility', on ? 'visible' : 'none');
+        }
+      }
+    }
+  }, [visible, styleReady]);
+
+  const fitToNetwork = useCallback(() => {
+    if (pilot) {
+      map.current?.fitBounds(
+        [[pilot.bounds.minLon, pilot.bounds.minLat], [pilot.bounds.maxLon, pilot.bounds.maxLat]],
+        { padding: OPERATING_PADDING, duration: 600 },
+      );
+    }
+  }, [pilot]);
+
+  // --- render ----------------------------------------------------------------
+
+  // Credit only what actually produced what is on screen. Routes are computed
+  // by our own shortest-path search over the OpenStreetMap extract, NOT by
+  // OSRM, so crediting OSRM here would be a false attribution -- the mirror
+  // image of a missing one, and just as wrong.
+  const sources: MapSource[] = ['osm'];
+  if (data.traffic && data.traffic.size > 0) sources.push('tomtom');
+
+  if (load.status === 'failed') {
+    return (
+      <div
+        data-map-state="failed"
+        className={`flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-950 p-6 text-center ${className}`}
+      >
+        <p className="text-sm font-semibold text-red-400">Map unavailable</p>
+        <p className="max-w-md text-xs text-slate-400">{load.reason}</p>
+        <p className="max-w-md text-xs text-slate-500">
+          The geographic evidence could not be loaded or did not validate. No substitute is drawn.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`relative h-full w-full ${className}`} data-map-state={load.status}>
+      <div ref={container} className="h-full w-full" data-testid="onemove-map" />
+
+      {/* Place names. Deduplicated by position so overlapping labels do not
+          stack into an unreadable smear at low zoom. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" data-testid="map-labels">
+        {labelPositions.map((label) => (
+          <span
+            key={`${label.kind}-${label.name}`}
+            data-label-kind={label.kind}
+            className={`absolute -translate-x-1/2 whitespace-nowrap [text-shadow:0_1px_4px_rgba(0,0,0,1)] ${
+              label.kind === 'city'
+                ? 'rounded border border-sky-300/30 bg-slate-950/75 px-2 py-0.5 text-[13px] font-bold tracking-[0.18em] text-white'
+                : label.kind === 'locality'
+                  ? 'text-[11px] font-semibold text-slate-100'
+                  : label.kind === 'landmark'
+                    ? 'text-[9px] font-medium text-emerald-200/90'
+                    : 'text-[9px] font-medium italic text-slate-300/80'
+            }`}
+            style={{ left: label.x, top: label.y }}
+          >
+            {label.name}
+          </span>
+        ))}
+      </div>
+
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" data-testid="map-decision-labels">
+        {decisionPositions.map((marker) => (
+          <div
+            key={marker.key}
+            data-decision-kind={marker.kind}
+            className={`absolute ml-3 -translate-y-1/2 rounded-md border px-2 py-1 shadow-lg backdrop-blur ${
+              marker.kind === 'recommended'
+                ? 'border-emerald-400/50 bg-emerald-950/90 text-emerald-100'
+                : 'border-purple-400/60 bg-purple-950/90 text-purple-100'
+            }`}
+            style={{ left: marker.x, top: marker.y }}
+          >
+            <p className="text-[9px] font-bold tracking-wide">{marker.label}</p>
+            <p className="mt-0.5 text-[8px] text-slate-300">{marker.detail}</p>
+          </div>
+        ))}
+      </div>
+
+      {load.status === 'loading' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80">
+          <p className="text-xs text-slate-400">Loading Bengaluru geographic evidence…</p>
+        </div>
+      )}
+
+      {pilot && (
+        <>
+          <div data-testid="map-geographic-context" className="pointer-events-none absolute left-[35%] top-3 rounded-lg border border-sky-400/30 bg-[#07101d]/94 px-3 py-2 shadow-xl backdrop-blur">
+            <div className="flex items-center gap-2"><strong className="text-[11px] tracking-[0.14em] text-white">BENGALURU · KARNATAKA, INDIA</strong><span className="rounded border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-sky-200">PUBLIC_GEOGRAPHIC</span></div>
+            <p className="mt-1 text-[9px] text-slate-400">PILOT AREA · Jayanagar · Koramangala · Indiranagar · HSR</p>
+          </div>
+
+          <div className="pointer-events-none absolute bottom-3 left-[35%] w-[210px]">
+            <LocatorMap pilot={pilot.bounds} />
+          </div>
+
+          <div data-testid="map-operational-legend" className="pointer-events-none absolute bottom-3 left-[47%] w-[430px] rounded-lg border border-slate-700/70 bg-[#07101d]/94 p-2 shadow-xl backdrop-blur">
+            <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400">Base geography · OneMove decision layers</p>
+            <div className="grid grid-cols-5 gap-x-3 gap-y-1 text-[8px] text-slate-300">
+              {[
+                ['bg-slate-200', 'Road network'],
+                ['border border-dashed border-sky-300', 'Pilot area'],
+                ['border border-slate-400 bg-slate-700/30', 'H3 demand zone'],
+                ['rounded-full bg-white', 'Facility'],
+                ['rounded-full border-2 border-pink-300 bg-pink-500/30', 'Do Nothing'],
+                ['rounded-full bg-emerald-400', 'Recommended'],
+                ['rounded-full bg-amber-400', 'Pickup'],
+                ['rounded-full bg-pink-400', 'Dropoff'],
+                ['bg-sky-400', 'Road route'],
+                ['border border-purple-300 bg-purple-500/40', 'Disruption'],
+              ].map(([style, name]) => <div key={name} className="flex items-center gap-1.5"><span className={`h-2 w-4 shrink-0 ${style}`} /><span>{name}</span></div>)}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-2">
+        <div className="pointer-events-auto rounded-md border border-slate-700/70 bg-slate-950/85 p-2 backdrop-blur">
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Layers</span>
+            <button
+              type="button"
+              onClick={fitToNetwork}
+              className="rounded border border-slate-600 px-1.5 py-0.5 text-[10px] text-slate-300 hover:bg-slate-800"
+            >
+              Fit network
+            </button>
+          </div>
+          <ul className="space-y-1">
+            {LAYERS.map((layer) => (
+              <li key={layer.id}>
+                <label className="flex cursor-pointer items-center gap-2 text-[11px] text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={visible[layer.id]}
+                    onChange={(e) => setVisible((v) => ({ ...v, [layer.id]: e.target.checked }))}
+                    className="h-3 w-3 accent-sky-500"
+                  />
+                  <span className="flex-1">{layer.label}</span>
+                  <span className="rounded bg-slate-800 px-1 py-px text-[9px] uppercase tracking-wide text-slate-400">
+                    {layer.evidence}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="pointer-events-none absolute bottom-3 right-3 flex flex-col items-end gap-1.5">
+        <div className="pointer-events-auto rounded-md border border-slate-700/70 bg-slate-950/85 px-2 py-1.5 backdrop-blur">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Congestion</p>
+          <div className="flex items-center gap-1 text-[10px] text-slate-300">
+            <span className="h-2 w-6 rounded-sm bg-[#16a34a]" />
+            <span>free</span>
+            <span className="h-2 w-6 rounded-sm bg-[#eab308]" />
+            <span className="h-2 w-6 rounded-sm bg-[#f97316]" />
+            <span className="h-2 w-6 rounded-sm bg-[#dc2626]" />
+            <span>heavy</span>
+            <span className="ml-2 h-2 w-6 rounded-sm bg-[#3f3f46]" />
+            <span>unavailable</span>
+          </div>
+        </div>
+        <MapAttribution sources={sources} className="pointer-events-auto rounded bg-slate-950/85 px-2 py-1" />
+      </div>
+    </div>
+  );
+}
+
+const LAYER_TO_MAPLIBRE: Record<LayerId, string[]> = {
+  roads: ['roads-line'],
+  pilot: ['pilot-area-fill', 'pilot-area-outline'],
+  zones: ['zones-outline', 'zones-hover'],
+  facilities: ['facilities-point'],
+  baseline: ['baseline-point'],
+  traffic: ['zones-fill'],
+  orders: ['orders-point'],
+  routes: ['routes-line'],
+  scenario: ['scenario-fill', 'scenario-outline'],
+  recommended: ['recommended-point'],
+};

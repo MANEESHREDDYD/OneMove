@@ -2,10 +2,13 @@ import { createClient } from '@/utils/supabase/server'
 import { SetupRequired } from '@/components/common/SetupRequired'
 import { getActiveOpsInsights } from '@/lib/ai/adminOpsAssistant'
 import { Brain, CheckCircle, AlertTriangle, AlertCircle, Info } from 'lucide-react'
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function OpsAssistantPage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
 
   const insights = await getActiveOpsInsights(supabase)
 

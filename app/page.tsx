@@ -4,6 +4,7 @@ import { Car, Utensils, ShoppingBag, Package, Tag, ShieldCheck, Activity, User, 
 import { GlassCard } from "@/components/common/GlassCard"
 import { ServiceCard } from "@/components/common/ServiceCard"
 import { LiveCityPreview } from "@/components/maps/LiveCityPreview"
+import { MAIN_CONTENT_ID } from "@/lib/a11y"
 
 export default function LandingPage() {
   return (
@@ -21,7 +22,12 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <main className="flex-1 pt-16">
+      {/*
+        This page owns the single #main-content landmark for "/" — AppShell
+        deliberately does not wrap it, so that the <header> and <footer> below
+        keep their banner / contentinfo roles instead of being nested in <main>.
+      */}
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="flex-1 pt-16">
         {/* Hero Section */}
         <section className="py-20 px-6 text-center max-w-4xl mx-auto space-y-8">
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-white to-white/50">
@@ -41,7 +47,15 @@ export default function LandingPage() {
         </section>
 
         {/* Service Grid */}
-        <section className="py-16 px-6 max-w-6xl mx-auto">
+        <section aria-labelledby="services-heading" className="py-16 px-6 max-w-6xl mx-auto">
+          {/*
+            Each ServiceCard renders an <h3>. Without this the page jumped
+            straight from the hero <h1> to those <h3>s, which reads to a screen
+            reader as a missing level of structure. The heading is visually
+            redundant next to the five labelled cards, so it is exposed to
+            assistive technology only.
+          */}
+          <h2 id="services-heading" className="sr-only">Services</h2>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <ServiceCard title="Ride" icon={<Car className="h-6 w-6" />} href="/customer/rides" />
             <ServiceCard title="Eats" icon={<Utensils className="h-6 w-6" />} href="/customer/eats" />
@@ -120,8 +134,26 @@ export default function LandingPage() {
                 Simulated city map with moving driver markers, active order markers, and real-time demand zones.
               </p>
             </div>
-            <div className="flex-1 w-full h-[400px] bg-muted rounded-xl flex items-center justify-center border overflow-hidden relative">
-              <LiveCityPreview />
+            <div className="flex-1 w-full space-y-3">
+              <div className="w-full h-[400px] bg-muted rounded-xl flex items-center justify-center border overflow-hidden relative">
+                <LiveCityPreview />
+              </div>
+              {/*
+                Text equivalent for the map. The Leaflet canvas conveys its
+                content purely through marker position and colour, neither of
+                which is available to a screen reader or to a user who cannot
+                distinguish the marker hues, so the same information is stated
+                in prose (WCAG 1.1.1). Keep this in sync with MapComponent's
+                legend.
+              */}
+              <p className="text-sm text-muted-foreground">
+                Map summary: a simulated New York City view showing 15 driver
+                markers moving across Lower and Midtown Manhattan, markers for
+                each active order and merchant, and two shaded high-demand
+                zones centred on Midtown and the Financial District. The map is
+                illustrative and carries no information that is not repeated
+                here.
+              </p>
             </div>
           </GlassCard>
         </section>

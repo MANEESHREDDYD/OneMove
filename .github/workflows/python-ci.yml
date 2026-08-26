@@ -1,23 +1,73 @@
 name: Python CI
 on: [push, pull_request]
+
+# Least privilege: this workflow only reads the repository. No job here uses
+# OIDC, uploads SARIF, publishes packages, or comments on pull requests.
+permissions:
+  contents: read
+
 jobs:
+  # Secret scanning is a SEPARATE job on purpose. It is blocking, and the history
+  # scan currently fails by design while P0-CREDENTIAL-001 awaits rotation. Run as
+  # a step inside the test job it would abort the job before any test executed,
+  # costing all database integration signal for as long as rotation is outstanding.
+  # As its own job the gate still blocks the workflow while tests keep reporting.
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Secret scan (working tree)
+        run: python scripts/security/scan_secrets.py
+      # Advisory, matching the documented design in
+      # docs/security/incidents/P0_DATABASE_CREDENTIAL_EXPOSURE_2026-08-19.md,
+      # which records history scanning as advisory and working-tree scanning as
+      # blocking. History cannot be cleaned by a commit -- only by a coordinated
+      # rewrite -- so a blocking history gate would hold every future PR hostage
+      # to an incident that is already tracked and whose remediation is provider
+      # rotation, not a code change. The working-tree scan above stays blocking,
+      # which is what actually prevents a new secret from landing.
+      - name: Secret scan (git history, advisory)
+        continue-on-error: true
+        run: python scripts/security/scan_secrets.py --history
+
   test:
     runs-on: ubuntu-latest
     steps:
-    - name: Setup Supabase CLI & Local Environment
-      uses: supabase/setup-cli@v3
-      with:
-        version: 2.113.0
-    - uses: actions/checkout@v7
-    - uses: actions/setup-python@v7
-      with:
-        python-version: '3.11'
-    - run: python -m pip install ruff==0.16.3 -r requirements.txt -r services/api/requirements.txt
-    - run: pip install -e ./python
-    - run: ruff check .
-    - name: Bootstrap Release Artifacts Supply Chain
-      run: python scripts/bootstrap_ci_artifacts.py
-    - name: Run Pytest Test Suite
-      env:
-        ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/data_root
-      run: pytest -m "not r1_evidence"
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.113.0
+
+      # The suite performs destructive writes. It runs against an ephemeral local
+      # database only -- never a hosted one. TEST_DATABASE_URL is mandatory; there
+      # is no built-in fallback. PROTECTED_DATABASE_FINGERPRINTS is set in CI, not
+      # only in tests, so the guard is live in the environment that matters.
+      - name: Start ephemeral database and apply migrations
+        run: |
+          supabase start
+          supabase db reset
+          echo "TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54332/postgres" >> $GITHUB_ENV
+          echo "ZONEPILOT_DB_URL=postgresql://postgres:postgres@127.0.0.1:54332/postgres" >> $GITHUB_ENV
+
+      - run: python -m pip install ruff==0.16.3 -r requirements.txt -r services/api/requirements.txt
+      - run: pip install -e ./python
+      - run: ruff check .
+
+      - name: Bootstrap Release Artifacts Supply Chain
+        run: python scripts/bootstrap_ci_artifacts.py
+
+      - name: Run Pytest Test Suite
+        env:
+          ZONEPILOT_DATA_ROOT: ${{ github.workspace }}/data_root
+          PROTECTED_DATABASE_FINGERPRINTS: ${{ secrets.PROTECTED_DATABASE_FINGERPRINTS }}
+        run: pytest -m "not r1_evidence"

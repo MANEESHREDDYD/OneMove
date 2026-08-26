@@ -92,6 +92,14 @@ class MetricsRegistry:
         self._requests: dict[tuple[str, str, int], int] = {}
         self._latency_sum: dict[tuple[str, str], float] = {}
         self._latency_count: dict[tuple[str, str], int] = {}
+        # Subsystems that keep their own counters append their exposition lines
+        # here. Without this the rate limiter's health -- in particular whether
+        # it has stopped limiting -- would be invisible on /metrics.
+        self._renderers: list[Callable[[], list[str]]] = []
+
+    def register_renderer(self, renderer: Callable[[], list[str]]) -> None:
+        with self._lock:
+            self._renderers.append(renderer)
 
     def observe_request(self, method: str, route: str, status: int, latency_seconds: float) -> None:
         request_key = (method, route, status)
@@ -122,6 +130,11 @@ class MetricsRegistry:
                 lines.append(
                     f"zonepilot_api_request_latency_seconds_count{{{labels}}} {self._latency_count[(method, route)]}"
                 )
+            renderers = list(self._renderers)
+        # Rendered outside the lock: a subsystem renderer takes its own lock, and
+        # holding both would be a lock-ordering hazard on the metrics path.
+        for renderer in renderers:
+            lines.extend(renderer())
         return "\n".join(lines) + "\n"
 
 
@@ -135,7 +148,25 @@ class _Window:
 
 
 class InMemoryRateLimiter:
-    """Thread-safe fixed-window limiter; intentionally local to one API process."""
+    """Thread-safe fixed-window limiter, local to one process.
+
+    NOT AN ENFORCEMENT PATH. This was the API's rate limiter until F-023. Two
+    defects made it unfit for that job:
+
+      * Per-process state. The API runs at max_instance_count = 10
+        (infra/gcp/modules/cloud_run/main.tf:79), so each instance kept its own
+        counters and every configured quota was multiplied by the instance count.
+        Measured: a limit of 10 admitted 100 across ten limiters.
+      * Unbounded growth. `_windows` was keyed by a caller-supplied principal and
+        nothing ever evicted from it -- not even fully expired windows. Measured:
+        50,000 distinct principals produced 50,000 retained entries, and 1,000
+        expired windows retained 1,000 entries.
+
+    Enforcement now lives in services/api/core/ratelimit.py, which shares one
+    counter across instances in Postgres. This class is retained only as a
+    self-contained reference for the fixed-window algorithm and for the tests
+    that cover it; nothing in the request path calls it.
+    """
 
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
@@ -156,19 +187,12 @@ class InMemoryRateLimiter:
             return True, max(0, limit - window.count)
 
 
-rate_limiter = InMemoryRateLimiter()
-
-
-def rate_policy(path: str, authenticated: bool) -> tuple[str, int] | None:
-    if not _truthy_env("ZONEPILOT_RATE_LIMIT_ENABLED", default=True):
-        return None
-    if "/auth" in path:
-        return "auth", int(os.environ.get("ZONEPILOT_AUTH_RATE_LIMIT_PER_MINUTE", "10"))
-    if any(segment in path for segment in ("/scenarios", "/optimizer", "/jobs")):
-        return "expensive", int(os.environ.get("ZONEPILOT_EXPENSIVE_RATE_LIMIT_PER_MINUTE", "20"))
-    if authenticated:
-        return "authenticated", int(os.environ.get("ZONEPILOT_API_RATE_LIMIT_PER_MINUTE", "120"))
-    return None
+# The `rate_limiter` singleton and the `rate_policy` classifier that used to sit
+# here are gone. They were the only callers of the per-process limiter, and
+# leaving an importable process-local limiter next to the real one is how a
+# future edit reintroduces the bug. Endpoint classification is now
+# services.api.core.ratelimit.classify_endpoint, and enforcement is
+# services.api.core.ratelimit.limiter.
 
 
 def _truthy_env(name: str, default: bool = False) -> bool:
@@ -176,3 +200,151 @@ def _truthy_env(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# --- F-025: canonical API error contract -------------------------------------
+#
+# One definition of the wire envelope, shared by the middleware, the app-level
+# exception handlers and the routers, so a client can rely on exactly one shape:
+#
+#   {"error": {"code", "message", "retryable", "details", "request_id", "trace_id"}}
+
+CANONICAL_ERROR_CODES: dict[int, str] = {
+    400: "BAD_REQUEST",
+    401: "UNAUTHORIZED",
+    403: "FORBIDDEN",
+    404: "NOT_FOUND",
+    405: "METHOD_NOT_ALLOWED",
+    409: "CONFLICT",
+    413: "PAYLOAD_TOO_LARGE",
+    415: "UNSUPPORTED_MEDIA_TYPE",
+    422: "VALIDATION_FAILED",
+    429: "RATE_LIMITED",
+    500: "INTERNAL_ERROR",
+    502: "DEPENDENCY_UNAVAILABLE",
+    503: "DEPENDENCY_UNAVAILABLE",
+    504: "DEPENDENCY_UNAVAILABLE",
+}
+
+# A retryable status tells the client the failure is transient. 4xx client
+# mistakes are never retryable; dependency/transport failures always are.
+RETRYABLE_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+DEPENDENCY_UNAVAILABLE = "DEPENDENCY_UNAVAILABLE"
+
+_TRACEPARENT = re.compile(r"^[0-9a-fA-F]{2}-([0-9a-fA-F]{32})-[0-9a-fA-F]{16}-[0-9a-fA-F]{2}$")
+_CLOUD_TRACE = re.compile(r"^([0-9a-fA-F]{8,32})(?:/\d+)?(?:;o=[01])?$")
+
+# Signatures of a *dependency* failure (database / pooler / socket), used where a
+# lower layer has already flattened the exception into a string and the type is
+# no longer available. Keep this list narrow: a false positive turns a permanent
+# client error into a retryable one.
+_DEPENDENCY_FAILURE_SIGNATURES = (
+    "databaseconfigurationerror",
+    "database_url is required",
+    "execution_database_url",
+    "operationalerror",
+    "interfaceerror",
+    "could not connect",
+    "connection refused",
+    "connection reset",
+    "connection timed out",
+    "server closed the connection",
+    "no connection to the server",
+    "name or service not known",
+    "temporary failure in name resolution",
+    "pool timeout",
+    "too many connections",
+    "the database system is starting up",
+    "psycopg",
+)
+
+
+def canonical_error_code(status_code: int) -> str:
+    """Map an HTTP status onto the one error code clients are allowed to see."""
+    return CANONICAL_ERROR_CODES.get(status_code, f"HTTP_{status_code}")
+
+
+def is_retryable_status(status_code: int) -> bool:
+    return status_code in RETRYABLE_STATUS_CODES
+
+
+def resolve_trace_id(traceparent: str | None, cloud_trace_context: str | None, fallback: str) -> str:
+    """Derive a trace id from standard propagation headers, else fall back.
+
+    Accepts W3C `traceparent` and Google Cloud `X-Cloud-Trace-Context` (Cloud Run
+    injects the latter). Anything unparseable is ignored rather than echoed, so a
+    caller cannot inject arbitrary text into logs or the error envelope.
+    """
+    if traceparent:
+        match = _TRACEPARENT.fullmatch(traceparent.strip())
+        if match:
+            return match.group(1).lower()
+    if cloud_trace_context:
+        match = _CLOUD_TRACE.fullmatch(cloud_trace_context.strip())
+        if match:
+            return match.group(1).lower()
+    return fallback
+
+
+def error_envelope(
+    code: str,
+    message: str,
+    *,
+    status_code: int | None = None,
+    request_id: str | None = None,
+    trace_id: str | None = None,
+    details: dict[str, Any] | None = None,
+    retryable: bool | None = None,
+) -> dict[str, Any]:
+    """Build the canonical error body. `retryable` defaults from the status."""
+    if retryable is None:
+        retryable = is_retryable_status(status_code) if status_code is not None else False
+    return {
+        "error": {
+            "code": code,
+            "message": message,
+            "retryable": bool(retryable),
+            "details": dict(details or {}),
+            "request_id": request_id or "unknown",
+            "trace_id": trace_id or "unknown",
+        }
+    }
+
+
+def looks_like_dependency_failure(message: str | None) -> bool:
+    """True when a stringified failure is recognisably a dependency outage.
+
+    Used only where the original exception type has already been discarded by a
+    lower layer (for example the assistant tool registry, which flattens every
+    handler exception into `error_message`). Prefer catching the exception type.
+    """
+    if not message:
+        return False
+    lowered = message.lower()
+    return any(signature in lowered for signature in _DEPENDENCY_FAILURE_SIGNATURES)
+
+
+def is_dependency_exception(exc: BaseException) -> bool:
+    """True when an exception means a backing dependency is unusable.
+
+    Imports are local so this module stays a leaf: it is imported by the
+    middleware, the app-level handlers and the routers alike.
+    """
+    try:
+        from services.common.db_dsn import DatabaseConfigurationError
+    except ImportError:  # pragma: no cover
+        pass
+    else:
+        if isinstance(exc, DatabaseConfigurationError):
+            return True
+
+    try:
+        import psycopg
+    except ImportError:  # pragma: no cover - psycopg is declared in pyproject
+        pass
+    else:
+        if isinstance(exc, (psycopg.OperationalError, psycopg.InterfaceError)):
+            return True
+
+    return looks_like_dependency_failure(str(exc))

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Sequence
+from typing import Sequence
 
 import psycopg
 from psycopg.rows import dict_row
@@ -17,7 +17,19 @@ from services.zonepilot.decisions.contracts import (
 
 class DecisionRepository:
     def __init__(self, dsn: str | None = None) -> None:
-        self.dsn = dsn or get_database_dsn()
+        self._explicit_dsn = dsn
+
+    @property
+    def dsn(self) -> str:
+        """Resolve the DSN lazily, at connection time rather than construction.
+
+        Repositories used to call get_database_dsn() in __init__. Routers build
+        them at module scope, so importing the API package required database
+        configuration to already be present: an unset DATABASE_URL made the
+        process unimportable, took liveness down with it, and turned 18 test
+        modules into collection errors instead of clean skips (F-024).
+        """
+        return self._explicit_dsn or get_database_dsn()
 
     def _connect(self) -> psycopg.Connection:
         return psycopg.connect(self.dsn, row_factory=dict_row, connect_timeout=15)
@@ -56,17 +68,29 @@ class DecisionRepository:
                         opened_facilities, objective_value, expected_travel_seconds,
                         p95_travel_seconds, coverage_basis_points, graph_version,
                         osrm_bundle_hash, solver_version, code_sha, evidence_ids,
-                        recorded_at, recorded_by
+                        recorded_at, recorded_by,
+                        optimization_policy_version, p95_scenario_total_travel_demand_seconds,
+                        decision_class, operator_rationale
                     ) VALUES (
                         %s, %s, %s, %s,
                         %s, %s, %s,
                         %s, %s, %s,
                         %s, %s, %s,
                         %s, %s, %s, %s,
-                        %s, %s::uuid
+                        %s, %s::uuid,
+                        %s, %s,
+                        %s, %s
                     )
                     ON CONFLICT (decision_id) DO UPDATE SET
-                        recorded_at = EXCLUDED.recorded_at
+                        recorded_at = EXCLUDED.recorded_at,
+                        -- Re-asserting the same decision_id means identical
+                        -- content, so lineage columns added after the row was
+                        -- first written must be refreshed too. Without this a
+                        -- row created before policy versioning keeps a NULL
+                        -- policy forever and is permanently misread as legacy.
+                        optimization_policy_version = EXCLUDED.optimization_policy_version,
+                        p95_scenario_total_travel_demand_seconds =
+                            EXCLUDED.p95_scenario_total_travel_demand_seconds
                     RETURNING *
                     """,
                     (
@@ -89,20 +113,31 @@ class DecisionRepository:
                         list(decision.evidence_ids),
                         decision.recorded_at,
                         rec_by_val,
+                        decision.optimization_policy_version,
+                        decision.p95_scenario_total_travel_demand_seconds,
+                        decision.decision_class,
+                        decision.operator_rationale,
                     ),
                 )
             conn.commit()
             return decision
 
-    def get_decision(self, decision_id: str, workspace_id: str | None = None) -> DecisionRecord | None:
+    def get_decision(self, decision_id: str, workspace_id: str) -> DecisionRecord | None:
+        """Fetch a decision, strictly scoped to the owning workspace.
+
+        The backend connects with an owner-role DSN, so RLS is not in force here
+        and this predicate is the only tenant-isolation control. It is therefore
+        mandatory, never conditional.
+        """
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("get_decision requires a non-empty workspace_id")
+
         with self._connect() as conn:
             with conn.cursor() as cur:
-                query = "SELECT * FROM public.decision_records WHERE decision_id = %s"
-                params: list[Any] = [decision_id]
-                if workspace_id:
-                    query += " AND workspace_id = %s"
-                    params.append(workspace_id)
-                cur.execute(query, params)
+                cur.execute(
+                    "SELECT * FROM public.decision_records WHERE decision_id = %s AND workspace_id = %s",
+                    [decision_id, workspace_id],
+                )
                 row = cur.fetchone()
                 if not row:
                     return None
@@ -125,6 +160,12 @@ class DecisionRepository:
                     code_sha=row["code_sha"],
                     evidence_ids=tuple(row["evidence_ids"]),
                     recorded_at=row["recorded_at"],
+                    optimization_policy_version=row.get("optimization_policy_version"),
+                    decision_class=row.get("decision_class") or "OPTIMIZER_DECISION",
+                    operator_rationale=row.get("operator_rationale"),
+                    p95_scenario_total_travel_demand_seconds=row.get(
+                        "p95_scenario_total_travel_demand_seconds"
+                    ),
                 )
 
     def list_decisions(self, workspace_id: str, limit: int = 50) -> list[DecisionRecord]:
@@ -245,15 +286,17 @@ class DecisionRepository:
             conn.commit()
             return shadow
 
-    def get_shadow(self, shadow_id: str, workspace_id: str | None = None) -> ShadowEvaluation | None:
+    def get_shadow(self, shadow_id: str, workspace_id: str) -> ShadowEvaluation | None:
+        """Fetch a shadow evaluation, strictly scoped to the owning workspace."""
+        if not workspace_id or not str(workspace_id).strip():
+            raise ValueError("get_shadow requires a non-empty workspace_id")
+
         with self._connect() as conn:
             with conn.cursor() as cur:
-                query = "SELECT * FROM public.shadow_evaluations WHERE shadow_id = %s"
-                params: list[Any] = [shadow_id]
-                if workspace_id:
-                    query += " AND workspace_id = %s"
-                    params.append(workspace_id)
-                cur.execute(query, params)
+                cur.execute(
+                    "SELECT * FROM public.shadow_evaluations WHERE shadow_id = %s AND workspace_id = %s",
+                    [shadow_id, workspace_id],
+                )
                 row = cur.fetchone()
                 if not row:
                     return None

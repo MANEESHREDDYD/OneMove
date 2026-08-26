@@ -29,7 +29,11 @@ def test_create_and_query_resilience_scenario():
     req = {
         "scenario_type": "CONGESTION_SPIKE",
         "description": "Peak evening rush hour spike",
-        "parameters": {"congestion_multiplier": 1.5},
+        # F-010: parameters must be expressible against the facility x demand
+        # matrix. "congestion_multiplier" named no effect the engine could apply,
+        # so the scenario was evaluated against the UNDISTURBED matrix and its
+        # baseline numbers published under a failure label. 1.5x == +50% == 5000bp.
+        "parameters": {"travel_time_inflation_basis_points": 5000},
         "seed": 42,
     }
 

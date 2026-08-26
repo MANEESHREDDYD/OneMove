@@ -66,4 +66,5 @@ ignore = ["E501", "B008", "B904", "B017", "B011"]
 [tool.pytest.ini_options]
 markers = [
     "r1_evidence: requires generated R1 geospatial and OSRM artifacts; runs in the ZonePilot R1 Evidence workflow",
+    "slow: long-running certification tests",
 ]

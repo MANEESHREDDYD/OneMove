@@ -10,7 +10,14 @@ export interface DemandForecast {
   zone_id: string;
   zone_name: string;
   predicted_demand_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'SURGE';
-  confidence_score: number;
+  /**
+   * Always null. A confidence score is only meaningful when it comes from a
+   * calibrated evaluation of the model against held-out outcomes; this engine is a
+   * fixed rule table and performs no such evaluation. This field previously carried
+   * `0.7 + Math.random() * 0.25`, which was persisted and rendered to operators as
+   * "ML Confidence". Populate it only from a real calibration run.
+   */
+  confidence_score: number | null;
   expected_orders_next_hour: number;
   factors: string[];
 }
@@ -87,7 +94,10 @@ export async function generateDemandForecast(): Promise<DemandForecast[]> {
       zone_id: zone.id,
       zone_name: zone.name,
       predicted_demand_level: level,
-      confidence_score: Number((0.7 + (Math.random() * 0.25)).toFixed(2)), // 0.70 - 0.95
+      // No calibrated evaluation exists for this rule engine, so no confidence is
+      // computed. Persisting null makes the UI render UNAVAILABLE rather than a
+      // fabricated percentage.
+      confidence_score: null,
       expected_orders_next_hour: Math.round(expectedOrders),
       factors
     })

@@ -86,10 +86,11 @@ module "pubsub" {
 
 # 8. Monitoring & Alerts
 module "monitoring" {
-  source      = "../../modules/monitoring"
-  project_id  = var.project_id
-  environment = "staging"
-  depends_on  = [module.services]
+  source             = "../../modules/monitoring"
+  project_id         = var.project_id
+  environment        = "staging"
+  notification_email = var.notification_email
+  depends_on         = [module.services]
 }
 
 # 9. Cloud Billing Budget

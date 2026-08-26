@@ -9,7 +9,8 @@ from services.zonepilot.assistant.contracts import (
 )
 from services.zonepilot.assistant.tools import (
     AssistantToolRegistry,
-    create_default_registry,
+    AuthoritativeSourceUnavailable,
+    build_assistant_registry,
     sanitize_input,
 )
 
@@ -20,6 +21,7 @@ __all__ = [
     "AssistantToolResult",
     "NumericalClaimBinding",
     "ToolName",
-    "create_default_registry",
+    "AuthoritativeSourceUnavailable",
+    "build_assistant_registry",
     "sanitize_input",
 ]

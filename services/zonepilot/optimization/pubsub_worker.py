@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import math
 import os
 import time
 import uuid
@@ -15,11 +14,12 @@ import psycopg
 from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel, Field
 
+from services.zonepilot.assumptions.application import AssumptionSetView
+from services.zonepilot.assumptions.registry import default_assumption_registry
 from services.zonepilot.optimization.contracts import (
     DemandPoint,
+    DoNothingBaseline,
     Facility,
-    MatrixEvidenceClass,
-    ObjectiveWeights,
     OptimizationConstraints,
     OptimizationProblem,
     SolverSettings,
@@ -31,6 +31,7 @@ from services.zonepilot.optimization.r1_catalog import (
     default_data_root,
 )
 from services.zonepilot.optimization.repository import OptimizationRepository
+from services.zonepilot.optimization.service import SOLVER_VERSION
 from services.zonepilot.optimization.solver import optimize_facilities
 from services.zonepilot.release import current_release_sha
 
@@ -53,19 +54,66 @@ class PubSubPushRequest(BaseModel):
     subscription: str | None = None
 
 
-def _reconstruct_problem_from_payload(payload: dict[str, Any]) -> OptimizationProblem:
+# The subscription ack deadline is 300s. A lease shorter than that lets Pub/Sub
+# redeliver while the first solve is still running, so a second worker claims the
+# expired lease and two CP-SAT runs execute concurrently (F-022). The lease must
+# outlive the redelivery window; result writes are additionally fenced on
+# lease_owner so a late finisher cannot overwrite the authoritative result.
+PUBSUB_ACK_DEADLINE_SECONDS = 300
+JOB_LEASE_SECONDS = PUBSUB_ACK_DEADLINE_SECONDS + 120
+
+
+def _frozen_lineage(job: dict[str, Any] | None, field: str) -> str:
+    """Read one lineage value from the frozen job row, or fail closed.
+
+    Placeholders like "UNKNOWN" and "UNVERSIONED" are invented provenance: they
+    make a stored result look attributable when it is not, which is precisely what
+    F-011 forbids. A failure record may be persisted, but it must reference the
+    real frozen job context -- and it always can, because job_id is an FK to it.
+    If the job row itself lacks lineage, that is an upstream data defect and the
+    write must not proceed.
+    """
+    value = str((job or {}).get(field) or "").strip()
+    if not value:
+        raise ValueError(
+            f"Frozen job lineage is missing '{field}'; refusing to persist a result with invented provenance."
+        )
+    return value
+
+
+def _reconstruct_problem_from_payload(
+    payload: dict[str, Any],
+    *,
+    assumptions: AssumptionSetView | None = None,
+) -> OptimizationProblem:
     """Reconstruct an OptimizationProblem from saved request payload with authentic data.
 
     Fails closed if the real travel matrix or Gold network catalog is missing.
     No synthetic substitution or fallback constants.
+
+    F-019: ``assumptions`` names the sealed assumption set to rebuild under. The
+    caller supplies the set the job froze, so the problem this worker solves is
+    built from the same assumptions the submitting request recorded, rather than
+    from whatever happens to be active when the message is finally delivered --
+    a queue can outlive an assumption revision. Omitting it selects the currently
+    ACTIVE set and is only correct for a genuinely new solve.
     """
     if "facilities" in payload and "demand_points" in payload and "scenarios" in payload:
         return OptimizationProblem.model_validate(payload)
 
+    view = assumptions or default_assumption_registry().active_view()
+
     min_open = int(payload.get("min_open_facilities", 1))
     max_open = int(payload.get("max_open_facilities", 4))
     max_travel = int(payload.get("max_travel_seconds", 1800))
-    allow_uncovered = bool(payload.get("allow_uncovered_demand", True))
+    # Third default site for this flag, now aligned. The domain contract and the
+    # API both default to False; this path defaulted to True, so a job or replay
+    # reconstructed from an empty payload silently solved a different problem
+    # from the one the operator requested. Landing this alone was not safe: it
+    # changes what every historical decision replays against, and the solve only
+    # fits its budget after the assumption set raised it to 120s on measured
+    # evidence. Both land together at assumption set 1.1.0.
+    allow_uncovered = bool(payload.get("allow_uncovered_demand", False))
     scenarios_list = payload.get("scenarios", ["s1_free_flow", "s2_congested", "s3_congested_outage"])
 
     mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
@@ -91,62 +139,58 @@ def _reconstruct_problem_from_payload(payload: dict[str, Any]) -> OptimizationPr
     facilities = tuple(
         Facility(
             facility_id=fid,
-            capacity_units=1500,
-            fixed_cost_units=1000,
-            failure_exposure_basis_points=100 * idx,
+            capacity_units=view.facility_capacity_units,
+            fixed_cost_units=view.facility_fixed_cost_units,
+            failure_exposure_basis_points=view.facility_failure_exposure_basis_points(rank=rank),
         )
-        for idx, fid in enumerate(facility_ids)
+        for rank, fid in enumerate(facility_ids)
     )
 
     demands = tuple(
         DemandPoint(
             demand_id=did,
-            demand_units=max(
-                1,
-                int(
-                    gold_rows.get(did.split(":")[-1], {}).get("commercial_poi_count", 1) * 3
-                    + gold_rows.get(did.split(":")[-1], {}).get("intersection_count", 1)
-                ),
-            ),
+            demand_units=view.demand_units_for(did, gold_rows),
         )
         for did in demand_ids
     )
 
-    scenarios = []
-    for s_idx, s_name in enumerate(scenarios_list):
-        mult = 1.0 if s_idx == 0 else (1.4 if s_idx == 1 else 1.6)
-        prob = 6000 if s_idx == 0 else (3000 if s_idx == 1 else 1000)
-        durations = tuple(tuple(int(math.ceil(dur * mult)) for dur in row) for row in base_durations)
+    # Same binding as the submission path. Reconstruction must refuse a frozen
+    # payload whose scenario labels do not name this set's ladder, or a job
+    # submitted before the labels were sealed would silently be re-solved with
+    # the caller's invented names re-attached to the tiers.
+    tiers = view.bind_scenarios(scenarios_list)
 
-        evidence_cls = (
-            MatrixEvidenceClass.PUBLIC_GEOGRAPHIC
-            if s_idx == 0
-            else (MatrixEvidenceClass.DERIVED if s_idx == 1 else MatrixEvidenceClass.SIMULATED_FAILURE)
-        )
-        parent_id = None if s_idx == 0 else "matrix-s1_free_flow"
+    scenarios = []
+    baseline_matrix_id: str | None = None
+    for tier in tiers:
+        matrix_id = f"matrix-{tier.scenario_id}"
+        if tier.is_baseline:
+            baseline_matrix_id = matrix_id
+
+        durations = tuple(tuple(tier.scale_duration_seconds(seconds) for seconds in row) for row in base_durations)
 
         mat = TravelMatrix(
-            matrix_id=f"matrix-{s_name}",
+            matrix_id=matrix_id,
             graph_version=graph_version,
             router=router,
             router_version=router_version,
-            evidence_class=evidence_cls,
+            evidence_class=tier.evidence_class,
             facility_ids=facility_ids,
             demand_ids=demand_ids,
             durations_seconds=durations,
-            parent_matrix_id=parent_id,
+            parent_matrix_id=None if tier.is_baseline else baseline_matrix_id,
         )
         scenarios.append(
             UncertaintyScenario(
-                scenario_id=s_name,
-                probability_basis_points=prob,
+                scenario_id=tier.scenario_id,
+                probability_basis_points=tier.probability_basis_points,
                 travel_matrix=mat,
                 capacity_adjustments=(),
             )
         )
 
     return OptimizationProblem(
-        problem_id=f"opt-async-{uuid.uuid4().hex[:8]}",
+        problem_id=f"opt-async-{uuid.uuid4().hex}",
         facilities=facilities,
         demand_points=demands,
         scenarios=tuple(scenarios),
@@ -154,18 +198,11 @@ def _reconstruct_problem_from_payload(payload: dict[str, Any]) -> OptimizationPr
             min_open_facilities=min_open,
             max_open_facilities=max_open,
             max_travel_seconds=max_travel,
-            minimum_coverage_basis_points=0,
+            minimum_coverage_basis_points=view.minimum_coverage_basis_points,
             allow_uncovered_demand=allow_uncovered,
         ),
-        objective_weights=ObjectiveWeights(
-            assumption_version="r1-proxy-1.0.0",
-            expected_travel=5000,
-            p95_travel=1000,
-            facility_cost=3000,
-            failure_exposure=500,
-            coverage_loss=5000 if allow_uncovered else 0,
-        ),
-        solver_settings=SolverSettings(max_time_seconds=30.0, num_search_workers=1),
+        objective_weights=view.objective_weights(allow_uncovered_demand=allow_uncovered),
+        solver_settings=SolverSettings(max_time_seconds=view.solver_max_time_seconds),
     )
 
 
@@ -219,7 +256,7 @@ async def process_pubsub_push(request: Request, response: Response):
 
     # 1. Atomic lease acquisition
     try:
-        lease = _repository.claim_job_lease(job_id=job_id, lease_owner=worker_id, lease_seconds=120)
+        lease = _repository.claim_job_lease(job_id=job_id, lease_owner=worker_id, lease_seconds=JOB_LEASE_SECONDS)
     except psycopg.OperationalError as db_err:
         logger.error(f"Transient DB operational error claiming lease for job {job_id}: {db_err}")
         response.status_code = 503
@@ -231,7 +268,7 @@ async def process_pubsub_push(request: Request, response: Response):
 
     # 2. Fetch full job details
     try:
-        job = _repository.get_job(job_id)
+        job = _repository.get_job_system(job_id)
     except psycopg.OperationalError as db_err:
         logger.error(f"Transient DB error reading job {job_id}: {db_err}")
         response.status_code = 503
@@ -247,7 +284,14 @@ async def process_pubsub_push(request: Request, response: Response):
     payload = job.get("request_payload") or {}
 
     try:
-        problem = _reconstruct_problem_from_payload(payload)
+        # F-019: rebuild under the assumption set the JOB froze, not the one that
+        # happens to be active now. A message can sit in the queue across an
+        # assumption revision, and solving it under newer numbers would leave the
+        # job row, the snapshot and the result each claiming a different basis.
+        frozen_assumptions = default_assumption_registry().resolve_view_for_token(
+            _frozen_lineage(job, "assumption_version")
+        )
+        problem = _reconstruct_problem_from_payload(payload, assumptions=frozen_assumptions)
 
         # Create and persist immutable ProblemSnapshot for true PIT replay
         from services.zonepilot.optimization.contracts import create_problem_snapshot
@@ -281,7 +325,13 @@ async def process_pubsub_push(request: Request, response: Response):
         )
         _repository.save_problem_snapshot(snapshot, workspace_id=workspace_id)
 
-        result = optimize_facilities(problem)
+        baseline_doc = payload.get("do_nothing_baseline") if isinstance(payload, dict) else None
+        baseline = (
+            DoNothingBaseline.model_validate(baseline_doc, strict=False)
+            if baseline_doc is not None
+            else None
+        )
+        result = optimize_facilities(problem, baseline=baseline)
         run_ms = int((time.perf_counter() - start_time) * 1000)
 
         result_doc = result.model_dump()
@@ -290,25 +340,66 @@ async def process_pubsub_push(request: Request, response: Response):
         result_doc["problem_snapshot_sha256"] = snapshot.problem_snapshot_sha256
         result_doc["dataset_version"] = job.get("dataset_version") or "1.0.0"
         result_doc["network_version"] = graph_ver
-        result_doc["solver_version"] = "ortools-cp-sat"
+        result_doc["solver_version"] = SOLVER_VERSION
 
-        _repository.save_result(
+        persisted = _repository.save_result(
             job_id=job_id,
             result_document=result_doc,
             pareto_document=None,
             problem_fingerprint=snapshot.problem_snapshot_sha256,
+            graph_version=graph_ver,
+            assumption_version=_frozen_lineage(job, "assumption_version"),
+            solver_version=SOLVER_VERSION,
+            lease_owner=worker_id,
             solver_status=result.status.value,
             action=result.action.value,
             fail_closed=result.fail_closed,
             code_sha=effective_code_sha,
             run_duration_ms=run_ms,
         )
+
+        if not persisted:
+            # The fence rejected the write: this worker's lease expired and another
+            # instance reclaimed the job while the solve was still running. The
+            # solve DID happen, it simply is not authoritative. Reporting it as
+            # "solved successfully" hid a duplicate solve from monitoring entirely
+            # -- the very signal an operator needs to size leases correctly.
+            logger.warning(
+                "WORKER_RESULT_FENCE_REJECTED",
+                extra={
+                    "event": "WORKER_RESULT_FENCE_REJECTED",
+                    "job_id": job_id,
+                    "worker_id": worker_id,
+                    "run_duration_ms": run_ms,
+                    "solver_status": result.status.value,
+                    "reason": "lease lost during solve; another worker owns this job",
+                },
+            )
+            logger.warning(
+                "DUPLICATE_SOLVE_DISCARDED",
+                extra={
+                    "event": "DUPLICATE_SOLVE_DISCARDED",
+                    "job_id": job_id,
+                    "worker_id": worker_id,
+                    "run_duration_ms": run_ms,
+                },
+            )
+            # Ack regardless: the message is being handled by the lease holder, so
+            # redelivering it to us would only repeat the discarded work.
+            return {
+                "status": "ack",
+                "job_id": job_id,
+                "result_persisted": False,
+                "reason": "lease_lost",
+            }
+
         logger.info(
             f"Job {job_id} solved successfully in {run_ms}ms (status={result.status.value}, snapshot={snapshot.problem_snapshot_id})"
         )
         return {
             "status": "ack",
             "job_id": job_id,
+            "result_persisted": True,
             "solver_status": result.status.value,
             "problem_snapshot_id": snapshot.problem_snapshot_id,
         }
@@ -335,6 +426,10 @@ async def process_pubsub_push(request: Request, response: Response):
             result_document=closed_doc,
             pareto_document=None,
             problem_fingerprint=f"err-{uuid.uuid4().hex[:8]}",
+            graph_version=_frozen_lineage(job, "graph_version"),
+            assumption_version=_frozen_lineage(job, "assumption_version"),
+            solver_version=SOLVER_VERSION,
+            lease_owner=worker_id,
             solver_status="FAILED",
             action="NONE",
             fail_closed=True,

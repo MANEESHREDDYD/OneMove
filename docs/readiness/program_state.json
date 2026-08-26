@@ -1,0 +1,158 @@
+{
+  "program_status": "IN_PROGRESS",
+  "stop_reason": null,
+  "resume_automatically": true,
+  "current_phase": "PARALLEL_WAR_ROOM_RESTAFFED_AFTER_LIMIT_RESET",
+  "as_of_utc": "2026-08-25T10:29:58Z",
+  "as_of_ist": "2026-08-25 15:59 IST",
+  "branch": "hotfix/onemove-p0-security-incident",
+  "authoritative_integration_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+  "main_sha": "ec4bb92d38914910bfc6f0faabfdaea3919d6c65",
+  "ahead_of_main": 97,
+  "pr": "https://github.com/MANEESHREDDYD/OneMove/pull/40",
+  "war_room": {
+    "health": "SATURATED_PENDING_CONFIRMATION",
+    "logical_role_count": 24,
+    "real_active_agents": 12,
+    "idle_slots": 0,
+    "max_available_capacity": "UNKNOWN_UPPER_BOUND - 12 launched and accepted; no terminations observed since the 15:50 IST reset. The previous ceiling is not proven to still apply, so capacity is reported as at-least-12, never as a fabricated 20.",
+    "utilization_basis": "12 real workers executing against 12 launched. Reporting any number above what is actually executing is forbidden.",
+    "restaff_policy": "A worker that finishes or dies is replaced immediately while RED/YELLOW/READY_FOR_VERIFY/P0/P1 remain nonzero. A finished worker does not shrink the organization.",
+    "roles": [
+      {
+        "role": "E13",
+        "area": "database/tenancy",
+        "ownership": "supabase/, tests/db/",
+        "task": "RLS bypass truth + missing DB constraints",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "E15",
+        "area": "ci/release",
+        "ownership": "workflows, CI",
+        "task": "drain PR #40 required checks",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "H3-B",
+        "area": "independent verifier",
+        "ownership": "docs/readiness/h3_verification_round2.md",
+        "task": "reproduce 6 READY_FOR_VERIFY claims",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "E07",
+        "area": "optimizer",
+        "ownership": "optimization/, observatory.py, tests/optimization/",
+        "task": "OPT-07 do-nothing baseline",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "E14",
+        "area": "security/auth",
+        "ownership": "services/api/core/, tests/api/",
+        "task": "authn/authz map + cross-tenant proof",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "H5",
+        "area": "math verifier",
+        "ownership": "docs/readiness/h5_math_verification.md",
+        "task": "objective exactness, inversions, overflow",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "E10",
+        "area": "data plane",
+        "ownership": "collectors, infra/, tests/data/",
+        "task": "DATA-01 continuous acquisition + scheduler",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "E16",
+        "area": "observability/SRE",
+        "ownership": "telemetry, monitoring, runbooks",
+        "task": "golden signals + induced-outage proof",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "E19",
+        "area": "compliance/licensing",
+        "ownership": "docs/data/DATA_LICENSES.md",
+        "task": "DOC-03 provider licence register",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "E09",
+        "area": "map/geo frontend",
+        "ownership": "components/, app/",
+        "task": "MAP-01 real basemap + coordinate truth",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "E17",
+        "area": "performance/chaos",
+        "ownership": "tests/load/, tests/chaos/",
+        "task": "LOAD-01 real solver + API + queue evidence",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      },
+      {
+        "role": "X1",
+        "area": "adversarial breaker",
+        "ownership": "docs/readiness/x1_findings_round2.md",
+        "task": "break the error/evidence/decision contracts",
+        "status": "RUNNING",
+        "base_sha": "774522fa898ef037c476e04bd4049ac8ed0f8c52",
+        "worktree": "main checkout (no worktree)"
+      }
+    ]
+  },
+  "termination_history": {
+    "2026-08-25T~06:00Z": "6 workers terminated on first API call by account session limit",
+    "2026-08-25T~10:15Z": "12 workers terminated simultaneously by session limit resetting 15:50 IST",
+    "2026-08-25T10:30Z": "capacity restored; 12 workers relaunched; in-flight work recovered from the working tree before relaunch (see 774522f)"
+  },
+  "worktrees": {
+    "agent_worktrees": 0,
+    "policy": "All workers run in the MAIN CHECKOUT. Two earlier worktrees were cut from stale origin/main (ec4bb92) rather than the branch head and were destroyed; merging them would have reintroduced allow_uncovered_demand=True, capacity 1500, and the pre-normalisation objective."
+  },
+  "merge_gate": {
+    "CURRENT_BASE_RECONCILED": "required",
+    "REGRESSION_GUARD": "required - tests/regression/test_regression_guard.py, 10 invariants, 16/16 mutations caught",
+    "CONTRACT_COMPATIBILITY": "required",
+    "TARGETED_TESTS": "required",
+    "REQUIRED_REVIEW": "required"
+  },
+  "closed_since_last_savepoint": [
+    "F-OPT-014 OptimizationResult.num_search_workers recorded 1 while solves ran 8 (a0c2090)",
+    "F-OPT-015 pilot oracle imported FIXED_POINT and _normalisation_references from the module it certified; independence claim was false (5196ac7)",
+    "X1-002 scenario labels sealed to the assumption ladder (563a009)",
+    "F-SEC-002 secret gate false positive on a loopback DSN quoted in prose (774522f)",
+    "F-SEC-003 two secret-baseline entries written outside the findings array were never loaded, and their fingerprints matched nothing the scanner emits (774522f)"
+  ],
+  "owner_action_post_rc": [
+    "Rotate exposed credential classes at the provider consoles: database credential, service-role key, provider API key. Values never recorded anywhere in this repo or in any log."
+  ]
+}

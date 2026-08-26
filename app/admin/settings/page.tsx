@@ -1,8 +1,12 @@
 import { PageHeader } from "@/components/common/PageHeader"
 import { GlassCard } from "@/components/common/GlassCard"
 import { Settings } from "lucide-react"
+import { SetupRequired } from "@/components/common/SetupRequired"
+import { requireAdmin } from "@/lib/auth/dal"
 
-export default function GlobalSettingsPage() {
+export default async function GlobalSettingsPage() {
+  if (!(await requireAdmin())) return <SetupRequired />
+
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <PageHeader 
@@ -13,7 +17,7 @@ export default function GlobalSettingsPage() {
         <div className="p-4 bg-primary/10 rounded-full">
           <Settings className="w-12 h-12 text-primary" />
         </div>
-        <h3 className="text-xl font-semibold">Active Global Settings</h3>
+        <h2 className="text-xl font-semibold">Active Global Settings</h2>
         <p className="text-muted-foreground max-w-md">
           This is a functional MVP placeholder. Live data integration for this module is scheduled for the next iteration.
         </p>

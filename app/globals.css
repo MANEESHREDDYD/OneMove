@@ -128,3 +128,109 @@
     @apply font-sans;
   }
 }
+/* ---------------------------------------------------------------------------
+ * Accessibility (F-028)
+ * ------------------------------------------------------------------------ */
+
+@layer base {
+  /*
+   * Skip-to-main link. Off-screen until it receives keyboard focus, at which
+   * point it becomes a visible, high-contrast target. It is NOT `display:none`
+   * or `visibility:hidden`, because either would remove it from the tab order
+   * and defeat the purpose.
+   */
+  .skip-to-main {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    transform: translateY(-200%);
+    padding: 0.75rem 1.25rem;
+    border-bottom-right-radius: 0.5rem;
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: underline;
+    transition: transform 150ms ease-out;
+  }
+
+  .skip-to-main:focus,
+  .skip-to-main:focus-visible {
+    transform: translateY(0);
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /*
+   * The <main> landmark is given tabindex="-1" so the skip link can move focus
+   * into it. Suppress the resulting outline on programmatic focus only — the
+   * user did not tab to `main` itself, so a ring around the whole page is noise.
+   * `:focus-visible` styling for real keyboard targets is untouched.
+   */
+  [id="main-content"]:focus {
+    outline: none;
+  }
+
+  /*
+   * Baseline focus indicator. `outline-none` appears on several controls that
+   * replace it with a `focus-visible:ring`; this rule guarantees that anything
+   * which does NOT provide its own replacement still shows a visible ring.
+   * WCAG 2.2 SC 2.4.11 (Focus Appearance) / 2.4.7 (Focus Visible).
+   */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * Reduced motion. The app uses tw-animate-css utilities (animate-in,
+ * animate-out, fade-in, slide-in-from-*, zoom-in/out) plus Tailwind's
+ * animate-spin / animate-ping / animate-pulse / animate-bounce, and a large
+ * number of `transition-*` utilities. For users who have asked their OS to
+ * reduce motion we collapse all of it to an effectively instant change rather
+ * than removing the state change altogether — the element still ends up in its
+ * final position, it just does not travel there.
+ *
+ * `animation-iteration-count: 1` (rather than `none`) is deliberate for the
+ * looping indicators (spin/ping/pulse/bounce): the element keeps its final
+ * rendered state instead of being frozen mid-keyframe.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /*
+   * tw-animate-css enter/exit utilities animate translate/scale/opacity via
+   * custom properties. Neutralise the travel so the reduced-motion result is a
+   * plain appearance rather than a 0.01ms jump across the viewport.
+   */
+  .animate-in,
+  .animate-out {
+    --tw-enter-opacity: 1;
+    --tw-enter-scale: 1;
+    --tw-enter-rotate: 0;
+    --tw-enter-translate-x: 0;
+    --tw-enter-translate-y: 0;
+    --tw-exit-opacity: 1;
+    --tw-exit-scale: 1;
+    --tw-exit-rotate: 0;
+    --tw-exit-translate-x: 0;
+    --tw-exit-translate-y: 0;
+  }
+
+  /* Leaflet pans/zooms with its own CSS transitions and a fly-to animation. */
+  .leaflet-fade-anim .leaflet-tile,
+  .leaflet-zoom-anim .leaflet-zoom-animated {
+    transition: none !important;
+  }
+}

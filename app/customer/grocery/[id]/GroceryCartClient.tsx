@@ -65,7 +65,7 @@ export function GroceryCartClient({
                 <span className="text-xs text-primary font-bold uppercase tracking-wider mb-1 block">
                   {item.category}
                 </span>
-                <h3 className="font-bold text-base leading-tight">{item.name}</h3>
+                <h2 className="font-bold text-base leading-tight">{item.name}</h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   ${item.price.toFixed(2)} <span className="text-xs opacity-70">/ {item.unit}</span>
                 </p>

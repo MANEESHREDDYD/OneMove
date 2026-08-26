@@ -47,13 +47,21 @@ def split_temporal_records(
     records: Sequence[TemporalFeatureRecord],
     boundaries: TemporalSplitBoundaries,
     *,
-    time_field: TemporalSplitTimeField = TemporalSplitTimeField.EVENT_TIME,
+    time_field: TemporalSplitTimeField = TemporalSplitTimeField.INFORMATION_AVAILABLE_AT,
 ) -> TemporalSplitResult:
     """Assign every record to a deterministic chronological partition.
 
     Boundary timestamps are inclusive for the partition they terminate. Records
     after ``test_end`` are preserved as the prospective holdout; none are silently
     discarded.
+
+    The split boundary defaults to ``information_available_at``, not ``event_time``
+    (F-020). What matters for point-in-time correctness is when a fact BECAME
+    KNOWABLE, not when it occurred. A record describing something that happened
+    before the cutoff but was only observed afterwards is future information: with
+    an event_time split it lands in train and leaks. Callers may still pass
+    ``EVENT_TIME`` explicitly for descriptive, non-predictive partitioning, but it
+    must be a deliberate choice rather than the default.
     """
 
     ordered = sorted(records, key=lambda record: (getattr(record, time_field.value), record.record_id))

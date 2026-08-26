@@ -4,10 +4,13 @@ import { SetupRequired } from "@/components/common/SetupRequired"
 import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function RecommendationLabPage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -43,7 +46,7 @@ export default async function RecommendationLabPage() {
           <GlassCard key={i} className="p-6">
             <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-border/50 pb-4 mb-4">
               <div>
-                <h3 className="font-bold font-mono">{(rec.profiles as { full_name?: string } | null)?.full_name || 'Customer'}</h3>
+                <h2 className="font-bold font-mono">{(rec.profiles as { full_name?: string } | null)?.full_name || 'Customer'}</h2>
                 <p className="text-xs text-muted-foreground">ID: {rec.customer_id}</p>
               </div>
               <div className="flex gap-2">

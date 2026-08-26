@@ -1,10 +1,13 @@
 import { createClient } from '@/utils/supabase/server'
 import { SetupRequired } from '@/components/common/SetupRequired'
 import { Layers, Server, Shield, Activity, Database, BrainCircuit, GitMerge, AlertCircle, TrendingUp, CheckCircle2 } from 'lucide-react'
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function ArchitecturePage() {
   const supabase = await createClient()
   if (!supabase) return <SetupRequired />
+
+  await requireAdmin()
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-12">
@@ -22,7 +25,7 @@ export default async function ArchitecturePage() {
             <AlertCircle className="h-5 w-5 text-yellow-400" />
           </div>
           <div className="ml-3">
-            <h3 className="text-sm font-medium text-yellow-800">Deployment Status</h3>
+            <h2 className="text-sm font-medium text-yellow-800">Deployment Status</h2>
             <div className="mt-2 text-sm text-yellow-700">
               <p>Private localhost portfolio demo: <strong>GO</strong></p>
               <p>Public production deployment: <strong>NOT YET APPROVED</strong></p>

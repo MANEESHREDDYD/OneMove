@@ -1,14 +1,13 @@
 """Observatory Router exposing authentic PostgreSQL-backed and evidence-bearing endpoints."""
 
-import hashlib
 import json
-import math
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
+import h3
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from services.api.contracts.observatory import (
     DataHealthResponse,
@@ -21,32 +20,53 @@ from services.api.contracts.observatory import (
     ZoneStateResponse,
 )
 from services.api.core.auth import get_current_user
+from services.api.core.telemetry import (
+    DEPENDENCY_UNAVAILABLE,
+    error_envelope,
+    is_dependency_exception,
+    looks_like_dependency_failure,
+)
 from services.api.repositories.artifact_catalog import ArtifactCorrupt, ArtifactNotFound, ArtifactNotReady
 from services.api.services.observatory import ObservatoryService, get_observatory_service
 from services.zonepilot.assistant.contracts import AssistantToolCall, ToolName
-from services.zonepilot.assistant.tools import create_default_registry
+from services.zonepilot.assistant.tools import build_assistant_registry
+from services.zonepilot.assumptions.application import (
+    CANONICAL_SCENARIO_IDS,
+    AssumptionSetView,
+    ScenarioBindingError,
+)
+from services.zonepilot.assumptions.registry import default_assumption_registry
 from services.zonepilot.decisions.ledger import DecisionLedger
+from services.zonepilot.decisions.lineage_validation import (
+    LineageValidationUnavailable,
+    operator_claims,
+    validate_operator_lineage,
+)
 from services.zonepilot.decisions.repository import DecisionRepository
 from services.zonepilot.economics.registry import CANONICAL_EXPERIMENTS
 from services.zonepilot.forecast.contracts import BaselineModelType, ForecastTarget, PredictionRecord
 from services.zonepilot.forecast.repository import ForecastRepository
 from services.zonepilot.optimization.contracts import (
+    CapacityMode,
     DemandPoint,
     Facility,
-    MatrixEvidenceClass,
-    ObjectiveWeights,
     OptimizationConstraints,
     OptimizationProblem,
     SolverSettings,
     TravelMatrix,
     UncertaintyScenario,
 )
+from services.temporal.contracts import EvidenceClass
 from services.zonepilot.optimization.r1_catalog import FileSystemArtifactCatalog, default_data_root
 from services.zonepilot.optimization.repository import OptimizationRepository
 from services.zonepilot.optimization.service import OptimizationService
 from services.zonepilot.release import current_release_sha
-from services.zonepilot.resilience.repository import ResilienceRepository
-from services.zonepilot.resilience.service import ResilienceService
+from services.zonepilot.resilience.derivation import ScenarioNotRepresentable
+from services.zonepilot.resilience.repository import (
+    IncompleteEvaluationError,
+    ResilienceRepository,
+)
+from services.zonepilot.resilience.service import ResilienceService, UnknownScenarioType
 
 router = APIRouter(prefix="/api/v1", tags=["observatory"])
 
@@ -55,24 +75,40 @@ _opt_service = OptimizationService(repository=OptimizationRepository())
 _res_service = ResilienceService(repository=ResilienceRepository())
 _dec_ledger = DecisionLedger(repository=DecisionRepository())
 _forecast_repo = ForecastRepository()
-_assistant_registry = create_default_registry()
 
 
-def standard_error(code: str, message: str, status_code: int = 400):
+def standard_error(code: str, message: str, status_code: int = 400, **details: Any):
+    """Raise the canonical error envelope (F-025).
+
+    request_id and trace_id are injected by the app-level handler in
+    services.api.main from the ids RequestIdMiddleware put on the request.
+    """
     raise HTTPException(
         status_code=status_code,
-        detail={
-            "error": {
-                "code": code,
-                "message": message,
-                "retryable": status_code in (408, 429, 500, 502, 503, 504),
-                "details": {},
-            }
-        },
+        detail=error_envelope(code, message, status_code=status_code, details=details or None),
     )
 
 
+def _fail_if_dependency_unavailable(exc: Exception) -> None:
+    """F-025: a dependency outage is a retryable 503, never a 4xx client error.
+
+    The broad `except Exception` blocks in this router exist to translate domain
+    errors. Without this guard a DatabaseConfigurationError or a psycopg
+    connection failure falls through them and is reported as 422
+    VALIDATION_FAILED -- telling the caller its own request was permanently
+    malformed when the real answer is "retry, the store is down".
+    """
+    if is_dependency_exception(exc):
+        standard_error(
+            DEPENDENCY_UNAVAILABLE,
+            "A backing dependency is not available to serve this request.",
+            503,
+            dependency="database",
+        )
+
+
 def _translate_artifact_error(exc: Exception) -> None:
+    _fail_if_dependency_unavailable(exc)
     if isinstance(exc, ArtifactNotReady):
         standard_error("DATASET_NOT_READY", str(exc), 503)
     if isinstance(exc, ArtifactNotFound):
@@ -207,16 +243,59 @@ def get_osm_evidence_tile(
 # --- R1 Optimization API ---
 
 
+class DoNothingBaselineRequest(BaseModel):
+    """JSON-facing form of the strict immutable domain baseline contract."""
+
+    baseline_id: str = Field(min_length=1)
+    facility_ids: list[str] = Field(default_factory=list, max_length=200)
+    source: str = Field(min_length=1)
+    evidence_class: EvidenceClass
+    as_of: str | None = None
+
+
 class OptimizationRequest(BaseModel):
     idempotency_key: str | None = None
     min_open_facilities: int = Field(default=1, ge=1)
     max_open_facilities: int = Field(default=4, ge=1)
     max_travel_seconds: int = Field(default=1800, ge=1)
-    allow_uncovered_demand: bool = True
-    scenarios: list[str] = ["s1_free_flow", "s2_congested", "s3_congested_outage"]
+    # One canonical operator-facing default. This model previously defaulted to
+    # True while OptimizationConstraints defaulted to False, so the API path
+    # silently permitted partial coverage and reported OPTIMAL while abandoning
+    # most of the network. A normal request now requires the whole modelled
+    # network to be served; partial coverage is an explicit opt-in.
+    allow_uncovered_demand: bool = False
+    capacity_mode: CapacityMode = CapacityMode.NOT_MODELED
+    # The ladder owns these labels; the default names them rather than
+    # re-declaring them, so the request model cannot drift away from the tiers
+    # it is validated against.
+    scenarios: list[str] = Field(default_factory=lambda: list(CANONICAL_SCENARIO_IDS))
+    # R1 has candidate sites but no incumbent facility ledger. A comparison is
+    # therefore optional input, and the controlled demo labels its supplied set
+    # SIMULATED instead of presenting it as a retailer's real network.
+    do_nothing_baseline: DoNothingBaselineRequest | None = None
 
 
-def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem:
+def _build_real_94x12x3_problem(
+    req: OptimizationRequest,
+    assumptions: AssumptionSetView | None = None,
+) -> OptimizationProblem:
+    """Assemble the R1 problem from authentic artifacts and one sealed assumption set.
+
+    F-019: this function used to carry the pilot's economics as bare integers --
+    capacity 1500, fixed cost 1000, a 1.4x congestion multiplier, objective weights
+    5000/1000/3000/500/5000 -- and stamp the result ``assumption_version =
+    "r1-proxy-1.0.0"``, a string validated by nothing and traceable to nothing. Not
+    one of those numbers was measured, and the label made them look as though they
+    had been.
+
+    Every number now comes from a digest-sealed :class:`AssumptionSet`, and the
+    reference that identifies it (``assumption_set_id`` + ``version`` + ``sha256``)
+    is written into ``objective_weights.assumption_version``. That field is covered
+    by ``problem_fingerprint``, so it propagates unforgeably into the job row, the
+    frozen problem snapshot and the stored result -- which is what lets a replay
+    load these exact assumptions back instead of whatever is current on the day it
+    runs.
+    """
     mat_path = default_data_root() / "private" / "official" / "gold" / "r1_osrm_travel_matrix.json"
     if not mat_path.is_file():
         raise FileNotFoundError(
@@ -234,73 +313,68 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
         "osrm/osrm-backend@sha256:af5d4a83fb90086a43b1ae2ca22872e6768766ad5fcbb07a29ff90ec644ee409",
     )
 
+    # A new decision is made under the currently ACTIVE set. Replay never reaches
+    # this branch; it resolves its own pinned set from frozen lineage.
+    view = assumptions or default_assumption_registry().active_view()
+
     catalog = FileSystemArtifactCatalog(default_data_root())
     gold_rows = {str(r["h3_index"]): r for r in catalog.gold_rows()}
 
     facilities = tuple(
         Facility(
             facility_id=fid,
-            capacity_units=1500,
-            fixed_cost_units=1000,
-            failure_exposure_basis_points=100 * idx,
+            capacity_units=view.facility_capacity_units,
+            fixed_cost_units=view.facility_fixed_cost_units,
+            failure_exposure_basis_points=view.facility_failure_exposure_basis_points(rank=rank),
         )
-        for idx, fid in enumerate(facility_ids)
+        for rank, fid in enumerate(facility_ids)
     )
 
     demands = tuple(
         DemandPoint(
             demand_id=did,
-            demand_units=max(
-                1,
-                int(
-                    gold_rows.get(did.split(":")[-1], {}).get("commercial_poi_count", 1) * 3
-                    + gold_rows.get(did.split(":")[-1], {}).get("intersection_count", 1)
-                ),
-            ),
+            demand_units=view.demand_units_for(did, gold_rows),
         )
         for did in demand_ids
     )
 
-    # 3 Uncertainty scenarios with authentic provenance
+    # Counting the caller's scenario names was the only check here, so any three
+    # strings validated and were zipped positionally onto the sealed tiers. The
+    # ladder now owns its own labels; the request may only name them, in order.
+    tiers = view.bind_scenarios(req.scenarios)
+
     scenarios = []
-    for s_idx, s_name in enumerate(req.scenarios):
-        mult = 1.0 if s_idx == 0 else (1.4 if s_idx == 1 else 1.6)
-        prob = 6000 if s_idx == 0 else (3000 if s_idx == 1 else 1000)
+    baseline_matrix_id: str | None = None
+    for tier in tiers:
+        matrix_id = f"matrix-{tier.scenario_id}"
+        if tier.is_baseline:
+            baseline_matrix_id = matrix_id
 
-        durations = tuple(
-            tuple(int(math.ceil(math_ceil_dur * mult)) for math_ceil_dur in row) for row in base_durations
-        )
-
-        evidence_cls = (
-            MatrixEvidenceClass.PUBLIC_GEOGRAPHIC
-            if s_idx == 0
-            else (MatrixEvidenceClass.DERIVED if s_idx == 1 else MatrixEvidenceClass.SIMULATED_FAILURE)
-        )
-        parent_id = None if s_idx == 0 else "matrix-s1_free_flow"
+        durations = tuple(tuple(tier.scale_duration_seconds(seconds) for seconds in row) for row in base_durations)
 
         mat = TravelMatrix(
-            matrix_id=f"matrix-{s_name}",
+            matrix_id=matrix_id,
             graph_version=graph_version,
             router=router,
             router_version=router_version,
-            evidence_class=evidence_cls,
+            evidence_class=tier.evidence_class,
             facility_ids=facility_ids,
             demand_ids=demand_ids,
             durations_seconds=durations,
-            parent_matrix_id=parent_id,
+            parent_matrix_id=None if tier.is_baseline else baseline_matrix_id,
         )
 
         scenarios.append(
             UncertaintyScenario(
-                scenario_id=s_name,
-                probability_basis_points=prob,
+                scenario_id=tier.scenario_id,
+                probability_basis_points=tier.probability_basis_points,
                 travel_matrix=mat,
                 capacity_adjustments=(),
             )
         )
 
     return OptimizationProblem(
-        problem_id=f"opt-94x12x3-{uuid.uuid4().hex[:8]}",
+        problem_id=f"opt-94x12x3-{uuid.uuid4().hex}",
         facilities=facilities,
         demand_points=demands,
         scenarios=tuple(scenarios),
@@ -308,18 +382,12 @@ def _build_real_94x12x3_problem(req: OptimizationRequest) -> OptimizationProblem
             min_open_facilities=req.min_open_facilities,
             max_open_facilities=req.max_open_facilities,
             max_travel_seconds=req.max_travel_seconds,
-            minimum_coverage_basis_points=0,
+            minimum_coverage_basis_points=view.minimum_coverage_basis_points,
             allow_uncovered_demand=req.allow_uncovered_demand,
+            capacity_mode=req.capacity_mode,
         ),
-        objective_weights=ObjectiveWeights(
-            assumption_version="r1-proxy-1.0.0",
-            expected_travel=5000,
-            p95_travel=1000,
-            facility_cost=3000,
-            failure_exposure=500,
-            coverage_loss=5000 if req.allow_uncovered_demand else 0,
-        ),
-        solver_settings=SolverSettings(max_time_seconds=30.0, num_search_workers=1),
+        objective_weights=view.objective_weights(allow_uncovered_demand=req.allow_uncovered_demand),
+        solver_settings=SolverSettings(max_time_seconds=view.solver_max_time_seconds),
     )
 
 
@@ -336,6 +404,21 @@ def run_optimization(
         problem = _build_real_94x12x3_problem(payload)
     except FileNotFoundError as fnf_err:
         standard_error("MATRIX_UNAVAILABLE", str(fnf_err), 503)
+    except ScenarioBindingError as bad_ladder:
+        # Named separately from the generic case so the caller is told which
+        # rule it broke -- an unknown scenario id and an out-of-range facility
+        # count are not the same mistake, and the sibling POST /scenarios
+        # already enumerates its legal values.
+        standard_error(bad_ladder.code, str(bad_ladder), 422)
+    except (ValueError, ValidationError) as invalid:
+        # Only FileNotFoundError was caught here, so every domain-validation
+        # failure from the problem builder escaped to the blanket handler and
+        # came back as 500 INTERNAL_ERROR with retryable: true. Nine ordinary
+        # bad requests hit this -- min_open_facilities greater than
+        # max_open_facilities, an empty scenarios list, and similar. Telling a
+        # caller to retry a permanently malformed request invites a retry storm,
+        # and it pages an on-call engineer for a client mistake.
+        standard_error("INVALID_OPTIMIZATION_REQUEST", str(invalid), 422)
 
     job = _opt_service.submit_optimization(
         requested_by=user_id,
@@ -376,6 +459,58 @@ def list_optimizations(
     return {"jobs": items}
 
 
+
+def _coverage_summary(
+    scenario_metrics: list[dict[str, Any]],
+    res_doc: dict[str, Any],
+    snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Make every demand zone accountable in the response.
+
+    ``assignments`` deliberately lists served pairs only, so a 94-zone problem
+    that abandons 90 zones previously returned four assignments and nothing
+    else. The solver does record the rest -- ``scenario_metrics`` carries
+    covered/uncovered demand units and coverage basis points per scenario -- so
+    this reports the worst scenario (the binding one for a service commitment)
+    and derives the uncovered zone ids from the problem's own demand list.
+    """
+    assignments = res_doc.get("assignments") or []
+    assigned_ids = {a.get("demand_id") for a in assignments if a.get("demand_id")}
+
+    # The repository exposes the frozen problem under "problem"; the raw column
+    # is named problem_json, and reading the column name here silently produced
+    # an empty accounting instead of an error.
+    problem = (snapshot or {}).get("problem") or {}
+    if isinstance(problem, str):
+        try:
+            problem = json.loads(problem)
+        except json.JSONDecodeError:
+            problem = {}
+    all_ids = [str(d.get("demand_id")) for d in (problem.get("demand_points") or []) if d.get("demand_id")]
+    uncovered_ids = sorted(set(all_ids) - assigned_ids) if all_ids else []
+
+    if not scenario_metrics:
+        return {
+            "coverage_basis_points": None,
+            "demand_zones_total": len(all_ids) or None,
+            "assigned_zones": len(assigned_ids) or None,
+            "uncovered_zones": len(uncovered_ids) if all_ids else None,
+            "uncovered_zone_ids": uncovered_ids,
+            "covered_demand_units": None,
+            "uncovered_demand_units": None,
+        }
+
+    worst = min(scenario_metrics, key=lambda m: m.get("coverage_basis_points", 0))
+    return {
+        "coverage_basis_points": worst.get("coverage_basis_points"),
+        "demand_zones_total": len(all_ids) or None,
+        "assigned_zones": len(assigned_ids),
+        "uncovered_zones": len(uncovered_ids) if all_ids else None,
+        "uncovered_zone_ids": uncovered_ids,
+        "covered_demand_units": worst.get("covered_demand_units"),
+        "uncovered_demand_units": worst.get("uncovered_demand_units"),
+    }
+
 @router.get("/optimizations/{opt_id}")
 def get_optimization(
     opt_id: str,
@@ -391,10 +526,32 @@ def get_optimization(
     opened = res_doc.get("opened_facility_ids") or res_doc.get("opened_facilities", [])
     expected_travel = res_doc.get("expected_travel_seconds")
     p95_travel = res_doc.get("p95_travel_seconds")
-    if expected_travel is None and "objective" in res_doc:
-        expected_travel = res_doc["objective"].get("expected_travel_probability_demand_seconds")
-    if p95_travel is None and "objective" in res_doc:
-        p95_travel = res_doc["objective"].get("p95_travel_demand_seconds")
+    # An INFEASIBLE result carries the key "objective" with the value None, so
+    # testing for key presence and then calling .get() on it raised
+    # AttributeError and turned a legitimate infeasible outcome into an opaque
+    # HTTP 500. Read the value, not the key.
+    objective = res_doc.get("objective") or {}
+    if expected_travel is None:
+        expected_travel = objective.get("expected_travel_probability_demand_seconds")
+    if p95_travel is None:
+        p95_travel = objective.get("p95_travel_demand_seconds")
+
+    # Full 94-zone accounting. The solver already records covered/uncovered
+    # demand per scenario; it was simply never surfaced, so a caller saw four
+    # assignments and no way to learn that 90 zones were abandoned.
+    scenario_metrics = res_doc.get("scenario_metrics") or []
+    # The full demand list lives in the frozen problem snapshot, not in the
+    # result. Reading it from there keeps the hashed result contract untouched
+    # while still letting the response account for every zone. The snapshot read
+    # is workspace-scoped, so this cannot widen tenant access.
+    snapshot = None
+    snapshot_id = res_doc.get("problem_snapshot_id")
+    if snapshot_id:
+        try:
+            snapshot = _opt_service.repository.get_problem_snapshot(snapshot_id, ws_id)
+        except Exception:  # a missing snapshot must not fail the job read
+            snapshot = None
+    coverage = _coverage_summary(scenario_metrics, res_doc, snapshot)
 
     return {
         "job_id": str(job["id"]),
@@ -405,12 +562,23 @@ def get_optimization(
         else res_doc.get("fail_closed", False),
         "opened_facilities": opened,
         "expected_travel_seconds": expected_travel,
-        "p95_travel_seconds": p95_travel,
-        "coverage_basis_points": res_doc.get("coverage_basis_points"),
+        # This value is a probability-weighted P95 across SCENARIO TOTAL
+        # demand-weighted travel, so its unit is demand_units*seconds, not
+        # seconds. It was published as "p95_travel_seconds", which reads as a
+        # customer ETA and is not what the model computes.
+        "p95_scenario_total_travel_demand_seconds": p95_travel,
+        "coverage_basis_points": coverage["coverage_basis_points"],
+        "demand_zones_total": coverage["demand_zones_total"],
+        "assigned_zones": coverage["assigned_zones"],
+        "uncovered_zones": coverage["uncovered_zones"],
+        "uncovered_zone_ids": coverage["uncovered_zone_ids"],
+        "covered_demand_units": coverage["covered_demand_units"],
+        "uncovered_demand_units": coverage["uncovered_demand_units"],
         "created_at": str(job.get("created_at")),
         "started_at": str(job.get("started_at")),
         "finished_at": str(job.get("finished_at")),
         "run_duration_ms": job.get("run_duration_ms"),
+        "code_sha": job.get("code_sha"),
         "result_document": res_doc,
     }
 
@@ -442,7 +610,29 @@ def create_and_run_scenario(
             created_by=user_id,
         )
         return scen
+    except FileNotFoundError as matrix_err:
+        # The authentic routing matrix is absent. Fail closed with a retryable
+        # dependency error rather than grading resilience on invented travel
+        # times (F-010).
+        standard_error("MATRIX_UNAVAILABLE", str(matrix_err), 503)
+    except UnknownScenarioType as unknown_err:
+        # Previously an unrecognised type was silently rewritten to ROAD_CLOSURE
+        # while the caller's original string was persisted, so the stored type
+        # disagreed with the evaluated one.
+        standard_error("SCENARIO_TYPE_UNKNOWN", str(unknown_err), 422)
+    except ScenarioNotRepresentable as shape_err:
+        # The scenario describes no effect expressible against the facility x
+        # demand matrix. Evaluating it would report the undisturbed baseline as
+        # though it were the failure.
+        standard_error("SCENARIO_NOT_REPRESENTABLE", str(shape_err), 422)
+    except IncompleteEvaluationError as incomplete_err:
+        # A metric is missing with no stated reason. That is a defect, not an
+        # absence, and must not be persisted.
+        standard_error("EVALUATION_INCOMPLETE", str(incomplete_err), 500)
+    except HTTPException:
+        raise
     except Exception as exc:
+        _fail_if_dependency_unavailable(exc)
         standard_error("EXECUTION_ERROR", str(exc), 422)
 
 
@@ -491,20 +681,46 @@ class DecisionFreezeRequest(BaseModel):
 
 
 class DecisionCreateRequest(BaseModel):
+    """Direct decision record submission.
+
+    Every lineage and measurement field is REQUIRED. These previously carried
+    fabricated defaults, so POST /decisions with an empty body wrote a complete,
+    plausible-looking decision -- facilities, objective value, travel times,
+    coverage, artifact hashes -- into the immutable ledger with no real lineage,
+    bypassing the DECISION_LINEAGE_INCOMPLETE guards that the optimization-backed
+    path enforces. A ledger that can be populated with invented measurements is
+    not an audit trail.
+
+    Prefer optimization_job_id, which derives lineage from a real solver run.
+    """
+
     optimization_job_id: str | None = None
+
+    # Without an optimization_job_id this endpoint writes caller-supplied numbers
+    # straight into the durable ledger. Requiring the fields (F-005) stopped an
+    # EMPTY body but not a well-formed fiction: an independent certifier posted
+    # invented facilities, an invented OSRM hash and 100% coverage and received a
+    # 201. Required is not the same as validated.
+    #
+    # A caller may therefore no longer author a decision implicitly. Recording one
+    # by hand is a legitimate operator action, but it must be declared as such and
+    # must never be indistinguishable from optimizer output.
+    decision_class: Literal["MANUAL_OPERATOR_DECISION"] | None = None
+    operator_rationale: str | None = Field(default=None, min_length=20)
+
     decision_time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    network_version: str = "1.1"
-    dataset_version: str = "1.0.0"
-    feature_snapshot_hash: str = "snap-7b443717"
-    selected_action: str = "DEPLOY_FACILITIES"
-    opened_facilities: list[str] = ["fac:01", "fac:04", "fac:07"]
-    objective_value: int = 154000
-    expected_travel_seconds: int = 710
-    p95_travel_seconds: int = 830
-    coverage_basis_points: int = 9910
-    graph_version: str = "1.1"
-    osrm_bundle_hash: str = "7b4437178db62410"
-    solver_version: str = "ortools-cp-sat"
+    network_version: str = Field(min_length=1)
+    dataset_version: str = Field(min_length=1)
+    feature_snapshot_hash: str = Field(min_length=1)
+    selected_action: str = Field(min_length=1)
+    opened_facilities: list[str] = Field(min_length=1)
+    objective_value: int
+    expected_travel_seconds: int = Field(ge=0)
+    p95_travel_seconds: int = Field(ge=0)
+    coverage_basis_points: int = Field(ge=0, le=10000)
+    graph_version: str = Field(min_length=1)
+    osrm_bundle_hash: str = Field(min_length=1)
+    solver_version: str = Field(min_length=1)
     evidence_ids: list[str] = []
 
 
@@ -541,8 +757,44 @@ def record_decision(
     payload: DecisionCreateRequest,
     _user: dict = Depends(get_current_user),
 ):
-    """Record or freeze an immutable decision into PostgreSQL ledger."""
+    """Record or freeze an immutable decision into PostgreSQL ledger.
+
+    Prefer POST /decisions/freeze, which reconstructs every field from authoritative
+    optimization state. The hand-authored path below is retained for genuine operator
+    decisions but must be declared explicitly.
+    """
     user_id, ws_id = _resolve_user_context(_user)
+
+    if not payload.optimization_job_id:
+        # Fail closed: an undeclared hand-authored decision is indistinguishable
+        # from optimizer output once it is in the ledger.
+        if payload.decision_class != "MANUAL_OPERATOR_DECISION" or not payload.operator_rationale:
+            standard_error(
+                "DECISION_LINEAGE_INCOMPLETE",
+                "A decision without optimization_job_id is not derived from a solver run. "
+                "Supply optimization_job_id to freeze from authoritative optimization state, or declare "
+                'decision_class="MANUAL_OPERATOR_DECISION" with an operator_rationale of at least 20 '
+                "characters. Hand-authored decisions are recorded as such and are never presented as "
+                "optimizer output.",
+                422,
+            )
+
+        # Declaring the decision manual is not the same as the claims being true.
+        # A certifier posted invented facilities, an invented OSRM hash and 100%
+        # coverage and got a persisted decision, because the API required these
+        # fields without ever resolving them. Resolve them now.
+        try:
+            verdict = validate_operator_lineage(
+                opened_facilities=list(payload.opened_facilities),
+                graph_version=payload.graph_version,
+                osrm_bundle_hash=payload.osrm_bundle_hash,
+            )
+        except LineageValidationUnavailable as artifact_err:
+            standard_error("DEPENDENCY_UNAVAILABLE", str(artifact_err), 503)
+
+        if not verdict.ok:
+            standard_error("DECISION_LINEAGE_INVALID", "; ".join(verdict.rejections), 422)
+
     if payload.optimization_job_id:
         job = _opt_service.get_optimization(payload.optimization_job_id, ws_id)
         if not job:
@@ -572,14 +824,32 @@ def record_decision(
             feature_snapshot_hash=payload.feature_snapshot_hash,
             selected_action=payload.selected_action,
             opened_facilities=payload.opened_facilities,
-            objective_value=payload.objective_value,
-            expected_travel_seconds=payload.expected_travel_seconds,
-            p95_travel_seconds=payload.p95_travel_seconds,
-            coverage_basis_points=payload.coverage_basis_points,
+            # The authoritative metric columns hold ONLY solver-derived values.
+            # There is no solver run behind a hand-authored decision, so they are
+            # NULL and the operator's figures go to operator_claims marked
+            # UNVERIFIED. Copying them into the derived columns would make a
+            # typed-in coverage figure indistinguishable from a computed one to
+            # every downstream reader (F-005).
+            objective_value=None,
+            expected_travel_seconds=None,
+            p95_travel_seconds=None,
+            coverage_basis_points=None,
+            decision_class="MANUAL_OPERATOR_DECISION",
+            operator_rationale=payload.operator_rationale,
+            operator_claims=operator_claims(
+                objective_value=payload.objective_value,
+                expected_travel_seconds=payload.expected_travel_seconds,
+                p95_travel_seconds=payload.p95_travel_seconds,
+                coverage_basis_points=payload.coverage_basis_points,
+            ),
+            lineage_verified=verdict.verified,
             graph_version=payload.graph_version,
             osrm_bundle_hash=payload.osrm_bundle_hash,
             solver_version=payload.solver_version,
-            evidence_ids=payload.evidence_ids,
+            # Mark provenance on the record itself. The declaration must survive
+            # into the ledger, not merely gate the request, or a later reader
+            # cannot tell a hand-authored decision from a solver-derived one.
+            evidence_ids=tuple(payload.evidence_ids) + ("provenance:MANUAL_OPERATOR_DECISION",),
             recorded_by=user_id,
         )
         return rec.model_dump()
@@ -637,6 +907,7 @@ def replay_decision(
     except FileNotFoundError as fnf_exc:
         standard_error("MATRIX_UNAVAILABLE", str(fnf_exc), 503)
     except Exception as exc:
+        _fail_if_dependency_unavailable(exc)
         standard_error("REPLAY_ERROR", str(exc), 422)
 
 
@@ -669,6 +940,7 @@ def create_shadow_evaluation(
     except ValueError as val_err:
         standard_error("INVALID_SHADOW_WINDOW", str(val_err), 422)
     except Exception as exc:
+        _fail_if_dependency_unavailable(exc)
         standard_error("SHADOW_ERROR", str(exc), 422)
 
 
@@ -689,11 +961,28 @@ def get_shadow(shadow_id: str, _user: dict = Depends(get_current_user)):
 # --- R2 Forecast API ---
 
 
+#: The furthest ahead a forecast for these targets can ever be scored.
+#:
+#: Every ForecastTarget is an hourly observable sourced from the Open-Meteo
+#: collector, whose own acquisition bound is 1..16 forecast days
+#: (services/collectors/execution/openmeteo_forecast.acquire). A prediction
+#: issued past that horizon can never be joined to an observation, so it is not
+#: a forecast that is merely wrong -- it is one that is permanently unscorable.
+MAX_FORECAST_HORIZON_HOURS = 16 * 24
+
+
 class ForecastRequest(BaseModel):
     zone_id: str = "88618925d3fffff"
     target: str = "WEATHER_TRAVEL_INFLATION_PERCENT"
     model: str = "LAST_OBSERVATION"
-    horizon_hours: int = 1
+    # An unbounded int here meant target_time = now + horizon*3600 was computed
+    # from a number nothing constrained. horizon_hours <= 0 produced a "forecast"
+    # whose target_time was at or before its own issue time -- a backdated claim
+    # about the past, stored in the same table and indistinguishable from a real
+    # prediction to every reader -- and a huge value overflowed the platform
+    # time_t inside datetime.fromtimestamp, raising an unhandled OSError that
+    # the blanket handler served as a retryable 500.
+    horizon_hours: int = Field(default=1, ge=1, le=MAX_FORECAST_HORIZON_HOURS)
 
 
 @router.post("/forecast/predict", status_code=201)
@@ -705,6 +994,18 @@ def predict_forecast(
     _, ws_id = _resolve_user_context(_user)
     now = datetime.now(timezone.utc)
     target_time = datetime.fromtimestamp(now.timestamp() + payload.horizon_hours * 3600, tz=timezone.utc)
+
+    # zone_id was a bare str, so ANY string -- '../../etc/passwd', a SQL
+    # injection payload, a 10KB blob -- was accepted and durably written to
+    # forecast_records. forecast_records is a measurement table: a row keyed to
+    # a zone that cannot exist is indistinguishable from a real one after the
+    # fact, and every reader that joins forecasts to zones or computes per-zone
+    # accuracy is then reading a table it cannot trust. The same check already
+    # guards GET /zones/{zone_id}/state (ObservatoryService.get_zone_state) and
+    # returns the same INVALID_ARGUMENT envelope; the forecast write path simply
+    # never received it.
+    if not h3.is_valid_cell(payload.zone_id):
+        standard_error("INVALID_ARGUMENT", "Zone ID must be a valid H3 cell identifier", 422)
 
     try:
         ft = ForecastTarget(payload.target)
@@ -725,12 +1026,17 @@ def predict_forecast(
         lower_bound=None,
         upper_bound=None,
         baseline_model=bm,
-        model_version="onemove-forecast-baseline-1.0.0",
-        feature_snapshot_hash=f"snap-{hashlib.sha256(payload.zone_id.encode()).hexdigest()[:8]}",
-        dataset_version="1.0.0",
-        graph_version="1.1",
+        # No forecast is produced yet, so no model, snapshot, dataset or graph
+        # backs this record. Previously these were literals and the snapshot hash
+        # was sha256(zone_id) -- a hash of the request, not of any feature
+        # snapshot -- and the evidence id resolved nowhere (F-018). Recording
+        # nothing is the truthful answer while the state is EVIDENCE_ACCUMULATING.
+        model_version=None,
+        feature_snapshot_hash=None,
+        dataset_version=None,
+        graph_version=None,
         code_sha=current_release_sha(),
-        evidence_ids=(f"ev-weather-{payload.zone_id}",),
+        evidence_ids=(),
     )
 
     try:
@@ -769,9 +1075,15 @@ class AssistantQuery(BaseModel):
 def assistant_query(
     body: AssistantQuery,
     _user: dict = Depends(get_current_user),
+    service: ObservatoryService = Depends(get_observatory_service),
 ):
-    """Execute typed assistant tool queries deterministically."""
+    """Execute typed assistant tool queries against authoritative sources only."""
     _, ws_id = _resolve_user_context(_user)
+    registry = build_assistant_registry(
+        observatory_service=service,
+        decision_ledger=_dec_ledger,
+        forecast_repository=_forecast_repo,
+    )
     tool = ToolName.GET_ZONE_STATE
     if body.tool_name:
         try:
@@ -784,7 +1096,24 @@ def assistant_query(
         arguments=body.arguments,
         workspace_id=ws_id,
     )
-    result = _assistant_registry.execute(call)
+    result = registry.execute(call)
+
+    # F-025 / P0-ASSISTANT-TRUTH-001. A *domain* miss ("no such zone in the gold
+    # network", "zone_id is required") is a legitimate typed 200 answer: the
+    # assistant answered truthfully that no authoritative record backs the
+    # question. An *infrastructure* failure is not -- the tool registry flattens
+    # every handler exception into error_message, so a database outage would
+    # otherwise be served as a successful business answer carrying success=false.
+    # Those become a retryable 503 like any other dependency outage.
+    if not result.success and looks_like_dependency_failure(result.error_message):
+        standard_error(
+            DEPENDENCY_UNAVAILABLE,
+            "An authoritative source for this query is not available.",
+            503,
+            dependency="database",
+            tool_name=tool.value,
+        )
+
     return result.model_dump()
 
 

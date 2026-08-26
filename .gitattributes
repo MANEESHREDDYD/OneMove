@@ -9,3 +9,6 @@ docs/**/*.html linguist-generated=true
 
 # Force Jupyter Notebooks to be classified as Python instead of "Other"
 *.ipynb linguist-language=Python
+
+# checksum manifests must stay LF or sha256sum -c cannot read them
+*.sha256 -text

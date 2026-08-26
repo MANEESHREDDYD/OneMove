@@ -36,7 +36,7 @@ def test_record_and_retrieve_decision() -> None:
     assert rec.workspace_id == "ws-blr-01"
     assert len(rec.opened_facilities) == 3
 
-    fetched = ledger.get_decision(rec.decision_id)
+    fetched = ledger.get_decision(rec.decision_id, "ws-blr-01")
     assert fetched is not None
     assert fetched.decision_id == rec.decision_id
 
@@ -58,8 +58,19 @@ def test_decision_replay_verification() -> None:
         dataset_version="1.0.0",
         feature_snapshot_hash="a" * 64,
         selected_action="OPEN_FACILITIES",
-        opened_facilities=["fac:88618925a5fffff", "fac:88618925a7fffff", "fac:8861892ec3fffff", "fac:8861892ecbfffff"],
-        objective_value=1756300000000,
+        # The optimum under optimization policy 2.0.0, cross-checked against the
+        # exhaustive oracle in tests/optimization/test_pilot_exact_oracle.py.
+        # The previous fixture pinned the pre-fix answer -- the four self-loop
+        # facilities from the model that abandoned 88.54% of demand -- while
+        # also asserting coverage_basis_points=10000. It claimed full coverage
+        # for a solution that served 11.46%.
+        opened_facilities=[
+            "fac:8861892599fffff",
+            "fac:88618925a7fffff",
+            "fac:88618925c5fffff",
+            "fac:8861892eddfffff",
+        ],
+        objective_value=23548137358244,
         expected_travel_seconds=500,
         p95_travel_seconds=750,
         coverage_basis_points=10000,
@@ -122,7 +133,7 @@ def test_shadow_evaluation_loop() -> None:
     assert shadow.shadow_state == ShadowState.FROZEN_AWAITING_FUTURE
     assert shadow.outcome_status == OutcomeStatus.PENDING
 
-    evaluated = ledger.evaluate_shadow(shadow.shadow_id, actual_observed_p95_seconds=650)
+    evaluated = ledger.evaluate_shadow(shadow.shadow_id, "ws-blr-01", actual_observed_p95_seconds=650)
     assert evaluated.shadow_state == ShadowState.EVALUATED
     assert evaluated.outcome_status == OutcomeStatus.EVALUATED
     assert evaluated.regret_seconds == 50
@@ -148,8 +159,19 @@ def test_adversarial_pit_temporal_isolation() -> None:
         dataset_version="1.0.0",
         feature_snapshot_hash=snapshot_hash,
         selected_action="OPEN_FACILITIES",
-        opened_facilities=["fac:88618925a5fffff", "fac:88618925a7fffff", "fac:8861892ec3fffff", "fac:8861892ecbfffff"],
-        objective_value=1756300000000,
+        # The optimum under optimization policy 2.0.0, cross-checked against the
+        # exhaustive oracle in tests/optimization/test_pilot_exact_oracle.py.
+        # The previous fixture pinned the pre-fix answer -- the four self-loop
+        # facilities from the model that abandoned 88.54% of demand -- while
+        # also asserting coverage_basis_points=10000. It claimed full coverage
+        # for a solution that served 11.46%.
+        opened_facilities=[
+            "fac:8861892599fffff",
+            "fac:88618925a7fffff",
+            "fac:88618925c5fffff",
+            "fac:8861892eddfffff",
+        ],
+        objective_value=23548137358244,
         expected_travel_seconds=500,
         p95_travel_seconds=750,
         coverage_basis_points=10000,
@@ -209,8 +231,19 @@ def test_pit_temporal_attack_and_artifact_corruption() -> None:
         dataset_version="1.0.0",
         feature_snapshot_hash=snapshot.problem_snapshot_sha256,
         selected_action="OPEN_FACILITIES",
-        opened_facilities=["fac:88618925a5fffff", "fac:88618925a7fffff", "fac:8861892ec3fffff", "fac:8861892ecbfffff"],
-        objective_value=1756300000000,
+        # The optimum under optimization policy 2.0.0, cross-checked against the
+        # exhaustive oracle in tests/optimization/test_pilot_exact_oracle.py.
+        # The previous fixture pinned the pre-fix answer -- the four self-loop
+        # facilities from the model that abandoned 88.54% of demand -- while
+        # also asserting coverage_basis_points=10000. It claimed full coverage
+        # for a solution that served 11.46%.
+        opened_facilities=[
+            "fac:8861892599fffff",
+            "fac:88618925a7fffff",
+            "fac:88618925c5fffff",
+            "fac:8861892eddfffff",
+        ],
+        objective_value=23548137358244,
         expected_travel_seconds=500,
         p95_travel_seconds=750,
         coverage_basis_points=10000,

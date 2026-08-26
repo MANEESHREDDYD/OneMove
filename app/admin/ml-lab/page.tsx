@@ -6,12 +6,15 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { AILabClient } from "./AILabClient"
+import { requireAdmin } from "@/lib/auth/dal"
 
 export default async function AILabPage() {
   const supabase = await createClient()
   if (!supabase) {
     return <SetupRequired />
   }
+
+  await requireAdmin()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
