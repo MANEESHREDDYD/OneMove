@@ -171,7 +171,7 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   const submit = await request.post(`${API}/api/v1/optimizations`, {
     headers,
     data: {
-      idempotency_key: `cto-outreach-v1-${sha.slice(0, 16)}`,
+      idempotency_key: `cto-outreach-v2-${sha.slice(0, 16)}`,
       min_open_facilities: 1,
       max_open_facilities: 4,
       max_travel_seconds: 1800,
@@ -220,6 +220,7 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   }
   expect(optimization, 'optimization completed').not.toBeNull();
   expect(optimization!.solver_status).toBe('OPTIMAL');
+  expect(optimization!.code_sha, 'optimization release identity').toBe(sha);
   const result = optimization!.result_document as Record<string, unknown>;
   const comparison = result.baseline_comparison as Record<string, unknown>;
   expect(comparison.status).toBe('AVAILABLE');
@@ -279,6 +280,7 @@ test('records the OPERATE → recommend → evidence → replay golden path', as
   });
   expect(freezeResponse.ok(), `decision freeze: ${await freezeResponse.text()}`).toBeTruthy();
   const decision = await freezeResponse.json();
+  expect(decision.code_sha, 'frozen decision release identity').toBe(sha);
   await push({ stage: 'freeze', optimization: optimizationScene, decision });
   await expect(page.getByTestId('frozen-decision')).toContainText(decision.decision_id);
   await shot('08-freeze');
