@@ -578,6 +578,7 @@ def get_optimization(
         "started_at": str(job.get("started_at")),
         "finished_at": str(job.get("finished_at")),
         "run_duration_ms": job.get("run_duration_ms"),
+        "code_sha": job.get("code_sha"),
         "result_document": res_doc,
     }
 
