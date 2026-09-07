@@ -12,6 +12,6 @@
 -r ../../requirements.txt
 
 supabase==2.31.0
-cryptography==50.0.0
+cryptography==50.0.1
 pandas==3.0.5
 requests==2.34.2
